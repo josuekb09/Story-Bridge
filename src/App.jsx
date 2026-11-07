@@ -219,7 +219,7 @@ export default function App() {
       {current.translation && <section className="panel">
         <button className="secondary" onClick={() => setShowTranslation(value => !value)}>{showTranslation ? 'View original' : 'View translation'}</button>
         {showTranslation && <><h2>Translation entered by the author</h2><p>{current.translationLanguage}</p>
-          <div className="notice">{current.translationChecked ? `Checked by ${current.checkedBy}, as stated by the author` : 'Not yet checked by a speaker of this language'}</div>
+          <div className="notice">{current.translationChecked ? `Checked by ${current.checkedBy} (self-reported)` : 'Not yet checked by a speaker of this language'}</div>
           <p className="story-text">{current.translation}</p></>}
       </section>}
     </main>}
@@ -253,7 +253,7 @@ export default function App() {
         <p className="muted">A checked label is self-declared by the author.</p>
         <label>Speaker name<input value={checkedBy} onChange={event => setCheckedBy(event.target.value)}/></label>
         <button className="secondary" onClick={async () => { try { await saveReviewChanges({ checkTranslation: true, checkedBy }); } catch (cause) { setError(cause.message); } }}>Mark as checked</button>
-        {review.translationChecked && <div className="notice">Checked by {review.checkedBy}, as stated by the author</div>}
+        {review.translationChecked && <div className="notice">Checked by {review.checkedBy} (self-reported)</div>}
         {!review.translationChecked && <div className="notice">Not yet checked by a speaker of this language</div>}
       </> : <p>No translation added.</p>}</section>
       <p className="muted">Illustrated video is not part of this version.</p>

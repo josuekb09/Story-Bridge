@@ -34,7 +34,24 @@ npx playwright install chromium
 npm run test:all
 ```
 
-`npm test` runs the backend tests. `npm run test:browser` starts isolated services on ports 4317 and 4318 with per-run data under `.test-data/runs`; it uses a local Playwright Chromium browser and saves screenshots and results under `test-evidence/`. The suite does not seed or write to `data/` or `uploads/`.
+`npm test` runs the backend tests. `npm run test:all` builds first, then starts isolated production-mode browser services on ports 4317 and 4318 with per-run data under `.test-data/runs`; it uses the local Playwright Chromium browser and saves screenshots and results under `test-evidence/`. The suite does not seed or write to `data/` or `uploads/`. A standalone `npm run test:browser` needs a current build first.
+
+## Server safety settings
+
+The server treats a missing store as empty only when there are no story-store backups or upload files suggesting prior data. Invalid, empty, unreadable, or missing-with-remnants stores return an error and are never replaced by a new write. Each successful update keeps up to three prior `stories.json` versions in the data directory; backups rotate before the atomic same-directory replacement.
+
+Defaults can be adjusted with these environment variables:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `STORY_WRITE_RATE_LIMIT` | `60` | Write requests per client IP per `STORY_WRITE_RATE_WINDOW_MS` window |
+| `STORY_WRITE_RATE_WINDOW_MS` | `60000` | Write-rate window in milliseconds |
+| `STORY_MAX_STORIES_PER_OWNER` | `500` | Maximum stories associated with one browser owner token |
+| `STORY_MAX_UPLOAD_BYTES` | `1073741824` | Total uploaded audio bytes allowed on disk (1 GiB) |
+| `STORY_TRUST_PROXY` | off | Set to `1` only behind a trusted proxy to use forwarded client IPs |
+| `STORY_HTTPS` | off | Set to `1` only when HTTPS is provided to enable HSTS |
+
+Each audio file remains limited to 10 MiB and is streamed to a temporary file in the upload directory before it is attached to a story. The write-rate limiter is in memory and applies per process; running multiple server processes does not share counters. The server sends a restrictive CSP allowing same-origin scripts, styles, images, fonts, and connections, plus `blob:` media for the recorder preview and audio playback.
 
 ## Ownership and privacy
 

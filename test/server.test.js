@@ -4,10 +4,11 @@ import fs from 'node:fs'; import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 const projectRoot = path.resolve('.');
-const temp=path.resolve('.test-data/unit-test-data'); fs.rmSync(temp,{recursive:true,force:true});fs.mkdirSync(temp,{recursive:true}); process.env.STORY_DATA_DIR=path.join(temp,'data');process.env.STORY_UPLOAD_DIR=path.join(temp,'uploads');process.env.NODE_ENV='test';
+const testRun= process.pid+'-'+Date.now();
+const temp=path.resolve('.test-data',`unit-test-data-${testRun}`); fs.mkdirSync(temp,{recursive:true}); process.env.STORY_DATA_DIR=path.join(temp,'data');process.env.STORY_UPLOAD_DIR=path.join(temp,'uploads');process.env.NODE_ENV='test';
 const {default:app}=await import('../server/index.js'); let server, base; const owner='a'.repeat(48), other='b'.repeat(48);
 before(async()=>{server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`;});
-after(async()=>{await new Promise(r=>server.close(r));fs.rmSync(temp,{recursive:true,force:true});});
+after(async()=>{await new Promise(r=>server.close(r));});
 const create=async(token=owner, extra={})=>{const fd=new FormData();for(const [k,v]of Object.entries({originalLanguage:'Language A',text:'A short story.',storytellerName:'Hidden Author',showName:'false',...extra}))fd.append(k,v);const r=await fetch(`${base}/api/stories`,{method:'POST',headers:{'x-owner-token':token},body:fd});return [r,await r.json()];};
 const put=(id,token,body)=>fetch(`${base}/api/stories/${id}`,{method:'PUT',headers:{'content-type':'application/json','x-owner-token':token},body:JSON.stringify(body)});
 test('draft, private approval, public sharing and owner-token confidentiality',async()=>{let [r,s]=await create();assert.equal(r.status,201);const id=s.id;assert.equal(s.ownerToken,undefined);assert.equal((await fetch(`${base}/api/stories/${id}`)).status,404);assert.equal((await fetch(`${base}/api/stories/${id}`,{headers:{'x-owner-token':other}})).status,404);assert.equal((await put(id,other,{approve:true})).status,403);assert.equal((await put(id,other,{checkTranslation:true,checkedBy:'X'})).status,403);assert.equal((await put(id,other,{withdraw:true})).status,403);assert.equal((await put(id,owner,{visibility:'private',approve:true})).status,200);assert.equal((await fetch(`${base}/api/stories/${id}`)).status,404);assert.equal((await fetch(`${base}/api/stories/${id}`,{headers:{'x-owner-token':owner}})).status,200);await put(id,owner,{visibility:'public',approve:true});const pubResponse=await fetch(`${base}/api/stories/${id}`);const pub=await pubResponse.json();assert.equal(Object.hasOwn(pub,'storytellerName'),false);assert.equal(JSON.stringify(pub).includes(owner),false);assert.equal(JSON.stringify(pub).includes(other),false);const list=await (await fetch(`${base}/api/stories`)).json();assert.equal(list.some(x=>x.id===id),true);});
@@ -16,9 +17,9 @@ test('translation checked label only changes for owner and edits reset status',a
 test('audio upload rejects non-audio and oversized files; text length limited',async()=>{let fd=new FormData();fd.append('originalLanguage','A');fd.append('audio',new Blob(['x'],{type:'text/plain'}),'bad.txt');assert.equal((await fetch(`${base}/api/stories`,{method:'POST',headers:{'x-owner-token':owner},body:fd})).status,400);fd=new FormData();fd.append('originalLanguage','A');fd.append('audio',new Blob([new Uint8Array(10*1024*1024+1)],{type:'audio/wav'}),'big.wav');assert.equal((await fetch(`${base}/api/stories`,{method:'POST',headers:{'x-owner-token':owner},body:fd})).status,413);assert.equal((await create(owner,{text:'x'.repeat(12001)}))[0].status,413);});
 
 test('seed honors STORY_DATA_DIR and refuses to replace stories unless --force is explicit',()=>{
-  const seedDir=path.join(projectRoot,'.test-data','seed-guard-test');
+  const seedDir=path.join(projectRoot,'.test-data',`seed-guard-test-${testRun}`);
   const seedFile=path.join(seedDir,'stories.json');
-  fs.rmSync(seedDir,{recursive:true,force:true});fs.mkdirSync(seedDir,{recursive:true});
+  fs.mkdirSync(seedDir,{recursive:true});
   const original=[{id:'synthetic-protected-story'}];fs.writeFileSync(seedFile,JSON.stringify(original));
   const env={...process.env,STORY_DATA_DIR:seedDir};
   try{
@@ -30,18 +31,18 @@ test('seed honors STORY_DATA_DIR and refuses to replace stories unless --force i
     assert.equal(forced.status,0,forced.stderr);
     assert.ok(forced.stdout.includes(seedFile),'Forced seed did not print its isolated target path.');
     assert.equal(JSON.parse(fs.readFileSync(seedFile,'utf8')).length,2,'Explicit --force did not replace the isolated fixture.');
-  }finally{fs.rmSync(seedDir,{recursive:true,force:true});}
+  }finally{}
 });
 
 test('production start serves the built app and assets on its configured isolated port',async t=>{
-  const distIndex=path.join(projectRoot,'dist','index.html');
+  const buildDir=path.resolve(process.env.STORY_BRIDGE_BUILD_DIR||path.join(projectRoot,'dist'));
+  const distIndex=path.join(buildDir,'index.html');
   if(!fs.existsSync(distIndex)){t.skip('Build the app before checking production static serving.');return;}
-  const serverTemp=path.join(projectRoot,'.test-data','production-start-test');
-  fs.rmSync(serverTemp,{recursive:true,force:true});
+  const serverTemp=path.join(projectRoot,'.test-data',`production-start-test-${testRun}`);
   const port=Number(process.env.TEST_API_PORT||4348);
   const server=spawn(process.execPath,[path.join(projectRoot,'server','start.js')],{
     cwd:projectRoot,
-    env:{...process.env,NODE_ENV:'development',HOST:'127.0.0.1',PORT:String(port),STORY_DATA_DIR:path.join(serverTemp,'data'),STORY_UPLOAD_DIR:path.join(serverTemp,'uploads'),STORY_NO_LISTEN:'0'},
+    env:{...process.env,NODE_ENV:'development',HOST:'127.0.0.1',PORT:String(port),STORY_DATA_DIR:path.join(serverTemp,'data'),STORY_UPLOAD_DIR:path.join(serverTemp,'uploads'),STORY_BRIDGE_BUILD_DIR:buildDir,STORY_NO_LISTEN:'0'},
     stdio:'ignore',
   });
   const origin=`http://127.0.0.1:${port}`;
@@ -68,6 +69,5 @@ test('production start serves the built app and assets on its configured isolate
         server.kill();
       });
     }
-    fs.rmSync(serverTemp,{recursive:true,force:true});
   }
 });

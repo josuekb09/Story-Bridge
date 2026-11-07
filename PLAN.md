@@ -15,7 +15,9 @@ Build a local-first story sharing proof of concept with an Express API, React/Vi
 
 ## Steps
 
-1. Create the API and storage model; test privacy, ownership, audio access, and input limits.
+1. Create the API and storage model; test privacy, ownership, audio access, and input limits. **Complete.** Stage 1 hardening adds fail-closed store validation, atomic writes with rotating backups, per-IP write limits, per-owner story limits, streamed uploads with a total on-disk cap, proxy trust off by default, restrictive response headers and CSP, generic client errors, and a self-reported checked-by label.
 2. Build the browser interface and authenticated private audio playback.
 3. Add seed data, run API and browser tests with isolated storage, inspect screenshots at phone and laptop widths, build, and record the review.
 4. Improve recording permission, capture, preview, retry, cleanup, and navigation feedback; verify with a fake microphone against isolated data and keep the real-data hashes unchanged.
+
+Stage 1 hardening is covered by `test/hardening.test.js`, the existing API tests, and isolated browser assertions. The browser run saves responsive screenshots for changed text and checks the CSP with both the recorder preview and playback. See `TEST-REPORT.md` for the latest run and known limitations.

@@ -9,9 +9,9 @@
     "start": "node server/start.js",
     "client": "vite --host 127.0.0.1",
     "build": "vite build",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "test:browser": "node scripts/run-browser-tests.js",
-    "test:all": "npm test && npm run test:browser && npm run build",
+    "test:all": "npm run build && npm test && npm run test:browser",
     "seed": "node scripts/seed.js"
   },
   "dependencies": {

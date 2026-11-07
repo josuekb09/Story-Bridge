@@ -1,8 +1,27 @@
 # Test report
 
-Current status: **PASS** — npm run test:all exited 0: 6 Node tests passed, 71 browser entries passed, and the build passed; 0 FAIL and 0 NOT TESTED browser entries.
-Latest full run: **2026-11-07 04:14:52 UTC** (2026-11-07T04-14-52-696Z).
-The real story file and all three existing uploads retained their baseline sizes and modification times; file contents were not opened.
+Current status: **PASS** — the latest `npm run test:all` exited 0: 11 Node tests passed, the build passed, and all 74 browser entries passed (0 FAIL, 0 NOT TESTED).
+Latest full run: **2026-11-07 06:20:27 UTC** (2026-11-07T06-20-27-184Z; evidence written at 08:21 local time).
+During recovery, `data/stories.json` and files under `uploads/` were checked by size and modified time only. Their current metadata is recorded below; the earlier report asserted a match but did not preserve numeric baseline values for comparison.
+
+## Stage 1 hardening recovery
+
+The Stage 1 implementation was present in the working tree and had no matching Stage 1 commit. This recovery kept the existing work, isolated the hardening tests into a unique `.test-data` directory so their setup would not erase prior test outputs, and updated this report and `PLAN.md`.
+
+| Requirement | State | Code and evidence |
+|---|---|---|
+| Fail-closed story store, validation, atomic writes, rotating backups | Complete | `server/index.js`; backup, corruption, missing-store, and atomic-write checks in `test/hardening.test.js` |
+| Per-IP write limit, per-owner cap, total upload cap, streamed disk uploads | Complete | `server/index.js`; upload uses Multer disk storage with a per-file limit and disk total cap; exercised in `test/hardening.test.js` |
+| Proxy trust off by default | Complete | `STORY_TRUST_PROXY` is opt-in; default and enabled configurations are tested |
+| Security headers and CSP checked with recorder and playback | Complete | Header assertions in the browser run; recorder preview and synthetic playback passed without CSP violations |
+| Generic client errors and self-reported checked label | Complete | Safe error tests and the checked-label browser assertion passed |
+| Tests and 390/1280 px screenshots of changed text | Complete | 11 Node tests and 74 browser entries passed; checked-label screenshots were opened and visually inspected at both widths |
+
+Final full run: build **PASS**; Node **11 passed, 0 failed, 0 skipped**; browser **74 PASS, 0 FAIL, 0 NOT TESTED**. Evidence: [results.json](test-evidence/2026-11-07T06-20-27-184Z/results.json). The checked-label screenshots are [390 px](test-evidence/2026-11-07T06-20-27-184Z/review-checked-self-reported-390-bottom.png) and [1280 px](test-evidence/2026-11-07T06-20-27-184Z/review-checked-self-reported-1280.png). They are fresh relative to the last source edits and were visually inspected.
+
+Real-data metadata at recovery close: `data/stories.json` is 3,549 bytes, modified 2026-11-07 05:49:20 local. Three upload files have sizes/times 465,908 bytes at 02:37:01, 156,788 bytes at 05:44:38, and 156,788 bytes at 05:49:20 local. Their contents were not opened or changed. No earlier numeric baseline was available to make an exact comparison.
+
+Limitations: write-rate counters are in memory and per process; the upload disk-cap check is not a cross-process reservation; browser playback verified decode and timeline progress, not audible output. This proof of concept is not production-ready. A subsequent standalone test invocation was blocked before tests started by sandbox `spawn EPERM`; the complete test suite had already passed in the final full run.
 
 ## Correctness follow-up
 

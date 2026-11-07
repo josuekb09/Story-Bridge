@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 const root = process.cwd();
 const inside = value => path.resolve(value).startsWith(`${root}${path.sep}`);
 const recorderPreviewOnly = process.env.RECORDER_PREVIEW_ONLY === '1';
-const recorderCaptureSeconds = Math.max(1, Math.min(10, Number.parseInt(process.env.RECORDER_CAPTURE_SECONDS || '1', 10) || 1));
+const recorderCaptureSeconds = Math.max(3, Math.min(10, Number.parseInt(process.env.RECORDER_CAPTURE_SECONDS || '3', 10) || 3));
 class FocusedPreviewComplete extends Error {}
 const requiredEnv = {
   TEMP: path.join(root, '_tmp'),
@@ -33,13 +33,15 @@ const apiPort = Number(process.env.TEST_API_PORT || 4318);
 const webPort = Number(process.env.TEST_WEB_PORT || 4317);
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const webOrigin = `http://127.0.0.1:${webPort}`;
+const buildDir = path.resolve(process.env.STORY_BRIDGE_BUILD_DIR || path.join(root, 'dist'));
+if (!inside(buildDir)) throw new Error('The browser suite build directory must stay inside this project.');
 const results = [];
 const responseBodies = [];
 const urls = [];
 const consoleMessages = [];
 const serverLogs = [];
 let apiServer;
-let viteServer;
+let webServer;
 let browser;
 let contextA;
 let contextB;
@@ -119,14 +121,15 @@ async function startApi() {
   });
   await waitFor(`${apiOrigin}/api/stories`);
 }
-async function startVite() {
-  viteServer = child(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(webPort), '--strictPort'], {
-    HOST: '127.0.0.1', VITE_API_PROXY_TARGET: apiOrigin,
+async function startWeb() {
+  webServer = child(process.execPath, ['server/start.js'], {
+    NODE_ENV: 'production', HOST: '127.0.0.1', PORT: String(webPort),
+    STORY_DATA_DIR: dataDir, STORY_UPLOAD_DIR: uploadsDir, STORY_BRIDGE_BUILD_DIR: buildDir, STORY_NO_LISTEN: '0',
   });
-  await waitFor(`${webOrigin}/`);
+  await waitFor(`${webOrigin}/api/stories`);
 }
 function waveFixture(file) {
-  const sampleRate = 16000, seconds = 0.5, samples = sampleRate * seconds;
+  const sampleRate = 16000, seconds = 3, samples = sampleRate * seconds;
   const data = Buffer.alloc(samples * 2);
   for (let i = 0; i < samples; i++) data.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 440 * i / sampleRate) * 5000), i * 2);
   const wav = Buffer.alloc(44 + data.length); wav.write('RIFF', 0); wav.writeUInt32LE(36 + data.length, 4); wav.write('WAVE', 8); wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(sampleRate, 24); wav.writeUInt32LE(sampleRate * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(data.length, 40); data.copy(wav, 44); fs.writeFileSync(file, wav);
@@ -178,10 +181,21 @@ let ok = true;
 try {
   await record('Isolated test server and storage under .test-data', async () => {
     ensure(inside(dataDir) && inside(uploadsDir), 'Isolated storage escaped the project.');
-    await startApi(); await startVite();
+    ensure(fs.existsSync(path.join(buildDir, 'index.html')), 'Production build is missing; run npm run build first.');
+    await startApi(); await startWeb();
     ensure(fs.existsSync(dataDir) && fs.existsSync(uploadsDir), 'Test server did not initialize isolated data directories.');
   });
-  if (!apiServer || !viteServer) throw new Error('Isolated test services could not start; stopping before application actions.');
+  if (!apiServer || !webServer) throw new Error('Isolated test services could not start; stopping before application actions.');
+
+  await record('Production server security headers and enforced CSP', async () => {
+    const response = await fetch(`${webOrigin}/`);
+    const csp = response.headers.get('content-security-policy') || '';
+    ensure(response.ok && csp.includes("script-src 'self'") && csp.includes("style-src 'self'") && csp.includes("connect-src 'self'") && csp.includes("media-src 'self' blob:"), 'Production response CSP omitted required app or blob-media sources.');
+    ensure(response.headers.get('x-content-type-options') === 'nosniff', 'X-Content-Type-Options missing.');
+    ensure(response.headers.get('x-frame-options') === 'DENY', 'Frame protection header missing.');
+    ensure(response.headers.get('referrer-policy') === 'no-referrer', 'Referrer-Policy missing.');
+    ensure(!response.headers.has('strict-transport-security'), 'HSTS was enabled without the HTTPS flag.');
+  });
 
   await record('Synthetic audio fixture generation', async () => {
     fixturePath = path.join(fixtureDir, 'synthetic-tone.wav'); waveFixture(fixturePath);
@@ -194,9 +208,16 @@ try {
     contextB = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     contextCapture = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     contextUnsupported = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    for (const context of [contextA, contextB, contextCapture, contextUnsupported]) await context.addInitScript(() => {
+      window.__storyBridgeCspViolations = [];
+      document.addEventListener('securitypolicyviolation', event => window.__storyBridgeCspViolations.push({ directive: event.violatedDirective, blocked: event.blockedURI }));
+    });
     pageA = await contextA.newPage(); pageB = await contextB.newPage(); pageA.setDefaultTimeout(8000); pageB.setDefaultTimeout(8000); observePage(pageA); observePage(pageB);
     pageCapture = await contextCapture.newPage(); pageUnsupported = await contextUnsupported.newPage(); pageCapture.setDefaultTimeout(8000); pageUnsupported.setDefaultTimeout(8000); observePage(pageCapture); observePage(pageUnsupported);
     await pageCapture.addInitScript(() => {
+      window.__revokedObjectUrls = [];
+      const nativeRevokeObjectURL = URL.revokeObjectURL.bind(URL);
+      URL.revokeObjectURL = url => { window.__revokedObjectUrls.push(url); nativeRevokeObjectURL(url); };
       const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       navigator.mediaDevices.getUserMedia = async constraints => {
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -314,6 +335,7 @@ try {
       let playbackWaitMs = 0;
       if (canPlayType) {
         try {
+          element.muted = true;
           const playbackStartedAt = performance.now();
           await element.play();
           playResolved = true;
@@ -336,13 +358,9 @@ try {
         error: mediaError(),
       };
       const progressed = afterPlay.currentTime > before.currentTime;
-      const source = element.src;
-      const fetched = await fetch(source).then(async response => ({ ok: response.ok, blob: await response.blob() })).catch(() => ({ ok: false, blob: null }));
-      const blob = fetched.blob;
       if (!element.paused) element.pause();
       return {
-        blobUrl: source.startsWith('blob:'),
-        fetchOk: fetched.ok,
+        blobUrl: element.src.startsWith('blob:'),
         canPlayType,
         canPlay: !!canPlayType,
         playResolved,
@@ -361,25 +379,28 @@ try {
         mediaErrorAfter: afterPlay.error,
         playbackWaitMs,
         progressed,
-        type: blob?.type || '',
-        size: blob?.size || 0,
       };
     });
-    ensure(preview.blobUrl && preview.fetchOk && preview.size > 0 && preview.readyStateAfter >= 1 && preview.duration > 0, `Captured preview is not playable media metadata: ${JSON.stringify(preview)}.`);
-    ensure(/^audio\/[a-z0-9.+-]+$/i.test(preview.type), `Captured audio MIME does not match server acceptance: ${preview.type || 'empty'}.`);
+    ensure(preview.blobUrl && preview.readyStateAfter >= 1 && preview.duration > 0 && preview.playResolved && preview.progressed, `Captured preview is not playable media metadata: ${JSON.stringify(preview)}.`);
+    const displayMetadata = await pageCapture.locator('.recording-preview').innerText();
+    const displayedType = displayMetadata.match(/Format:\s*(audio\/[a-z0-9.+-]+)/i)?.[1] || '';
+    const displayedSize = displayMetadata.match(/File size:\s*([1-9][^\n·]*)/)?.[1] || '';
+    ensure(/^audio\/[a-z0-9.+-]+$/i.test(displayedType) && displayedSize, `Captured file size or MIME was not shown honestly: ${displayMetadata.replace(/\n/g, ' | ')}.`);
     if (preview.canPlay) ensure(preview.progressed, `Chromium advertised support for the captured recording but playback did not advance. Diagnostics: ${JSON.stringify(preview)}.`);
     const actualRecorderMime = await pageCapture.evaluate(() => window.__lastMediaRecorder?.mimeType || '');
     const [actualContainer, ...actualParameters] = actualRecorderMime.split(';').map(part => part.trim());
-    ensure(actualContainer?.toLowerCase() === preview.type.toLowerCase() && actualParameters.every(parameter => /^codecs\s*=\s*[a-z0-9._,-]+$/i.test(parameter)), `Actual MediaRecorder MIME was not safely normalized to the server-accepted type: ${actualRecorderMime || 'empty'} -> ${preview.type}.`);
+    ensure(actualContainer?.toLowerCase() === displayedType.toLowerCase() && actualParameters.every(parameter => /^codecs\s*=\s*[a-z0-9._,-]+$/i.test(parameter)), `Actual MediaRecorder MIME was not safely normalized to the server-accepted type: ${actualRecorderMime || 'empty'} -> ${displayedType}.`);
     ensure(await pageCapture.getByRole('button', { name: 'Remove recording' }).isVisible(), 'Unsaved recording cannot be removed.');
     ensure(await pageCapture.getByRole('button', { name: 'Retake recording' }).isVisible(), 'Unsaved recording cannot be retaken.');
     const stoppedTracks = await pageCapture.evaluate(() => window.__lastMicStream?.getTracks().every(track => track.readyState === 'ended'));
     ensure(stoppedTracks, 'Microphone track remained live after stopping.');
+    const cspViolations = await pageCapture.evaluate(() => window.__storyBridgeCspViolations);
+    ensure(cspViolations.length === 0, `Recording preview violated the enforced CSP: ${JSON.stringify(cspViolations)}.`);
     const transitions = await pageCapture.evaluate(() => window.__captureStatuses);
     ensure(transitions.includes('Stopping recording.') && transitions.includes('Recording captured. Not saved yet.'), `Status transitions were incomplete: ${JSON.stringify(transitions)}.`);
     await captureWidths(pageCapture, 'record-captured-unsaved');
     capturePreviewReady = true;
-    return { status: preview.canPlay ? 'PASS' : 'NOT TESTED', detail: `MediaRecorder reported ${actualRecorderMime}; captured upload MIME was ${preview.type}; preview diagnostics: ${JSON.stringify(preview)}.` };
+    return { status: preview.canPlay ? 'PASS' : 'NOT TESTED', detail: `MediaRecorder reported ${actualRecorderMime}; captured UI MIME was ${displayedType}; displayed size was ${displayedSize}; playback diagnostics: ${JSON.stringify(preview)}.` };
   }, captureReady);
 
   if (recorderPreviewOnly) throw new FocusedPreviewComplete();
@@ -412,8 +433,8 @@ try {
     await pageCapture.getByRole('status').getByText('Recording captured. Not saved yet.').waitFor();
     const replacementUrl = await preview.getAttribute('src');
     ensure(replacementUrl && replacementUrl !== firstUrl, 'Successful retake did not replace the captured audio.');
-    const previousStillWorks = await pageCapture.evaluate(async url => { try { return (await fetch(url)).ok; } catch { return false; } }, firstUrl);
-    ensure(!previousStillWorks, 'Previous recording object URL was not revoked after replacement.');
+    await pageCapture.waitForFunction(url => window.__revokedObjectUrls.includes(url), firstUrl);
+    ensure(await pageCapture.evaluate(url => window.__revokedObjectUrls.includes(url), firstUrl), 'Previous recording object URL was not revoked after replacement.');
     await captureWidths(pageCapture, 'record-retaken-unsaved');
 
     const removeCanceled = await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Remove recording' }), false);
@@ -421,8 +442,8 @@ try {
     await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Remove recording' }), true);
     await pageCapture.getByRole('status').getByText('Ready to record.').waitFor();
     ensure(await pageCapture.locator('audio[aria-label="Preview of unsaved audio"]').count() === 0, 'Removed audio preview remained visible.');
-    const replacementStillWorks = await pageCapture.evaluate(async url => { try { return (await fetch(url)).ok; } catch { return false; } }, replacementUrl);
-    ensure(!replacementStillWorks, 'Removed recording object URL was not revoked.');
+    await pageCapture.waitForFunction(url => window.__revokedObjectUrls.includes(url), replacementUrl);
+    ensure(await pageCapture.evaluate(url => window.__revokedObjectUrls.includes(url), replacementUrl), 'Removed recording object URL was not revoked.');
 
     await pageCapture.evaluate(() => { window.__incompatibleNextRecording = true; });
     await pageCapture.getByRole('button', { name: 'Record voice' }).click();
@@ -473,7 +494,7 @@ try {
     const originalPreview = pageUnsupported.locator('audio[aria-label="Preview of unsaved audio"]');
     await originalPreview.waitFor({ state: 'visible' });
     const originalUrl = await originalPreview.getAttribute('src');
-    await pageUnsupported.getByText('Duration: 0:00.5', { exact: true }).waitFor();
+    await pageUnsupported.getByText('Duration: 0:03', { exact: true }).waitFor();
     await input.setInputFiles(invalidPath);
     await pageUnsupported.getByRole('alert').getByText(/Choose a file with an audio media type/).waitFor();
     ensure(await originalPreview.getAttribute('src') === originalUrl, 'Invalid file selection replaced the existing unsaved audio.');
@@ -575,7 +596,10 @@ try {
     await pageA.getByLabel('Your name (optional)').fill('Synthetic Hidden Author');
     ensure(!(await pageA.getByLabel('Show my name on this story').isChecked()), 'Show-name default should be off.');
     await pageA.getByLabel(/Or choose an audio file/).setInputFiles(fixturePath);
+    const createResponsePromise = pageA.waitForResponse(response => response.url() === `${webOrigin}/api/stories` && response.request().method() === 'POST');
     await pageA.getByRole('button', { name: 'Save draft and review' }).click();
+    const createResponse = await createResponsePromise;
+    ensure(createResponse.status() === 201, `Draft creation returned HTTP ${createResponse.status()}.`);
     await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
     const mine = await direct(ownerA, '/api/mine'); storyId = mine.body?.[0]?.id || '';
     ensure(storyId && mine.status === 200, 'Draft was not saved for A.');
@@ -608,7 +632,8 @@ try {
   await record('A review labels are honest and checked translation edits invalidate old status', async () => {
     await pageA.getByText('Not yet checked by a speaker of this language').waitFor({ state: 'visible' });
     await pageA.getByLabel('Speaker name').fill('Synthetic Reviewer'); await pageA.getByRole('button', { name: 'Mark as checked' }).click();
-    await pageA.getByText('Checked by Synthetic Reviewer, as stated by the author').waitFor({ state: 'visible' });
+    await pageA.getByText('Checked by Synthetic Reviewer (self-reported)').waitFor({ state: 'visible' });
+    await captureWidths(pageA, 'review-checked-self-reported');
     await pageA.getByLabel('Translation entered by you').fill('Edited manual test translation.');
     const savedTranslation = pageA.waitForResponse(r => r.url() === `${webOrigin}/api/stories/${storyId}` && r.request().method() === 'PUT' && r.status() === 200);
     await pageA.getByRole('button', { name: 'Save translation edit' }).click(); await savedTranslation;
@@ -694,16 +719,17 @@ try {
     const ownerAudio = await direct(ownerA, `/api/stories/${storyId}/audio`); ensure(ownerAudio.status === 200, `Owner audio endpoint failed (HTTP ${ownerAudio.status}; ${ownerAudio.body?.error || 'no error detail'}).`);
     ensure((await direct(ownerB, `/api/stories/${storyId}/audio`)).status === 404, 'B accessed private audio.');
     await pageA.waitForFunction(() => document.querySelector('audio')?.src.startsWith('blob:'));
-    const playback = await pageA.locator('audio').evaluate(async audio => {
+    const encodedFixture = fs.readFileSync(fixturePath).toString('base64');
+    const playback = await pageA.locator('audio').evaluate(async (audio, encoded) => {
       if (!audio.canPlayType('audio/wav')) return { supported: false, reason: 'Browser reports WAV unsupported.' };
       let decoded=false, decodeError='';
-      try { const context=new AudioContext();const buffer=await fetch(audio.src).then(r=>r.arrayBuffer());await context.decodeAudioData(buffer);decoded=true;await context.close(); } catch(e) { decodeError=e?.name||'decode failed'; }
-      try { audio.load(); await new Promise(resolve => { if (audio.readyState >= 1 || audio.error) return resolve(); audio.addEventListener('loadedmetadata', resolve, { once:true }); audio.addEventListener('error', resolve, { once:true }); setTimeout(resolve, 3000); }); const metadata={duration:Number.isFinite(audio.duration)?audio.duration:null,error:audio.error?.code||null,readyState:audio.readyState}; await audio.play(); await new Promise(resolve => setTimeout(resolve, 220)); const progressed = audio.currentTime > 0; audio.pause(); return { supported: true, progressed, metadata, decoded, decodeError }; }
+      try { const context=new AudioContext();const bytes=Uint8Array.from(atob(encoded),character=>character.charCodeAt(0));await context.decodeAudioData(bytes.buffer);decoded=true;await context.close(); } catch(e) { decodeError=e?.name||'decode failed'; }
+      try { audio.load(); await new Promise(resolve => { if (audio.readyState >= 1 || audio.error) return resolve(); audio.addEventListener('loadedmetadata', resolve, { once:true }); audio.addEventListener('error', resolve, { once:true }); setTimeout(resolve, 3000); }); const metadata={duration:Number.isFinite(audio.duration)?audio.duration:null,error:audio.error?.code||null,readyState:audio.readyState}; audio.muted=true; await audio.play(); const progressDeadline=performance.now()+2000; while(audio.currentTime<=0&&!audio.ended&&!audio.error&&performance.now()<progressDeadline) await new Promise(resolve=>setTimeout(resolve,25)); const progressed = audio.currentTime > 0; audio.pause(); return { supported: true, progressed, metadata, decoded, decodeError }; }
       catch (e) { return { supported: true, reason: e?.name || 'play failed', metadata:{duration:Number.isFinite(audio.duration)?audio.duration:null,error:audio.error?.code||null,readyState:audio.readyState}, decoded, decodeError }; }
-    });
+    }, encodedFixture);
     const playbackResult = !playback.supported || !playback.progressed
       ? { name:'Synthetic audio playback', status:'NOT TESTED', detail:`Browser playback did not advance (${playback.reason || 'no progress'}); media=${JSON.stringify(playback.metadata||{})}, decode=${playback.decoded?'PASS':playback.decodeError||'not available'}.` }
-      : { name:'Synthetic audio playback', status:'PASS', detail:'Chromium decoded the synthetic WAV and the media timeline advanced; audible output was not independently assessed.' };
+      : { name:'Synthetic audio playback', status:'PASS', detail:'Chromium decoded the synthetic WAV fixture and advanced the blob-backed media timeline; audible output was not independently assessed.' };
     results.push(playbackResult); process.stdout.write(`${playbackResult.status} ${playbackResult.name} — ${playbackResult.detail}\n`);
   }, haveStory);
 
@@ -756,6 +782,7 @@ try {
     ensure((await direct(ownerB, `/api/stories/${storyId}`)).status === 200, 'Canceling withdrawal removed public access.');
     await pageA.locator('.mine-card').filter({ hasText: 'Shared publicly' }).getByRole('button', { name: 'Withdraw', exact: true }).click();
     await pageA.getByRole('button', { name: 'Withdraw story', exact: true }).click();
+    await pageA.locator('.mine-card').filter({ hasText: 'Withdrawn' }).waitFor({ state: 'visible' });
     const withdrawnCard = pageA.locator('.mine-card').filter({ hasText: 'Withdrawn' });
     await withdrawnCard.waitFor({ state: 'visible' });
     ensure(!(await withdrawnCard.getByRole('button', { name: 'Withdraw', exact: true }).count()), 'Withdrawn story still offers another withdrawal action.');
@@ -792,12 +819,21 @@ try {
     const restored = await direct(ownerB, `/api/stories/${storyId}`);
     ensure(restored.status === 200 && restored.body.visibility === 'public' && restored.body.text === approvedActionText, 'Public re-approval did not restore the edited story for B.');
     await pageA.locator('.mine-card').filter({ hasText: 'Shared publicly' }).getByRole('button', { name: 'Withdraw', exact: true }).click();
+    const secondWithdrawal = pageA.waitForResponse(response => response.url() === `${webOrigin}/api/stories/${storyId}` && response.request().method() === 'PUT' && response.status() === 200);
     await pageA.getByRole('button', { name: 'Withdraw story', exact: true }).click();
-    ensure((await direct(ownerB, `/api/stories/${storyId}`)).status === 404 && (await direct(ownerB, `/api/stories/${storyId}/audio`)).status === 404, 'Second withdrawal did not revoke story and audio access.');
+    const withdrawalResponse = await secondWithdrawal;
+    const withdrawalBody = await withdrawalResponse.json();
+    ensure(withdrawalBody.status === 'withdrawn' && withdrawalBody.visibility === 'private', `Second withdrawal response state was ${withdrawalBody.status}/${withdrawalBody.visibility}.`);
+    await pageA.locator('.mine-card').filter({ hasText: 'Withdrawn' }).waitFor({ state: 'visible' });
+    const ownerAfterSecondWithdrawal = await direct(ownerA, `/api/stories/${storyId}`);
+    const visitorStoryAfterSecondWithdrawal = await direct(ownerB, `/api/stories/${storyId}`);
+    const visitorAudioAfterSecondWithdrawal = await direct(ownerB, `/api/stories/${storyId}/audio`);
+    ensure(ownerAfterSecondWithdrawal.body?.status === 'withdrawn' && ownerAfterSecondWithdrawal.body?.visibility === 'private', `Persisted owner state after second withdrawal was ${ownerAfterSecondWithdrawal.body?.status}/${ownerAfterSecondWithdrawal.body?.visibility} (HTTP ${ownerAfterSecondWithdrawal.status}).`);
+    ensure(visitorStoryAfterSecondWithdrawal.status === 404 && visitorAudioAfterSecondWithdrawal.status === 404, `Second withdrawal access statuses were story=${visitorStoryAfterSecondWithdrawal.status}, audio=${visitorAudioAfterSecondWithdrawal.status}.`);
   }, haveStory && results.find(x => x.name === 'Public approval is visible to B and hidden author is absent from API and UI')?.status === 'PASS');
 
   await record('Reload and isolated API restart preserve test data', async () => {
-    await stop(apiServer); await startApi();
+    await stop(apiServer); await stop(webServer); await startApi(); await startWeb();
     await pageA.reload(); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
     ensure((await pageA.evaluate(() => localStorage.getItem('story-bridge-owner'))) === ownerA, 'A owner token did not survive page reload.');
     const mine = await direct(ownerA, '/api/mine'); const persisted = mine.body.find(s => s.id === storyId);
@@ -825,7 +861,7 @@ try {
     process.stderr.write(`SUITE BLOCKER — ${detail}\n`);
   }
 } finally {
-  await stop(apiServer); await stop(viteServer);
+  await stop(apiServer); await stop(webServer);
   if (browser) await browser.close();
   const report = { runId, apiPort, webPort, isolatedData: path.relative(root, dataDir), isolatedUploads: path.relative(root, uploadsDir), evidence: path.relative(root, evidenceDir), results };
   fs.writeFileSync(path.join(evidenceDir, 'results.json'), JSON.stringify(report, null, 2));
