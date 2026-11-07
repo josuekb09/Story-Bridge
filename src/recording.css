@@ -1,0 +1,7 @@
+.recording-status{color:#1f4d3a;font-weight:600;line-height:1.45}
+.recording-error{margin:0;padding:10px 12px;border:1px solid #d9a89d;border-radius:5px;background:#f9e8e4;color:#57291f;line-height:1.45}
+.recording-preview{display:grid;gap:8px;padding-top:12px;border-top:1px solid #d9d5c9;min-width:0}
+.recording-preview audio{width:100%;max-width:100%}
+.recording-preview p{margin:0;overflow-wrap:anywhere}
+.recording-preview .actions{margin-top:3px}
+.recording-saved{color:#1f4d3a;line-height:1.45;margin:14px 0}
