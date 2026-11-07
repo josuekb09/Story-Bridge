@@ -1,8 +1,12 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
+import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
+import { signTestToken } from '../server/auth.js';
 
 const root = process.cwd();
 const inside = value => path.resolve(value).startsWith(`${root}${path.sep}`);
@@ -20,6 +24,13 @@ for (const [key, value] of Object.entries(requiredEnv)) {
 }
 
 const runId = new Date().toISOString().replace(/[:.]/g, '-');
+async function freePort() {
+  const probe = net.createServer();
+  await new Promise((resolve, reject) => probe.once('error', reject).listen(0, '127.0.0.1', resolve));
+  const port = probe.address().port;
+  await new Promise(resolve => probe.close(resolve));
+  return port;
+}
 const isolated = path.join(root, '.test-data', 'runs', runId);
 const dataDir = path.join(isolated, 'data');
 const uploadsDir = path.join(isolated, 'uploads');
@@ -29,8 +40,8 @@ for (const dir of [isolated, dataDir, uploadsDir, fixtureDir, evidenceDir]) {
   if (!inside(dir)) throw new Error('Refusing a path outside the project.');
   fs.mkdirSync(dir, { recursive: true });
 }
-const apiPort = Number(process.env.TEST_API_PORT || 4318);
-const webPort = Number(process.env.TEST_WEB_PORT || 4317);
+const apiPort = Number(process.env.TEST_API_PORT || await freePort());
+const webPort = Number(process.env.TEST_WEB_PORT || await freePort());
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const webOrigin = `http://127.0.0.1:${webPort}`;
 const buildDir = path.resolve(process.env.STORY_BRIDGE_BUILD_DIR || path.join(root, 'dist'));
@@ -43,6 +54,7 @@ const serverLogs = [];
 let apiServer;
 let webServer;
 let accountServer;
+let jwksServer;
 let browser;
 let contextA;
 let contextB;
@@ -859,9 +871,14 @@ try {
   await record('Account screens have 390px and 1280px visual evidence', async () => {
     // A real server in account mode produces the page, its real config and its real Content-Security-Policy.
     // Only the Supabase origin and the signed-in API calls (which need a real key set) are mocked.
-    const accountPort = Number(process.env.TEST_ACCOUNT_PORT || 4319);
+    const accountPort = Number(process.env.TEST_ACCOUNT_PORT || await freePort());
     const webOrigin = `http://127.0.0.1:${accountPort}`;
-    accountServer = child(process.execPath, ['server/static-test-server.js'], { HOST:'127.0.0.1', PORT:String(accountPort), STORY_BACKEND:'file', STORY_AUTH_MODE:'account', STORY_SERVE_STATIC:'1', STORY_NO_LISTEN:'0', STORY_ACCOUNT_DATA_DIR:path.join(isolated,'account-data'), STORY_DATA_DIR:dataDir, STORY_UPLOAD_DIR:uploadsDir, STORY_BRIDGE_BUILD_DIR:buildDir, STORY_SKIP_DOTENV:'1', SUPABASE_URL:'https://story-bridge-test.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake_local_test_key_123456', SUPABASE_SECRET_KEY:'sb_secret_fake_local_test_key_123456', SUPABASE_BUCKET:'story-bridge-audio', STORY_EMAIL_CODE_SIGN_IN:'true', STORY_GOOGLE_SIGN_IN:'false' });
+    const testSigningKey = crypto.generateKeyPairSync('rsa', { modulusLength:2048 });
+    const testJwk = { ...testSigningKey.publicKey.export({ format:'jwk' }), kid:'browser-local-key', alg:'RS256', use:'sig' };
+    jwksServer = http.createServer((_req,res) => { res.writeHead(200, { 'content-type':'application/json' }); res.end(JSON.stringify({ keys:[testJwk] })); });
+    await new Promise(resolve => jwksServer.listen(0, '127.0.0.1', resolve));
+    const jwksUrl = `http://127.0.0.1:${jwksServer.address().port}/jwks.json`;
+    accountServer = child(process.execPath, ['server/static-test-server.js'], { HOST:'127.0.0.1', PORT:String(accountPort), STORY_BACKEND:'file', STORY_AUTH_MODE:'account', STORY_SERVE_STATIC:'1', STORY_NO_LISTEN:'0', STORY_ACCOUNT_DATA_DIR:path.join(isolated,'account-data'), STORY_DATA_DIR:path.join(isolated,'account-stories'), STORY_UPLOAD_DIR:path.join(isolated,'account-uploads'), STORY_BRIDGE_BUILD_DIR:buildDir, STORY_SKIP_DOTENV:'1', STORY_JWKS_URL:jwksUrl, SUPABASE_URL:'https://story-bridge-test.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake_local_test_key_123456', SUPABASE_SECRET_KEY:'sb_secret_fake_local_test_key_123456', SUPABASE_BUCKET:'story-bridge-audio', STORY_EMAIL_CODE_SIGN_IN:'true', STORY_GOOGLE_SIGN_IN:'false' });
     await waitFor(`${webOrigin}/api/account/config`);
     const supabaseMock = async route => {
       const cors = { 'access-control-allow-origin':webOrigin, 'access-control-allow-headers':'*', 'access-control-allow-methods':'GET,POST,PUT,OPTIONS' };
@@ -899,7 +916,47 @@ try {
     await profilePage.goto(webOrigin); await profilePage.getByRole('button',{name:'Profile'}).waitFor(); await profilePage.getByRole('button',{name:'Profile'}).click(); await profilePage.getByRole('heading',{name:'Your profile'}).waitFor();
     for(const width of [390,1280]) { await profilePage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-profile-${width}.png`); await profilePage.screenshot({path:file,fullPage:true}); results.push({name:`Account profile screenshot ${width}px`,status:'PASS',evidence:path.relative(root,file)}); }
     await profileContext.close();
-    return {detail:'Sign-in, code entry, and profile screens captured at both widths using mocked auth and API responses.'};
+    const liveContext = await browser.newContext({ viewport:{width:1280,height:900} });
+    await liveContext.addInitScript(() => {
+      window.__storyBridgeCspViolations = [];
+      document.addEventListener('securitypolicyviolation', event => window.__storyBridgeCspViolations.push({ directive:event.violatedDirective, blocked:event.blockedURI }));
+    });
+    const livePage = await liveContext.newPage(); livePage.setDefaultTimeout(8000);
+    const signedInToken = signTestToken({ sub:'browser-test-user', iss:'https://story-bridge-test.supabase.co/auth/v1', aud:'authenticated', exp:Math.floor(Date.now()/1000)+3600, email:'reader@example.test' }, testSigningKey.privateKey, 'browser-local-key');
+    await livePage.route('https://story-bridge-test.supabase.co/**', async route => {
+      const cors = { 'access-control-allow-origin':webOrigin, 'access-control-allow-headers':'*', 'access-control-allow-methods':'GET,POST,PUT,OPTIONS' };
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status:204, headers:cors });
+      const providerPath = new URL(route.request().url()).pathname;
+      if (providerPath === '/auth/v1/otp') return route.fulfill({ status:200, contentType:'application/json', headers:cors, body:'{}' });
+      if (providerPath === '/auth/v1/verify') return route.fulfill({ status:200, contentType:'application/json', headers:cors, body:JSON.stringify({ access_token:signedInToken, refresh_token:'synthetic-refresh', token_type:'bearer', expires_in:3600, expires_at:Math.floor(Date.now()/1000)+3600, user:{ id:'browser-test-user', aud:'authenticated', email:'reader@example.test', app_metadata:{ provider:'email' }, user_metadata:{}, created_at:'2026-01-01T00:00:00Z' } }) });
+      return route.fulfill({ status:404, contentType:'application/json', headers:cors, body:JSON.stringify({ message:'Unexpected provider request in local test.' }) });
+    });
+    await livePage.goto(webOrigin);
+    await livePage.getByLabel('Email address').fill('reader@example.test');
+    await livePage.getByRole('button',{name:'Email me a sign-in code'}).click();
+    await livePage.getByLabel('One-time code').fill('123456');
+    await livePage.getByRole('button',{name:'Verify code'}).click();
+    await livePage.getByRole('button',{name:'Sign out'}).waitFor();
+    ensure(await livePage.getByText('reader@example.test',{exact:true}).isVisible(), 'Signed-in email did not appear in the real account header.');
+    await livePage.getByRole('button',{name:'Share a story',exact:true}).click();
+    await livePage.getByLabel('Language told in').fill('Synthetic language');
+    await livePage.getByLabel('Your story').fill('A synthetic signed-in draft before editing.');
+    await livePage.getByRole('button',{name:'Save draft and review'}).click();
+    await livePage.getByRole('heading',{name:'Review your story'}).waitFor();
+    await livePage.getByLabel('Original text').fill('Edited by the signed-in browser flow.');
+    await livePage.getByRole('button',{name:'Save original edit'}).click();
+    await livePage.getByRole('button',{name:'My stories',exact:true}).click();
+    await livePage.getByRole('heading',{name:'My stories'}).waitFor();
+    const ownCard = livePage.locator('.mine-card').filter({ hasText:'Synthetic language' });
+    ensure(await ownCard.isVisible(), 'Created signed-in draft did not appear in My stories.');
+    await ownCard.getByRole('button',{name:'Open'}).click();
+    await livePage.getByRole('heading',{name:'Anonymous'}).waitFor();
+    ensure(await livePage.getByText('Edited by the signed-in browser flow.',{exact:true}).isVisible(), 'Saved signed-in edit was not returned by the real story API.');
+    const violations = await livePage.evaluate(() => window.__storyBridgeCspViolations);
+    ensure(violations.length === 0, `Real account-mode CSP violations occurred: ${JSON.stringify(violations)}`);
+    await liveContext.close();
+    jwksServer.close(); jwksServer = undefined;
+    return {detail:'Existing sign-in/profile views use mocked API responses; the added browser session mocks only Supabase auth. Real account-mode server, real same-origin routes, real file account storage, local JWKS signature verification, and enforced CSP cover create, edit, save, and My stories visibility.'};
   }, browserReady);
 } catch (error) {
   if (!(error instanceof FocusedPreviewComplete)) {
@@ -909,6 +966,7 @@ try {
   }
 } finally {
   await stop(apiServer); await stop(webServer); await stop(accountServer);
+  if (jwksServer?.listening) await new Promise(resolve => jwksServer.close(resolve));
   if (browser) await browser.close();
   const report = { runId, apiPort, webPort, isolatedData: path.relative(root, dataDir), isolatedUploads: path.relative(root, uploadsDir), evidence: path.relative(root, evidenceDir), results };
   fs.writeFileSync(path.join(evidenceDir, 'results.json'), JSON.stringify(report, null, 2));

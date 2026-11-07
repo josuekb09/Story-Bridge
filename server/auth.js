@@ -25,8 +25,9 @@ export function parseAccountConfig(env = process.env) {
     if (env.STORY_JWKS_URL) {
       let discovery;
       try { discovery = new URL(env.STORY_JWKS_URL); } catch { throw new Error('Key discovery URL is invalid.'); }
+      if (discovery.username || discovery.password) throw new Error('Key discovery URL must not include user information.');
       const loopback = discovery.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(discovery.hostname);
-      if (!loopback && !(discovery.protocol === 'https:' && discovery.hostname === url.hostname)) throw new Error('Key discovery URL must be on the Supabase project host or loopback.');
+      if (!loopback && !(discovery.protocol === 'https:' && discovery.host === url.host)) throw new Error('Key discovery URL must be on the Supabase project host or loopback.');
       jwksUrl = discovery.href;
     }
     return { backend, authMode, account: true, jwksUrl, url: url.origin, publishableKey: env.SUPABASE_PUBLISHABLE_KEY, secretKey: env.SUPABASE_SECRET_KEY, bucket: env.SUPABASE_BUCKET, google: env.STORY_GOOGLE_SIGN_IN === 'true', email: env.STORY_EMAIL_CODE_SIGN_IN === 'true', jwks: env.STORY_TEST_JWKS || '' };
@@ -45,7 +46,11 @@ export function createTokenVerifier(config, { fetchImpl = fetch, clock = () => D
     try {
       if (config.jwks) keys = JSON.parse(config.jwks).keys;
       else {
-        const response = await fetchImpl(config.jwksUrl || `${config.url}/auth/v1/.well-known/jwks.json`, { headers: { apikey: config.publishableKey } });
+        const response = await fetchImpl(config.jwksUrl || `${config.url}/auth/v1/.well-known/jwks.json`, {
+          headers: { apikey: config.publishableKey },
+          redirect: 'error',
+          signal: AbortSignal.timeout(5_000),
+        });
         if (!response.ok) throw new Error('key-discovery-failed');
         keys = (await response.json()).keys;
       }

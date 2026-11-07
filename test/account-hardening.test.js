@@ -106,6 +106,8 @@ test('test-only environment switches cannot weaken a production or development s
   assert.throws(() => parseAccountConfig({ ...env, NODE_ENV: 'production', STORY_BACKEND: 'file' }), /local development/);
   assert.throws(() => parseAccountConfig({ ...env, NODE_ENV: 'production', STORY_JWKS_URL: 'https://attacker.example/jwks.json' }), /project host or loopback/);
   assert.throws(() => parseAccountConfig({ ...env, NODE_ENV: 'production', STORY_JWKS_URL: 'http://example.com/jwks.json' }), /project host or loopback/);
+  assert.throws(() => parseAccountConfig({ ...env, NODE_ENV: 'production', STORY_JWKS_URL: 'https://user:pass@story-bridge-test.supabase.co/auth/v1/keys' }), /user information/);
+  assert.throws(() => parseAccountConfig({ ...env, NODE_ENV: 'production', STORY_JWKS_URL: 'https://story-bridge-test.supabase.co:444/auth/v1/keys' }), /project host or loopback/);
   assert.equal(parseAccountConfig({ ...env, NODE_ENV: 'production', STORY_JWKS_URL: 'http://127.0.0.1:9/jwks.json' }).jwksUrl, 'http://127.0.0.1:9/jwks.json');
   // Real process: production entry with the inline test key set refuses to start, and so does STORY_SERVE_STATIC with a missing config.
   const run = extra => spawnSync(process.execPath, ['server/start.js'], { encoding: 'utf8', timeout: 15000, env: { ...process.env, STORY_SKIP_DOTENV: '1', PORT: '0', ...extra } });
@@ -117,6 +119,29 @@ test('test-only environment switches cannot weaken a production or development s
   assert.notEqual(file.status, 0); assert.match(file.stderr, /local development/);
   const unset = run({ STORY_BACKEND: '', STORY_AUTH_MODE: '' });
   assert.notEqual(unset.status, 0); assert.match(unset.stderr, /explicitly selected/);
+});
+
+test('JWKS network discovery rejects redirects and has a bounded fetch timeout', async () => {
+  let options;
+  const verify = createTokenVerifier({ ...base, jwks: '', jwksUrl: 'http://127.0.0.1:9/keys' }, {
+    fetchImpl: async (_url, init) => { options = init; return new Response(JSON.stringify({ keys: [rsaJwk] }), { status: 200, headers: { 'content-type': 'application/json' } }); },
+  });
+  const token = signTestToken(claims('u1'), rsa.privateKey, 'rsa-1');
+  assert.equal((await verify(token)).id, 'u1');
+  assert.equal(options.redirect, 'error');
+  assert.ok(options.signal instanceof AbortSignal);
+  assert.equal(options.signal.aborted, false);
+  let redirectedTargetHits = 0;
+  const redirects = http.createServer((req, res) => {
+    if (req.url === '/keys') { res.writeHead(302, { location:'/target' }); res.end(); }
+    else { redirectedTargetHits++; res.writeHead(200, { 'content-type':'application/json' }); res.end(JSON.stringify({ keys:[rsaJwk] })); }
+  });
+  await new Promise(resolve => redirects.listen(0, '127.0.0.1', resolve));
+  try {
+    const redirectVerifier = createTokenVerifier({ ...base, jwks:'', jwksUrl:`http://127.0.0.1:${redirects.address().port}/keys` });
+    await assert.rejects(redirectVerifier(token), /key-discovery-failed/);
+    assert.equal(redirectedTargetHits, 0, 'Fetch followed a JWKS redirect.');
+  } finally { await new Promise(resolve => redirects.close(resolve)); }
 });
 
 test('npm start entry serves the built app when configured, using ordinary key discovery against a local mock endpoint', async t => {
