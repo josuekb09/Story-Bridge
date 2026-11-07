@@ -42,6 +42,7 @@ const consoleMessages = [];
 const serverLogs = [];
 let apiServer;
 let webServer;
+let accountServer;
 let browser;
 let contextA;
 let contextB;
@@ -116,14 +117,14 @@ async function stop(p) {
 }
 async function startApi() {
   apiServer = child(process.execPath, ['server/index.js'], {
-    NODE_ENV: 'development', HOST: '127.0.0.1', PORT: String(apiPort),
+    NODE_ENV: 'development', HOST: '127.0.0.1', PORT: String(apiPort), STORY_BACKEND:'file', STORY_AUTH_MODE:'legacy',
     STORY_DATA_DIR: dataDir, STORY_UPLOAD_DIR: uploadsDir, STORY_NO_LISTEN: '0',
   });
   await waitFor(`${apiOrigin}/api/stories`);
 }
 async function startWeb() {
-  webServer = child(process.execPath, ['server/start.js'], {
-    NODE_ENV: 'production', HOST: '127.0.0.1', PORT: String(webPort),
+  webServer = child(process.execPath, ['server/static-test-server.js'], {
+    NODE_ENV: 'development', HOST: '127.0.0.1', PORT: String(webPort), STORY_BACKEND:'file', STORY_AUTH_MODE:'legacy', STORY_SERVE_STATIC:'1',
     STORY_DATA_DIR: dataDir, STORY_UPLOAD_DIR: uploadsDir, STORY_BRIDGE_BUILD_DIR: buildDir, STORY_NO_LISTEN: '0',
   });
   await waitFor(`${webOrigin}/api/stories`);
@@ -854,6 +855,52 @@ try {
       ensure(!await pageUnsupported.locator('body').innerText().then(t => t.includes(token)), 'Owner token appeared in unsupported-browser UI.');
     }
   }, browserReady);
+
+  await record('Account screens have 390px and 1280px visual evidence', async () => {
+    // A real server in account mode produces the page, its real config and its real Content-Security-Policy.
+    // Only the Supabase origin and the signed-in API calls (which need a real key set) are mocked.
+    const accountPort = Number(process.env.TEST_ACCOUNT_PORT || 4319);
+    const webOrigin = `http://127.0.0.1:${accountPort}`;
+    accountServer = child(process.execPath, ['server/static-test-server.js'], { HOST:'127.0.0.1', PORT:String(accountPort), STORY_BACKEND:'file', STORY_AUTH_MODE:'account', STORY_SERVE_STATIC:'1', STORY_NO_LISTEN:'0', STORY_ACCOUNT_DATA_DIR:path.join(isolated,'account-data'), STORY_DATA_DIR:dataDir, STORY_UPLOAD_DIR:uploadsDir, STORY_BRIDGE_BUILD_DIR:buildDir, STORY_SKIP_DOTENV:'1', SUPABASE_URL:'https://story-bridge-test.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake_local_test_key_123456', SUPABASE_SECRET_KEY:'sb_secret_fake_local_test_key_123456', SUPABASE_BUCKET:'story-bridge-audio', STORY_EMAIL_CODE_SIGN_IN:'true', STORY_GOOGLE_SIGN_IN:'false' });
+    await waitFor(`${webOrigin}/api/account/config`);
+    const supabaseMock = async route => {
+      const cors = { 'access-control-allow-origin':webOrigin, 'access-control-allow-headers':'*', 'access-control-allow-methods':'GET,POST,PUT,OPTIONS' };
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status:204, headers:cors });
+      return route.fulfill({ status:200, contentType:'application/json', headers:cors, body:'{}' });
+    };
+    const accountContext = await browser.newContext({ viewport:{width:390,height:900} });
+    const accountPage = await accountContext.newPage();
+    await accountPage.route('**/api/account/profile', route => route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:''})}));
+    await accountPage.route('**/api/account/claim', route => route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'No unclaimed stories matched this browser token.'})}));
+    await accountPage.route('**/api/stories', route => route.fulfill({status:200,contentType:'application/json',body:'[]'}));
+    await accountPage.route('**/api/mine', route => route.fulfill({status:200,contentType:'application/json',body:'[]'}));
+    await accountPage.route('https://story-bridge-test.supabase.co/**', supabaseMock);
+    const cspViolations = [];
+    accountPage.on('console', message => { if (/Content[- ]Security[- ]Policy/i.test(message.text())) cspViolations.push(message.text().slice(0,120)); });
+    const accountResponse = await accountPage.goto(webOrigin);
+    ensure((await accountResponse.headerValue('content-security-policy')).includes("connect-src 'self' https://story-bridge-test.supabase.co"), 'The server CSP did not allow the configured Supabase origin.');
+    await accountPage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor();
+    for(const width of [390,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-sign-in-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); results.push({name:`Account sign-in screenshot ${width}px`,status:'PASS',evidence:path.relative(root,file)}); }
+    await accountPage.getByLabel('Email address').fill('reader@example.test');
+    await accountPage.getByRole('button',{name:'Email me a sign-in code'}).click();
+    await accountPage.getByRole('heading',{name:'Enter your code'}).waitFor({timeout:5000});
+    ensure(cspViolations.length === 0, `CSP blocked a request: ${cspViolations.join('; ')}`);
+    for(const width of [390,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-email-code-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); results.push({name:`Email code screenshot ${width}px`,status:'PASS',evidence:path.relative(root,file)}); }
+    await accountPage.close(); await accountContext.close();
+
+    const profileContext = await browser.newContext({viewport:{width:390,height:900}});
+    await profileContext.addInitScript(() => localStorage.setItem('sb-story-bridge-test-auth-token',JSON.stringify({access_token:'synthetic-local-session',refresh_token:'synthetic-refresh',token_type:'bearer',expires_at:4102444800,user:{id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',email:'reader@example.test',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-01-01T00:00:00Z'}})));
+    const profilePage=await profileContext.newPage();
+    await profilePage.route('**/api/account/profile', route => route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:'Storyteller'}),delay:40}));
+    await profilePage.route('**/api/account/claim', route => route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'No unclaimed stories matched this browser token.'})}));
+    await profilePage.route('**/api/stories', route => route.fulfill({status:200,contentType:'application/json',body:'[]'}));
+    await profilePage.route('**/api/mine', route => route.fulfill({status:200,contentType:'application/json',body:'[]'}));
+    await profilePage.route('https://story-bridge-test.supabase.co/**', supabaseMock);
+    await profilePage.goto(webOrigin); await profilePage.getByRole('button',{name:'Profile'}).waitFor(); await profilePage.getByRole('button',{name:'Profile'}).click(); await profilePage.getByRole('heading',{name:'Your profile'}).waitFor();
+    for(const width of [390,1280]) { await profilePage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-profile-${width}.png`); await profilePage.screenshot({path:file,fullPage:true}); results.push({name:`Account profile screenshot ${width}px`,status:'PASS',evidence:path.relative(root,file)}); }
+    await profileContext.close();
+    return {detail:'Sign-in, code entry, and profile screens captured at both widths using mocked auth and API responses.'};
+  }, browserReady);
 } catch (error) {
   if (!(error instanceof FocusedPreviewComplete)) {
     ok = false;
@@ -861,7 +908,7 @@ try {
     process.stderr.write(`SUITE BLOCKER — ${detail}\n`);
   }
 } finally {
-  await stop(apiServer); await stop(webServer);
+  await stop(apiServer); await stop(webServer); await stop(accountServer);
   if (browser) await browser.close();
   const report = { runId, apiPort, webPort, isolatedData: path.relative(root, dataDir), isolatedUploads: path.relative(root, uploadsDir), evidence: path.relative(root, evidenceDir), results };
   fs.writeFileSync(path.join(evidenceDir, 'results.json'), JSON.stringify(report, null, 2));

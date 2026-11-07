@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 const projectRoot = path.resolve('.');
 const testRun= process.pid+'-'+Date.now();
-const temp=path.resolve('.test-data',`unit-test-data-${testRun}`); fs.mkdirSync(temp,{recursive:true}); process.env.STORY_DATA_DIR=path.join(temp,'data');process.env.STORY_UPLOAD_DIR=path.join(temp,'uploads');process.env.NODE_ENV='test';
+const temp=path.resolve('.test-data',`unit-test-data-${testRun}`); fs.mkdirSync(temp,{recursive:true}); process.env.STORY_DATA_DIR=path.join(temp,'data');process.env.STORY_UPLOAD_DIR=path.join(temp,'uploads');process.env.NODE_ENV='test';process.env.STORY_BACKEND='file';process.env.STORY_AUTH_MODE='legacy';
 const {default:app}=await import('../server/index.js'); let server, base; const owner='a'.repeat(48), other='b'.repeat(48);
 before(async()=>{server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}`;});
 after(async()=>{await new Promise(r=>server.close(r));});
@@ -34,15 +34,15 @@ test('seed honors STORY_DATA_DIR and refuses to replace stories unless --force i
   }finally{}
 });
 
-test('production start serves the built app and assets on its configured isolated port',async t=>{
+test('isolated static server serves the built app and assets on its configured port',async t=>{
   const buildDir=path.resolve(process.env.STORY_BRIDGE_BUILD_DIR||path.join(projectRoot,'dist'));
   const distIndex=path.join(buildDir,'index.html');
   if(!fs.existsSync(distIndex)){t.skip('Build the app before checking production static serving.');return;}
   const serverTemp=path.join(projectRoot,'.test-data',`production-start-test-${testRun}`);
   const port=Number(process.env.TEST_API_PORT||4348);
-  const server=spawn(process.execPath,[path.join(projectRoot,'server','start.js')],{
+  const server=spawn(process.execPath,[path.join(projectRoot,'server','static-test-server.js')],{
     cwd:projectRoot,
-    env:{...process.env,NODE_ENV:'development',HOST:'127.0.0.1',PORT:String(port),STORY_DATA_DIR:path.join(serverTemp,'data'),STORY_UPLOAD_DIR:path.join(serverTemp,'uploads'),STORY_BRIDGE_BUILD_DIR:buildDir,STORY_NO_LISTEN:'0'},
+    env:{...process.env,NODE_ENV:'development',HOST:'127.0.0.1',PORT:String(port),STORY_BACKEND:'file',STORY_AUTH_MODE:'legacy',STORY_SERVE_STATIC:'1',STORY_DATA_DIR:path.join(serverTemp,'data'),STORY_UPLOAD_DIR:path.join(serverTemp,'uploads'),STORY_BRIDGE_BUILD_DIR:buildDir,STORY_NO_LISTEN:'0'},
     stdio:'ignore',
   });
   const origin=`http://127.0.0.1:${port}`;
@@ -50,16 +50,16 @@ test('production start serves the built app and assets on its configured isolate
     let response;
     const deadline=Date.now()+5000;
     while(Date.now()<deadline){
-      if(server.exitCode!==null)throw new Error(`Production start exited early with code ${server.exitCode}.`);
+      if(server.exitCode!==null)throw new Error(`Static test server exited early with code ${server.exitCode}.`);
       try{response=await fetch(origin);if(response.ok)break;}catch{}
       await delay(50);
     }
-    assert.ok(response?.ok,'Production start did not serve dist/index.html.');
+    assert.ok(response?.ok,'Static test server did not serve the built index.html.');
     const html=await response.text();
     const assetPath=html.match(/(?:src|href)="(\/assets\/[^\"]+\.(?:js|css))"/)?.[1];
     assert.ok(assetPath,'Built HTML did not reference a static asset.');
     const assetResponse=await fetch(`${origin}${assetPath}`);
-    assert.equal(assetResponse.status,200,'Production start did not serve the built asset.');
+    assert.equal(assetResponse.status,200,'Static test server did not serve the built asset.');
     assert.ok((await assetResponse.text()).length>0,'Built asset was empty.');
   }finally{
     if(server.exitCode===null){

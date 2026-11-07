@@ -1,9 +1,16 @@
+import './env.js';
 import express from 'express';
 import multer from 'multer';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseAccountConfig } from './auth.js';
+import { mountAccountRoutes } from './account-routes.js';
+import { createFileAccountStore } from './file-account-store.js';
+import { contentSecurityPolicy } from './csp.js';
+
+export const MODE = parseAccountConfig();
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(here, '..');
@@ -135,7 +142,7 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', process.env.STORY_TRUST_PROXY === '1');
 app.use((req, res, next) => {
-  res.set('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self' blob:; font-src 'self'; connect-src 'self'");
+  res.set('Content-Security-Policy', contentSecurityPolicy(MODE));
   res.set('X-Content-Type-Options', 'nosniff');
   res.set('X-Frame-Options', 'DENY');
   res.set('Referrer-Policy', 'no-referrer');
@@ -143,6 +150,12 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '256kb' }));
+
+if (MODE.authMode === 'account') {
+  const accountStore = MODE.backend === 'supabase' ? undefined : createFileAccountStore(path.resolve(process.env.STORY_ACCOUNT_DATA_DIR || path.join(ROOT,'account-data')));
+  mountAccountRoutes(app, MODE, { store:accountStore, rateLimit: rateLimitWrites });
+  app.use('/api', (_req, res) => res.status(503).json({ error: 'This account operation is not available.' }));
+} else app.get('/api/account/config', (_req, res) => res.json({ account: false, brand: 'Story Bridge' }));
 
 function rateLimitWrites(req, res, next) {
   const now = Date.now();
@@ -211,16 +224,16 @@ function storeGuard(_req, _res, next) {
 }
 
 function find(id, stories = readDb()) { return stories.find(story => story.id === id); }
-const access = (req, story) => isOwner(req, story) || (story.status === 'shared' && story.visibility === 'public');
+const access = (req, story) => MODE.backend === 'file' && isOwner(req, story) || (story.status === 'shared' && story.visibility === 'public');
 
-app.get('/api/stories', (_req, res) => res.json(readDb().filter(story => story.status === 'shared' && story.visibility === 'public').map(story => clean(story, false))));
-app.get('/api/mine', (req, res) => {
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories', (_req, res) => res.json(readDb().filter(story => story.status === 'shared' && story.visibility === 'public').map(story => clean(story, false))));
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/mine', (req, res) => {
   const stories = readDb();
   if (!ownerToken(req)) return res.status(400).json({ error: 'A browser owner token is required.' });
   res.json(stories.filter(story => isOwner(req, story)).map(story => clean(story, true)));
 });
 
-app.post('/api/stories', rateLimitWrites, storeGuard, reserveUploadSpace, upload.single('audio'), async (req, res, next) => {
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/stories', rateLimitWrites, storeGuard, reserveUploadSpace, upload.single('audio'), async (req, res, next) => {
   try {
     const token = ownerToken(req);
     if (!token) return res.status(400).json({ error: 'A browser owner token is required.' });
@@ -270,13 +283,13 @@ app.post('/api/stories', rateLimitWrites, storeGuard, reserveUploadSpace, upload
   }
 });
 
-app.get('/api/stories/:id', (req, res) => {
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories/:id', (req, res) => {
   const story = find(req.params.id);
   if (!story || !access(req, story)) return res.sendStatus(404);
   res.json(clean(story, isOwner(req, story)));
 });
 
-app.put('/api/stories/:id', rateLimitWrites, (req, res) => {
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories/:id', rateLimitWrites, (req, res) => {
   const all = readDb();
   const story = find(req.params.id, all);
   if (!story) return res.sendStatus(404);
@@ -296,7 +309,7 @@ app.put('/api/stories/:id', rateLimitWrites, (req, res) => {
   res.json(clean(story, true));
 });
 
-app.get('/api/stories/:id/audio', (req, res) => {
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories/:id/audio', (req, res) => {
   const story = find(req.params.id);
   if (!story || !story.audio || !access(req, story)) return res.sendStatus(404);
   const uploadRoot = path.resolve(UPLOADS);
@@ -310,7 +323,7 @@ app.get('/api/stories/:id/audio', (req, res) => {
   stream.pipe(res);
 });
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' || process.env.STORY_SERVE_STATIC === '1') {
   const buildDir = path.resolve(process.env.STORY_BRIDGE_BUILD_DIR || path.join(ROOT, 'dist'));
   app.use(express.static(buildDir));
   app.get('*path', (_req, res) => res.sendFile(path.join(buildDir, 'index.html')));
@@ -337,5 +350,5 @@ export default app;
 if (process.env.NODE_ENV !== 'test' && process.env.STORY_NO_LISTEN !== '1') {
   const host = process.env.HOST || '127.0.0.1';
   const port = Number(process.env.PORT || 3000);
-  app.listen(port, host, () => console.log(`Story Bridge API listening at http://${host}:${port}`));
+  app.listen(port, host, () => console.log(`Story Bridge API listening at http://${host}:${port} (${MODE.backend}/${MODE.authMode})`));
 }

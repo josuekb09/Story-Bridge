@@ -13,9 +13,9 @@ async function withServer(label, config, callback) {
   const dir = path.join(baseDir, label);
   const dataDir = path.join(dir, 'data');
   const uploadsDir = path.join(dir, 'uploads');
-  const envNames = ['STORY_DATA_DIR', 'STORY_UPLOAD_DIR', 'STORY_MAX_UPLOAD_BYTES', 'STORY_MAX_STORIES_PER_OWNER', 'STORY_WRITE_RATE_LIMIT', 'STORY_WRITE_RATE_WINDOW_MS', 'STORY_TRUST_PROXY', 'STORY_HTTPS', 'NODE_ENV'];
+  const envNames = ['STORY_DATA_DIR', 'STORY_UPLOAD_DIR', 'STORY_MAX_UPLOAD_BYTES', 'STORY_MAX_STORIES_PER_OWNER', 'STORY_WRITE_RATE_LIMIT', 'STORY_WRITE_RATE_WINDOW_MS', 'STORY_TRUST_PROXY', 'STORY_HTTPS', 'NODE_ENV', 'STORY_BACKEND', 'STORY_AUTH_MODE'];
   const prior = Object.fromEntries(envNames.map(name => [name, process.env[name]]));
-  Object.assign(process.env, { NODE_ENV: 'test', STORY_DATA_DIR: dataDir, STORY_UPLOAD_DIR: uploadsDir });
+  Object.assign(process.env, { NODE_ENV: 'test', STORY_BACKEND:'file', STORY_AUTH_MODE:'legacy', STORY_DATA_DIR: dataDir, STORY_UPLOAD_DIR: uploadsDir });
   for (const name of envNames) if (Object.hasOwn(config, name)) process.env[name] = String(config[name]);
   try {
     const { default: app, safeErrorHandler } = await import(`../server/index.js?hardening=${++instance}-${Date.now()}`);

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import RecordingCapture from './RecordingCapture.jsx';
 
 const tokenKey = 'story-bridge-owner';
+let accountSessionToken = '';
 
 function ownerToken() {
   let token = localStorage.getItem(tokenKey);
@@ -13,7 +15,7 @@ function ownerToken() {
   return token;
 }
 
-const headers = () => ({ 'x-owner-token': ownerToken() });
+const headers = () => ({ 'x-owner-token': ownerToken(), ...(accountSessionToken ? { Authorization: `Bearer ${accountSessionToken}` } : {}) });
 
 async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
@@ -75,9 +77,42 @@ export default function App() {
   const [reviewVisibility, setReviewVisibility] = useState('private');
   const [withdrawConfirmationId, setWithdrawConfirmationId] = useState('');
   const [checkedBy, setCheckedBy] = useState('');
+  const [accountConfig, setAccountConfig] = useState(null);
+  const [supabase, setSupabase] = useState(null);
+  const [session, setSession] = useState(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authCode, setAuthCode] = useState('');
+  const [authStep, setAuthStep] = useState('email');
+  const [profileName, setProfileName] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
   const captureBusyRef = useRef(false);
 
-  useEffect(() => { ownerToken(); refresh(); }, []);
+  useEffect(() => {
+    ownerToken();
+    let unsubscribe = () => {};
+    fetch('/api/account/config').then(response => response.json()).then(config => {
+      setAccountConfig(config);
+      if (config.account) {
+        const client = createClient(config.url, config.publishableKey, { auth: { flowType: 'pkce' } });
+        setSupabase(client);
+        client.auth.getSession().then(({ data }) => setSession(data.session));
+        const { data } = client.auth.onAuthStateChange((_event, next) => setSession(next));
+        unsubscribe = () => data.subscription.unsubscribe();
+      } else refresh();
+    }).catch(() => { setAccountConfig({ account: false }); refresh(); });
+    return () => unsubscribe();
+  }, []);
+  useEffect(() => {
+    accountSessionToken = session?.access_token || '';
+    if (session) {
+      api('/api/account/claim', { method:'POST' }).catch(() => {});
+      refresh();
+    }
+    else { setStories([]); setMine([]); }
+  }, [session]);
+  useEffect(() => {
+    if (session && page === 'profile') api('/api/account/profile').then(profile => setProfileName(profile.display_name || '')).catch(cause => setError(cause.message));
+  }, [session, page]);
   useEffect(() => { captureBusyRef.current = captureBusy; }, [captureBusy]);
   useEffect(() => {
     const beforeUnload = event => {
@@ -103,6 +138,36 @@ export default function App() {
     setFileKind(kind || '');
     setAudioSaved(false);
   }, []);
+
+  async function sendEmailCode(event) {
+    event.preventDefault(); setError(''); setAuthBusy(true);
+    const { error: cause } = await supabase.auth.signInWithOtp({ email: authEmail.trim(), options: { shouldCreateUser: true } });
+    setAuthBusy(false);
+    if (cause) setError(/rate|too many/i.test(cause.message) ? 'Too many code requests. Wait before trying again.' : 'The sign-in code could not be sent. Check the address and try again.');
+    else setAuthStep('code');
+  }
+  async function verifyEmailCode(event) {
+    event.preventDefault(); setError(''); setAuthBusy(true);
+    const { error: cause } = await supabase.auth.verifyOtp({ email: authEmail.trim(), token: authCode.trim(), type: 'email' });
+    setAuthBusy(false);
+    if (cause) setError(/rate|too many/i.test(cause.message) ? 'Too many attempts. Wait before trying again.' : 'That code is incorrect or expired. Request a new code and try again.');
+  }
+  async function signOut() { accountSessionToken = ''; await supabase.auth.signOut(); setPage('listen'); }
+  async function saveProfile(event) {
+    event.preventDefault();
+    try { await api('/api/account/profile', { method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify({displayName:profileName}) }); setError('Profile saved.'); }
+    catch (cause) { setError(cause.message); }
+  }
+  if (!accountConfig) return <div className="app"><header aria-label="Story Bridge"><h1>Story Bridge</h1></header><main><p>Loading Story Bridge…</p></main></div>;
+  if (accountConfig.account && !session) return <div className="app account-app">
+    <header aria-label="Story Bridge"><a className="brand" href="#" aria-label="Story Bridge"><img src="/assets/logo/story-bridge-lockup-horizontal-reverse.svg" alt="Story Bridge"/></a><p>Stories in the storyteller’s own voice.</p></header>
+    {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">Dismiss</button></div>}
+    <main className="account-card"><h1>{authStep === 'email' ? 'Sign in to Story Bridge' : 'Enter your code'}</h1>
+      {accountConfig.google && <button className="secondary account-action" disabled={authBusy} onClick={async () => { setAuthBusy(true); const { error: cause } = await supabase.auth.signInWithOAuth({ provider:'google', options:{ redirectTo:window.location.origin, scopes:'openid email profile' } }); if (cause) { setError('Google sign-in could not be started. Try again later.'); setAuthBusy(false); } }}>Continue with Google</button>}
+      {accountConfig.email && (authStep === 'email' ? <form className="form auth-form" onSubmit={sendEmailCode}><label>Email address<input required type="email" autoComplete="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)}/></label><button className="primary" disabled={authBusy}>{authBusy ? 'Sending…' : 'Email me a sign-in code'}</button></form> : <form className="form auth-form" onSubmit={verifyEmailCode}><p>Enter the one-time code sent to your email.</p><label>One-time code<input required inputMode="numeric" autoComplete="one-time-code" value={authCode} onChange={event => setAuthCode(event.target.value)}/></label><button className="primary" disabled={authBusy}>{authBusy ? 'Checking…' : 'Verify code'}</button><button type="button" className="secondary" onClick={() => { setAuthStep('email'); setAuthCode(''); }}>Use a different email</button></form>)}
+      {!accountConfig.email && !accountConfig.google && <p>Sign-in is not configured. Contact the Story Bridge administrator.</p>}
+    </main><footer>Story Bridge</footer>
+  </div>;
 
   function navigate(nextPage) {
     const unsavedAudio = page === 'share' && (captureBusyRef.current || (file && !audioSaved));
@@ -200,6 +265,7 @@ export default function App() {
         </picture>
       </a>
       <p>Stories in the storyteller’s own voice.</p>
+      {accountConfig.account && <div className="account-tools"><span>{session.user?.email || 'Signed in'}</span><button className="header-link" onClick={() => setPage('profile')}>Profile</button><button className="header-link" onClick={signOut}>Sign out</button></div>}
     </header>
     {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">Dismiss</button></div>}
 
@@ -211,6 +277,8 @@ export default function App() {
         </button>)}
       </div>}
     </main>}
+
+    {page === 'profile' && accountConfig.account && <main><button className="back" onClick={() => navigate('listen')}>← Back</button><h1>Your profile</h1><p className="intro">Your display name is used only when you choose to show your name on a story.</p><form className="form" onSubmit={saveProfile}><label>Display name<input maxLength="80" value={profileName} onChange={event => setProfileName(event.target.value)}/></label><button className="primary">Save profile</button><button type="button" className="secondary" onClick={signOut}>Sign out</button></form></main>}
 
     {page === 'detail' && current && <main>
       <button className="back" onClick={() => navigate(current._own ? 'mine' : 'listen')}>← Back</button>
@@ -266,7 +334,7 @@ export default function App() {
     </main>}
 
     {page === 'mine' && <main>
-      <h1>My stories</h1><p className="intro">Only this browser can access your drafts and private stories. Losing its owner token means losing access.</p>
+      <h1>My stories</h1><p className="intro">{accountConfig.account ? 'Only your account can access your drafts and private stories.' : 'Only this browser can access your drafts and private stories. Losing its owner token means losing access.'}</p>
       {mine.length === 0 ? <p className="empty">No stories saved here yet.</p> : <div className="cards">{mine.map(story =>
         <article className="story-card mine-card" key={story.id}>
           <b>{story.storytellerName || 'Anonymous'}</b>

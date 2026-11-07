@@ -5,17 +5,20 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"npm:server\" \"npm:client\"",
-    "server": "node server/index.js",
+    "server": "node server/dev.js",
     "start": "node server/start.js",
     "client": "vite --host 127.0.0.1",
     "build": "vite build",
+    "check:dist-secrets": "node scripts/check-dist-secrets.js",
     "test": "node --test --test-concurrency=1",
     "test:browser": "node scripts/run-browser-tests.js",
-    "test:all": "npm run build && npm test && npm run test:browser",
+    "test:all": "npm run build && npm test && npm run test:browser && npm run check:dist-secrets",
     "seed": "node scripts/seed.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "express": "^5.1.0",
+    "jose": "^6.2.15",
     "multer": "^2.0.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

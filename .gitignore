@@ -2,6 +2,7 @@ node_modules/
 dist/
 data/
 uploads/
+account-data/
 _tmp/
 _npm-cache/
 .test-data/
@@ -10,6 +11,7 @@ test-evidence/
 # Local credentials, environment files, and logs
 .env
 .env.*
+!.env.example
 .npmrc
 /secrets/
 /credentials/
