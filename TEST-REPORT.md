@@ -1,10 +1,77 @@
 # Test report
 
-Current status: **PASS** — the latest npm run test:all exited 0: 4 Node tests passed, all 63 browser entries passed (0 FAIL, 0 NOT TESTED), and the production build passed.
-Latest full run: **2026-11-07 03:21:55 UTC** (2026-11-07T03-21-55-747Z).
-This status supersedes every earlier run documented under History.
+Current status: **PASS** — npm run test:all exited 0: 6 Node tests passed, 71 browser entries passed, and the build passed; 0 FAIL and 0 NOT TESTED browser entries.
+Latest full run: **2026-11-07 04:14:52 UTC** (2026-11-07T04-14-52-696Z).
+The real story file and all three existing uploads retained their baseline sizes and modification times; file contents were not opened.
 
-## Current recorder-preview diagnosis
+## Correctness follow-up
+
+### 1. Review keeps unsaved edits
+
+Approve and Save as draft now send pending original text and translation edits in the same update request. The existing per-field save buttons remain available and save all pending Review edits; a changed translation still invalidates its checked label. A simulated server error left the story in Review, displayed the error, and left the draft unchanged; retry saved and published exactly the text and translation shown. **PASS.**
+
+### 2. Withdrawn state and re-approval
+
+My stories now labels withdrawn entries as Withdrawn and requires an inline confirmation before withdrawal. Cancel keeps public access; confirming withdrawal removes story and audio access for B. For a withdrawn story, public visibility shows Publish again and says the story will become public again; Only me shows Approve for only me and says approval will keep it private. Re-approval restores public access only when the selected visibility is public. The confirmation explains that the story remains in My stories and downloaded copies are not deleted. **PASS.**
+
+### 3. Seed safety
+
+Before this change, scripts/seed.js unconditionally replaced stories.json with two placeholder stories; it already honored STORY_DATA_DIR. It now prints the resolved target and refuses to overwrite a non-empty, invalid, or unreadable target without --force. The guard and explicit overwrite were exercised only against a synthetic directory under .test-data; the real data directory was never targeted. **PASS.**
+
+### 4. Production start
+
+package.json now has start and Node 24.x engines entries, mirrored in package-lock.json without dependency changes. npm start runs server/start.js, which sets production mode inside Node and loads the existing server. In production mode the existing server serves dist/ and its assets. Default host remains 127.0.0.1 and default port is 3000; HOST and PORT change them. I left the loopback default unchanged because it suits a local default and no hosting setup was requested. The isolated server test started on port 4348 and fetched the built index and an asset. **PASS.**
+
+### 5. Test results
+
+| Check | Result | Evidence |
+|---|---|---|
+| npm test | **PASS** — 6 passed, 0 failed, 0 skipped | [_tmp test log](_tmp/test-all-correctness-b35d31d620644802a5c9a797335a0ab3.log) |
+| Browser suite | **PASS** — 71 PASS, 0 FAIL, 0 NOT TESTED | [results.json](test-evidence/2026-11-07T04-14-52-696Z/results.json) |
+| npm run build | **PASS** | [_tmp test log](_tmp/test-all-correctness-b35d31d620644802a5c9a797335a0ab3.log) |
+| npm run test:all | **PASS** — exit code 0 | [results.json](test-evidence/2026-11-07T04-14-52-696Z/results.json) |
+
+The browser run used isolated owner/visitor contexts and data/uploads under .test-data, with ports 4347/4348. It covered draft edits, approval edits, failed-save retention and retry, public API/UI values, withdrawal confirmation and cancellation, Withdrawn status, visibility-specific re-approval wording, and public restoration. The seed test used only its synthetic .test-data directory. No dependencies were installed. The already-running app servers on 5173/3000 remained up; isolated test servers were stopped after tests.
+
+### Visual review
+
+I opened and inspected the 390 px and 1280 px screenshots. The withdrawal message wraps clearly and both confirmation controls are reachable. The public re-approval explanation and Publish again action are visible and reachable at both widths. I observed no overlap or clipping in these changed states.
+
+| State | 390 px | 1280 px |
+|---|---|---|
+| Withdraw confirmation | [screenshot](test-evidence/2026-11-07T04-14-52-696Z/withdraw-confirm-390.png) | [screenshot](test-evidence/2026-11-07T04-14-52-696Z/withdraw-confirm-1280.png) |
+| Re-approval wording and visibility | [screenshot](test-evidence/2026-11-07T04-14-52-696Z/republish-review-390-bottom.png) | [screenshot](test-evidence/2026-11-07T04-14-52-696Z/republish-review-1280.png) |
+| Publish again action reachable | [screenshot](test-evidence/2026-11-07T04-14-52-696Z/republish-action-390.png) | [screenshot](test-evidence/2026-11-07T04-14-52-696Z/republish-action-1280.png) |
+
+### Real-data metadata check
+
+Before tests I recorded only file size and last-modified time for the real story file and the three existing uploads. After the full suite, the story file metadata matched and all 3/3 upload metadata records matched; filenames, contents, and owner tokens were not printed. Tests and seed execution wrote only to isolated .test-data paths.
+
+### Files touched
+
+- src/App.jsx — save pending Review edits with approve/draft; withdrawn status, visibility-aware re-approval, and withdrawal confirmation.
+- scripts/run-browser-tests.js — browser tests for unsaved Review edits, failed-save retry, withdrawal/re-approval, and screenshots.
+- scripts/seed.js — target reporting and overwrite guard.
+- test/server.test.js — isolated seed-guard and production-start tests.
+- server/start.js — cross-platform production-mode entry point.
+- package.json and package-lock.json — start script and Node 24.x engine.
+- TEST-REPORT.md — this report.
+
+I did not change README attribution, the logo, server host defaults, real data, or uploads. I did not add dependencies, features, deployment setup, accounts, or hosting configuration. The compact approved logo still looks small at 390 px; it was left unchanged per scope.
+
+### Rerun
+
+From the project root, run this single PowerShell command:
+
+    $buildId=[guid]::NewGuid().ToString('N'); $env:TEMP=Join-Path (Get-Location) '_tmp'; $env:TMP=Join-Path (Get-Location) '_tmp'; $env:npm_config_cache=Join-Path (Get-Location) '_npm-cache'; $env:PLAYWRIGHT_BROWSERS_PATH=Join-Path (Get-Location) '.test-data\playwright-browsers'; $env:TEST_API_PORT='4348'; $env:TEST_WEB_PORT='4347'; $env:RECORDER_PREVIEW_ONLY='0'; $env:STORY_BRIDGE_BUILD_DIR=Join-Path (Get-Location) ('.test-data\correctness-build-' + $buildId); npm run test:all
+
+## History
+### Recorder-preview and logo follow-ups from earlier tasks
+Historical status of the recorder-preview follow-up: **PASS** as of 2026-11-07 03:21:55 UTC; superseded by the correctness follow-up above.
+Earlier latest full run: **2026-11-07 03:21:55 UTC** (2026-11-07T03-21-55-747Z).
+That earlier report status has since been superseded.
+
+#### Recorder-preview diagnosis from the prior follow-up
 
 **Diagnosis: (b) the playback test was racy for headless Chromium.** The old test called play(), waited exactly 250 ms, then sampled currentTime once. The two historical failures reported the assertion “Chromium advertised support for the captured recording but playback did not advance (no progress).” Their results.json files do not store currentTime before/after, duration, readyState, paused, ended, media error, or play-promise status; the failure screenshots show the control at 0:00 / 0:01, so those missing historical values cannot be reconstructed. This is not evidence that the logo affected playback.
 
@@ -20,11 +87,11 @@ This status supersedes every earlier run documented under History.
 
 The longer clip did not change the result: it also passed the original single 250 ms sample. All three pre-fix short-clip reruns also passed, showing the failure was intermittent rather than a consistent broken preview. The current full run further confirmed a valid blob URL and successful fetch, canPlayType: maybe, play() resolved, currentTime 0 → 0.018964 s, duration 1.62 s, readyState 4 → 4, paused true → false → true, ended false, no media error, and progress after 303 ms. Together, the intermittent 250 ms failures and later progress beyond 250 ms support a headless playback-start timing race, not a revoked URL or remounted preview. The logo/header only changes page chrome; no evidence connected it to the audio element, so category (c) is unsupported.
 
-### Fix
+#### Fix
 
 Only scripts/run-browser-tests.js changed for the playback fix. It now polls every 25 ms for up to 2 seconds, stopping early on playback progress, end-of-media, or media error, and still requires currentTime to advance. This gives headless Chromium time to start its media clock; a rejected play, media error, invalid metadata/blob, or timeline that never advances still fails, so the change does not mask an unplayable preview. The app playback implementation was not changed.
 
-### Latest full-suite results
+#### Latest full-suite results
 
 | Test | Result | Evidence |
 |---|---|---|
@@ -35,7 +102,7 @@ Only scripts/run-browser-tests.js changed for the playback fix. It now polls eve
 
 The test servers used separate ports 4347/4348; the existing application servers on 5173/3000 remained listening.
 
-### Visual review
+#### Visual review
 
 I inspected the captured-unsaved preview (including duration and file size), saved state, and header at both viewport widths. No content, text, or controls overlap, and none are clipped in the normal view; the saved confirmation is visible at both sizes. The 390 px compact approved logo appears as a small mark because its square SVG canvas contains substantial empty space; it does not overlap or clip page content, and no logo asset or styling was changed in this playback-only follow-up.
 
@@ -46,31 +113,31 @@ I inspected the captured-unsaved preview (including duration and file size), sav
 | Saved with story | [screenshot](test-evidence/2026-11-07T03-21-55-747Z/record-saved-with-story-390.png) | [screenshot](test-evidence/2026-11-07T03-21-55-747Z/record-saved-with-story-1280.png) |
 | Header logo | [Listen screenshot](test-evidence/2026-11-07T03-21-55-747Z/listen-public-390.png) | [Listen screenshot](test-evidence/2026-11-07T03-21-55-747Z/listen-public-1280.png) |
 
-### Protected real-data verification
+#### Protected real-data verification
 
 The real story metadata and existing uploads were compared by SHA-256 against both saved pre-test baselines after the latest run. Each baseline recorded two protected files; both matched, with zero changed or missing files. Hashes, filenames, story contents, and owner tokens are not reproduced here.
 
-### Files changed in this follow-up
+#### Files changed in this follow-up
 
 - scripts/run-browser-tests.js — bounded playback-progress polling and non-secret diagnostic fields for the preview assertion; capture length and focused-check controls support repeatable diagnosis.
 - TEST-REPORT.md — current result, diagnosis, evidence, and historical-run labeling.
 - Screenshots and isolated test data were written under test-evidence/ and .test-data/ respectively; they are ignored local test artifacts, not staged project files.
 
-### Remaining manual checks
+#### Remaining manual checks
 
 - Real microphone and operating-system permission behavior for the revised experience: **NOT TESTED**. The project owner previously reported a real laptop recording played audibly; this agent did not independently verify that or the revised feedback.
 - Physical phone and device compatibility: **NOT TESTED**.
 - Audible output on hardware during this follow-up: **NOT TESTED**.
 - Favicon in actual browser chrome: **NOT TESTED**; screenshots show page content and the logo, not browser chrome.
 
-### Rerun
+#### Rerun
 
 From the project root, run this single PowerShell command:
 
     $buildId=[guid]::NewGuid().ToString('N'); $env:TEMP=Join-Path (Get-Location) '_tmp'; $env:TMP=Join-Path (Get-Location) '_tmp'; $env:npm_config_cache=Join-Path (Get-Location) '_npm-cache'; $env:PLAYWRIGHT_BROWSERS_PATH=Join-Path (Get-Location) '.test-data\playwright-browsers'; $env:TEST_API_PORT='4348'; $env:TEST_WEB_PORT='4347'; $env:STORY_BRIDGE_BUILD_DIR=Join-Path (Get-Location) ('.test-data\build-' + $buildId); npm run test:all
 
-## History
-### Recorder run — 2026-11-07 01:27 UTC (historical; no longer current)
+#### Older run details from the preceding report
+#### Recorder run — 2026-11-07 01:27 UTC (historical; no longer current)
 
 Historical result: **PASS** — recorder run 2026-11-07 01:27 UTC; no longer current. `npm run test:all` exited successfully: 4 Node tests passed, all 63 browser result entries passed, and the Vite production build completed.
 
@@ -78,7 +145,7 @@ Playwright used separate isolated browser contexts for owner A, unrelated visito
 
 All test commands used `_tmp`, `_npm-cache`, and `.test-data/playwright-browsers` inside the project. No deployment, paid service, account, runtime third-party API, personal browser profile, or extension was used. Playwright 1.65.0 and Chromium revision 1254 were already installed locally from the preceding test setup; nothing was installed for this recording-feedback follow-up.
 
-### Results from the 01:27 recorder run
+#### Results from the 01:27 recorder run
 
 | Test | Result | Evidence or notes |
 |---|---|---|
@@ -101,7 +168,7 @@ All test commands used `_tmp`, `_npm-cache`, and `.test-data/playwright-browsers
 | `npm test` | PASS | 4 tests passed, 0 failed. |
 | `npm run build` | PASS | Vite production build completed. |
 
-### Recording screenshots
+#### Recording screenshots
 
 Each state has top and lower-scroll screenshots at 390px and 1280px. The per-run `results.json` contains all outcomes and measured layout metrics.
 
@@ -118,7 +185,7 @@ Each state has top and lower-scroll screenshots at 390px and 1280px. The per-run
 
 Additional evidence covers empty/failed recordings, unavailable device, unsupported browser, invalid file, oversized file, and successful retake. See [results.json](test-evidence/2026-11-07T01-27-16-766Z/results.json).
 
-### Real-data hash comparison
+#### Real-data hash comparison
 
 Hashes were recorded before the isolated tests and recomputed afterward. Names and contents were not read into the report.
 
@@ -127,11 +194,11 @@ Hashes were recorded before the isolated tests and recomputed afterward. Names a
 | Story metadata store | Before/after SHA-256 matched; exact digest retained only in ignored local scratch data. | Unchanged |
 | Existing uploaded recording(s) | Before/after SHA-256 matched; filenames and exact digests are omitted from project documentation. | Unchanged |
 
-### Failures and fixes during this follow-up
+#### Failures and fixes during this follow-up
 
 The first browser iteration preserved `failure-19.png` under `test-evidence/2026-11-07T01-00-47-586Z/`. The app surfaced the expected simulated microphone-read error, but the test harness timed out waiting for a transient “Recording” state before the error. I changed the test to wait for the failure state and reran it. At the time of the recording-work report, its final run had no FAIL or NOT TESTED browser entries; the later logo follow-up test results below supersede that status.
 
-### Files changed
+#### Files changed
 
 - `src/RecordingCapture.jsx`: accessible states/timer, MIME validation, preview metadata, retry/retake/remove confirmation, size checks, track/timer/object-URL cleanup.
 - `src/App.jsx`, `src/main.jsx`, `src/recording.css`: save success/failure messaging, action locking, navigation warnings, and recording panel styles.
@@ -139,7 +206,7 @@ The first browser iteration preserved `failure-19.png` under `test-evidence/2026
 - `README.md`, `PLAN.md`, `REVIEW.md`, and `TEST-REPORT.md`: workflow, limitations, and results.
 - The build regenerated ignored `dist/` output. No server upload or privacy rules were changed.
 
-### Remaining manual checks
+#### Remaining manual checks
 
 - The project owner confirmed a real laptop recording played audibly. Codex did not witness the recording or playback; repeatability with the revised feedback remains **NOT TESTED**. Operating-system permission denial and unavailable-device behavior were simulated only.
 - Physical phone microphone, secure-context behavior, and on-device layout: **NOT TESTED**; 390px checks were desktop Chromium emulation.
@@ -147,7 +214,7 @@ The first browser iteration preserved `failure-19.png` under `test-evidence/2026
 - The browser's native beforeunload dialog appearance and wording were not manually inspected; the cancellation event and in-app confirmation behavior were tested.
 - A long real recording reaching the 10 MB recording-size cap was not made; synthetic oversized uploads and server/client file-size enforcement were tested.
 
-### Rerun
+#### Rerun
 
 Run this single PowerShell command from the project root:
 
@@ -155,13 +222,13 @@ Run this single PowerShell command from the project root:
 
 The existing app remains running locally at `http://127.0.0.1:5173` with its API on port 3000. Isolated test servers on 4317/4318 were stopped after the suite.
 
-### Logo integration follow-up — historical
+#### Logo integration follow-up — historical
 
 The six supplied SVG sections were copied verbatim to `public/assets/logo/`, the Vite-served public directory. Before wiring the favicon, a separate Vite server returned `/assets/logo/story-bridge-icon.svg` with HTTP 200 and `Content-Type: image/svg+xml`. The shared `index.html` head now references that path. The existing app header uses the horizontal reverse lockup on green, swaps to the reverse mark at 390px, keeps `alt="Story Bridge"` and an accessible header label, and preserves navigation order. The `<img>` box is 40px high; no CSS recoloring is applied.
 
 No dependencies or browser binaries were installed for this follow-up; visual checks used the project-local Playwright setup already present in the workspace.
 
-#### Logo visual review
+##### Logo visual review
 
 **PASS — 12/12 visual checks.** Listen, Share, Review, My stories, and story detail were opened in isolated Chromium contexts at 1280px and 390px; the SVG favicon was also loaded and previewed at both viewport widths. Compact mode selected `story-bridge-mark-reverse.svg` at 390px, and wide mode selected `story-bridge-lockup-horizontal-reverse.svg` at 1280px. All screenshots and measured checks report matching document/viewport widths, no clipped controls, no tiny text, the original navigation order, the green header, and the expected 40px image height. I inspected the page and icon screenshots for text legibility, contrast, clipping, and overlap; none was observed. The favicon screenshots are page previews of the SVG; browser chrome itself is outside the captured viewport.
 
@@ -176,7 +243,7 @@ No dependencies or browser binaries were installed for this follow-up; visual ch
 
 Machine-readable visual results: [results.json](test-evidence/logo-integration/2026-11-07T02-31-48-223Z/results.json). The fixture story and uploads were confined to `.test-data/logo-visual/2026-11-07T02-31-48-223Z/`; those runs did not write to real stories or uploads.
 
-#### Test results after logo integration
+##### Test results after logo integration
 
 | Check | Result | Evidence / notes |
 |---|---|---|
@@ -185,7 +252,7 @@ Machine-readable visual results: [results.json](test-evidence/logo-integration/2
 | `npm run test:all` — `2026-11-07T02-50-23-084Z` | **FAIL** | Commit-preparation rerun: 4 Node tests passed; 38 browser checks passed, 1 failed, and 2 were not tested. The same fake-preview playback assertion recurred; independent API/privacy/persistence checks passed. Evidence: [results.json](test-evidence/2026-11-07T02-50-23-084Z/results.json). |
 | `npm run build` | **PASS** | Vite build completed independently after the suite stopped at its browser failure; output went to a unique ignored `.test-data` directory to preserve existing `dist/` files. |
 
-#### Files changed in the logo follow-up
+##### Files changed in the logo follow-up
 
 - `index.html` — SVG favicon link.
 - `src/App.jsx` — responsive existing header logo and accessible label.
@@ -193,7 +260,7 @@ Machine-readable visual results: [results.json](test-evidence/logo-integration/2
 - `public/assets/logo/story-bridge-icon.svg`, `story-bridge-mark.svg`, `story-bridge-mark-reverse.svg`, `story-bridge-lockup.svg`, `story-bridge-lockup-horizontal.svg`, and `story-bridge-lockup-horizontal-reverse.svg` — approved assets copied verbatim.
 - `TEST-REPORT.md` and `test-evidence/logo-integration/2026-11-07T02-31-48-223Z/` — requested report and visual evidence. No test source, API, privacy code, stories, uploads, or snapshots were changed. The Vite build refreshed ignored `dist/` output.
 
-#### Final real-data hash comparison
+##### Final real-data hash comparison
 
 The hashes recorded before this logo follow-up match the final content hashes after the test runs and visual review. File names and content are recorded here without exposing story contents or owner tokens.
 
@@ -201,13 +268,13 @@ The hashes recorded before this logo follow-up match the final content hashes af
 |---|---|---|
 | Story metadata store and existing uploaded recording(s) | Before/after content hashes matched; exact digests and filenames are retained locally, not published in project documentation. | Unchanged |
 
-#### Remaining manual checks
+##### Remaining manual checks
 
 - Verify the favicon in actual browser chrome; screenshots capture the loaded favicon asset in the page viewport, not browser chrome.
 - The project owner confirmed an earlier real laptop recording played audibly; this was not independently witnessed. Confirmation of the revised recording-feedback experience, OS permission behavior, device-specific formats, and physical-phone behavior remains outstanding.
 - The recording browser suite has one reproducible fake-media playback failure, so its dependent retake, permission/device error, and save-failure/retry scenarios remain **NOT TESTED** in these three follow-up runs.
 
-#### Rerun
+##### Rerun
 
 From the project root, run:
 
@@ -215,7 +282,7 @@ From the project root, run:
 
 The isolated logo visual server on ports 4330/4331 was stopped after capture. The existing app remains running locally on ports 5173 and 3000.
 
-### Local Git preparation audit
+#### Local Git preparation audit
 
 This project had no Git repository, commits, remotes, or staged changes before preparation. A new repository was initialized at this project root on branch `main`; no global or local commit identity values were changed. The configured identity was present. Because no remote existed, `origin` was set locally to the owner's stated intended URL. No network operation was performed.
 

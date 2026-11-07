@@ -55,6 +55,10 @@ let ownerCapture = '';
 let ownerUnsupported = '';
 let storyId = '';
 let fixturePath = '';
+const draftActionText = 'Saved directly by the draft action.';
+const draftActionTranslation = 'Draft-action translation stays on the story.';
+const approvedActionText = 'Published directly by the approval action.';
+const approvedActionTranslation = 'Approval-action translation is public.';
 
 const ensure = (condition, message) => { if (!condition) throw new Error(message); };
 const pass = name => { results.push({ name, status: 'PASS' }); process.stdout.write(`PASS ${name}\n`); };
@@ -617,9 +621,66 @@ try {
     ensure((await direct(ownerA, `/api/stories/${storyId}`)).body.translationChecked === true, 'Owner could not mark translation checked.');
   }, haveStory);
 
+  await record('Save as draft persists unsaved original and translation edits', async () => {
+    await pageA.getByLabel('Original text').fill(draftActionText);
+    await pageA.getByLabel('Translation entered by you').fill(draftActionTranslation);
+    await pageA.getByRole('button', { name: 'Save as draft', exact: true }).click();
+    await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    const saved = await direct(ownerA, `/api/stories/${storyId}`);
+    ensure(saved.status === 200 && saved.body.status === 'draft' && saved.body.text === draftActionText && saved.body.translation === draftActionTranslation, 'Save as draft did not persist both pending review edits.');
+    ensure(saved.body.translationChecked === false, 'Editing the translation did not clear its checked label.');
+    await pageA.locator('.mine-card').filter({ hasText: 'Draft' }).getByRole('button', { name: 'Review', exact: true }).click();
+    await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
+    ensure(await pageA.getByLabel('Original text').inputValue() === draftActionText && await pageA.getByLabel('Translation entered by you').inputValue() === draftActionTranslation, 'Reopened draft did not show the saved edits.');
+  }, haveStory);
+
+  await record('Approve saves unsaved edits; failed save stays private and retry publishes the shown version', async () => {
+    const before = await direct(ownerA, `/api/stories/${storyId}`);
+    ensure(before.body.status === 'draft' && before.body.text === draftActionText && before.body.translation === draftActionTranslation, 'Draft baseline was not available for the approval check.');
+    await pageA.getByLabel('Original text').fill(approvedActionText);
+    await pageA.getByLabel('Translation entered by you').fill(approvedActionTranslation);
+    await pageA.getByRole('radio', { name: 'Anyone who opens this app' }).check();
+    const routePattern = `**/api/stories/${storyId}`;
+    let failOnce = true;
+    await pageA.route(routePattern, async route => {
+      if (failOnce && route.request().method() === 'PUT') {
+        failOnce = false;
+        await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Synthetic review-save failure.' }) });
+      } else await route.continue();
+    });
+    try {
+      await pageA.getByRole('button', { name: 'Approve and share', exact: true }).click();
+      await pageA.getByRole('alert').getByText('Synthetic review-save failure.').waitFor({ state: 'visible' });
+      await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
+      const unchanged = await direct(ownerA, `/api/stories/${storyId}`);
+      ensure(unchanged.body.status === 'draft' && unchanged.body.visibility === 'private' && unchanged.body.text === draftActionText && unchanged.body.translation === draftActionTranslation, 'A failed save approved or partially changed the draft.');
+    } finally {
+      await pageA.unroute(routePattern);
+    }
+    const approvalResponse = pageA.waitForResponse(response => response.url() === `${webOrigin}/api/stories/${storyId}` && response.request().method() === 'PUT' && response.status() === 200);
+    await pageA.getByRole('button', { name: 'Approve and share', exact: true }).click();
+    await approvalResponse;
+    await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    const ownerView = await direct(ownerA, `/api/stories/${storyId}`);
+    ensure(ownerView.body.status === 'shared' && ownerView.body.visibility === 'public' && ownerView.body.text === approvedActionText && ownerView.body.translation === approvedActionTranslation && ownerView.body.translationChecked === false, 'Approval did not persist exactly the edited public version.');
+    const visitorView = await direct(ownerB, `/api/stories/${storyId}`);
+    ensure(visitorView.status === 200 && visitorView.body.text === approvedActionText && visitorView.body.translation === approvedActionTranslation, 'B API response did not contain the exact approved edits.');
+    await pageB.reload();
+    await pageB.getByRole('heading', { name: 'Listen' }).waitFor();
+    const publicCard = pageB.locator('.story-card').filter({ hasText: approvedActionText });
+    await publicCard.waitFor({ state: 'visible' });
+    await publicCard.click();
+    await pageB.getByText(approvedActionText, { exact: true }).waitFor({ state: 'visible' });
+    await pageB.getByRole('button', { name: 'View translation' }).click();
+    await pageB.getByText(approvedActionTranslation, { exact: true }).waitFor({ state: 'visible' });
+  }, haveStory);
+
   await record('Only me approval remains private and B direct mutations are forbidden', async () => {
-    ensure(await pageA.getByLabel('Only me').isChecked(), 'Only me is not the default visibility.');
-    await pageA.getByRole('button', { name: 'Approve and share' }).click(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    await pageA.locator('.mine-card').filter({ hasText: 'Shared publicly' }).getByRole('button', { name: 'Review', exact: true }).click();
+    await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
+    await pageA.getByLabel('Only me').check();
+    ensure(await pageA.getByRole('button', { name: 'Approve for only me', exact: true }).isVisible(), 'Private approval is not labeled as private.');
+    await pageA.getByRole('button', { name: 'Approve for only me', exact: true }).click(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
     const ownerStory = await direct(ownerA, `/api/stories/${storyId}`); ensure(ownerStory.status === 200 && ownerStory.body.visibility === 'private', 'Only me approval was not private.');
     for (const [method, body, label] of [['GET', undefined, 'story read'], ['PUT', { text: 'unauthorized' }, 'edit'], ['PUT', { checkTranslation: true, checkedBy: 'B' }, 'translation check'], ['PUT', { visibility: 'public', approve: true }, 'publish'], ['PUT', { withdraw: true }, 'withdraw']]) {
       const r = method === 'GET' ? await direct(ownerB, `/api/stories/${storyId}`) : await direct(ownerB, `/api/stories/${storyId}`, 'PUT', body);
@@ -664,25 +725,75 @@ try {
     await pageB.reload(); await pageB.getByRole('heading', { name: 'Listen' }).waitFor();
     await pageB.getByRole('button', { name: /Anonymous/ }).first().click(); await pageB.getByRole('heading', { name: 'Anonymous' }).waitFor();
     ensure(!(await pageB.getByText('Synthetic Hidden Author', { exact: false }).count()), 'Hidden author name appeared in public UI.');
-    ensure(await pageB.getByText('Synthetic test story edited by owner A.').isVisible(), 'Original text is not visible.');
+    ensure(await pageB.getByText(approvedActionText, { exact: true }).isVisible(), 'Original text is not visible.');
     ensure(await pageB.getByRole('button', { name: 'View translation' }).isVisible(), 'Translation view control missing.');
     await pageB.getByRole('button', { name: 'View translation' }).click();
     await pageB.getByText('Translation entered by the author').waitFor({state:'visible'});
-    await pageB.getByText('Checked by Synthetic Reviewer, as stated by the author').waitFor({state:'visible'});
+    await pageB.getByText('Not yet checked by a speaker of this language').waitFor({state:'visible'});
     const publicResponse = await direct(ownerB, `/api/stories/${storyId}`);
+    ensure(publicResponse.body.text === approvedActionText && publicResponse.body.translation === approvedActionTranslation && publicResponse.body.translationChecked === false, 'Public response did not contain the edited and honestly labeled version.');
     ensure(!Object.hasOwn(publicResponse.body, 'storytellerName') && !publicResponse.text.includes('Synthetic Hidden Author'), 'Hidden author included in non-owner API response.');
     const publicAudio = await direct(ownerB, `/api/stories/${storyId}/audio`); ensure(publicAudio.status === 200, 'B public audio access failed.');
     await pageA.getByRole('button', { name: 'Listen', exact: true }).click(); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
-    await pageA.getByText('Synthetic test story edited by owner A.').waitFor({state:'visible'});
+    await pageA.getByText(approvedActionText, { exact: true }).waitFor({state:'visible'});
     for (const width of [1280, 390]) { const shot = await captureScreen(pageA, 'listen-public', width); results.push({ name: `Listen screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) }); }
   }, haveStory && results.find(x => x.name === 'Valid WAV upload, owner/private/public audio authorization, and playback attempt')?.status === 'PASS');
 
-  await record('Withdrawal removes story and audio from B immediately; downloaded copies are outside this test', async () => {
+  await record('Withdrawal confirmation, withdrawn label, private/public re-approval wording, and public restoration', async () => {
     await pageA.getByRole('button', { name: 'My stories', exact: true }).click(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
-    await pageA.getByRole('button', { name: 'Withdraw', exact: true }).click();
+    const publicStoryCard = pageA.locator('.mine-card').filter({ hasText: 'Shared publicly' });
+    await publicStoryCard.getByRole('button', { name: 'Withdraw', exact: true }).click();
+    await pageA.getByRole('group', { name: 'Confirm withdrawal' }).waitFor({ state: 'visible' });
+    const confirmationText = await pageA.getByRole('group', { name: 'Confirm withdrawal' }).innerText();
+    ensure(confirmationText.includes('remain in My stories') && confirmationText.includes('downloaded copies are not deleted'), 'Withdrawal confirmation omitted its consequences.');
+    for (const width of [1280, 390]) {
+      const shot = await captureScreen(pageA, 'withdraw-confirm', width);
+      results.push({ name: `Withdraw confirmation screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
+    }
+    await pageA.getByRole('button', { name: 'Keep story', exact: true }).click();
+    const afterCancel = await direct(ownerA, `/api/stories/${storyId}`);
+    ensure(afterCancel.body.status === 'shared' && afterCancel.body.visibility === 'public', 'Canceling withdrawal changed the story unexpectedly.');
+    ensure((await direct(ownerB, `/api/stories/${storyId}`)).status === 200, 'Canceling withdrawal removed public access.');
+    await pageA.locator('.mine-card').filter({ hasText: 'Shared publicly' }).getByRole('button', { name: 'Withdraw', exact: true }).click();
+    await pageA.getByRole('button', { name: 'Withdraw story', exact: true }).click();
+    const withdrawnCard = pageA.locator('.mine-card').filter({ hasText: 'Withdrawn' });
+    await withdrawnCard.waitFor({ state: 'visible' });
+    ensure(!(await withdrawnCard.getByRole('button', { name: 'Withdraw', exact: true }).count()), 'Withdrawn story still offers another withdrawal action.');
     const list = await direct(ownerB, '/api/stories'); ensure(!list.body.some(s => s.id === storyId), 'Withdrawn story remains in B list.');
     ensure((await direct(ownerB, `/api/stories/${storyId}`)).status === 404, 'B read withdrawn story.');
     ensure((await direct(ownerB, `/api/stories/${storyId}/audio`)).status === 404, 'B read withdrawn audio.');
+    await withdrawnCard.getByRole('button', { name: 'Review', exact: true }).click();
+    await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
+    ensure(await pageA.getByText('This approval will keep the story private to you.').isVisible(), 'Private re-approval wording was incorrect.');
+    ensure(await pageA.getByRole('button', { name: 'Approve for only me', exact: true }).isVisible(), 'Private re-approval label implied public sharing.');
+    await pageA.getByRole('radio', { name: 'Anyone who opens this app' }).check();
+    ensure(await pageA.getByText('This story will become public again.').isVisible(), 'Public re-approval wording was missing.');
+    ensure(await pageA.getByRole('button', { name: 'Publish again', exact: true }).isVisible(), 'Public re-approval did not use the Publish again label.');
+    for (const width of [1280, 390]) {
+      const shot = await captureScreen(pageA, 'republish-review', width);
+      results.push({ name: `Publish again review screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
+      const main = pageA.locator('main');
+      await main.evaluate(element => { element.scrollTop = element.scrollHeight; });
+      await pageA.waitForTimeout(50);
+      const actionMetrics = await pageA.getByRole('button', { name: 'Publish again', exact: true }).evaluate(element => {
+        const button = element.getBoundingClientRect();
+        const header = document.querySelector('header').getBoundingClientRect();
+        const nav = document.querySelector('.bottom-nav').getBoundingClientRect();
+        return { top: button.top, bottom: button.bottom, headerBottom: header.bottom, navTop: nav.top, text: element.innerText };
+      });
+      ensure(actionMetrics.top >= actionMetrics.headerBottom - 1 && actionMetrics.bottom <= actionMetrics.navTop + 1, `Publish again button is clipped at ${width}px: ${JSON.stringify(actionMetrics)}.`);
+      const actionEvidence = path.join(evidenceDir, `republish-action-${width}.png`);
+      await pageA.screenshot({ path: actionEvidence, animations: 'disabled' });
+      results.push({ name: `Publish again action screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, actionEvidence), detail: JSON.stringify(actionMetrics) });
+      await main.evaluate(element => { element.scrollTop = 0; });
+    }
+    await pageA.getByRole('button', { name: 'Publish again', exact: true }).click();
+    await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    const restored = await direct(ownerB, `/api/stories/${storyId}`);
+    ensure(restored.status === 200 && restored.body.visibility === 'public' && restored.body.text === approvedActionText, 'Public re-approval did not restore the edited story for B.');
+    await pageA.locator('.mine-card').filter({ hasText: 'Shared publicly' }).getByRole('button', { name: 'Withdraw', exact: true }).click();
+    await pageA.getByRole('button', { name: 'Withdraw story', exact: true }).click();
+    ensure((await direct(ownerB, `/api/stories/${storyId}`)).status === 404 && (await direct(ownerB, `/api/stories/${storyId}/audio`)).status === 404, 'Second withdrawal did not revoke story and audio access.');
   }, haveStory && results.find(x => x.name === 'Public approval is visible to B and hidden author is absent from API and UI')?.status === 'PASS');
 
   await record('Reload and isolated API restart preserve test data', async () => {
@@ -690,9 +801,9 @@ try {
     await pageA.reload(); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
     ensure((await pageA.evaluate(() => localStorage.getItem('story-bridge-owner'))) === ownerA, 'A owner token did not survive page reload.');
     const mine = await direct(ownerA, '/api/mine'); const persisted = mine.body.find(s => s.id === storyId);
-    ensure(persisted && persisted.status === 'withdrawn' && persisted.translation === 'Edited manual test translation.' && persisted.text === 'Synthetic test story edited by owner A.', 'Test record did not persist across isolated server restart.');
+    ensure(persisted && persisted.status === 'withdrawn' && persisted.translation === approvedActionTranslation && persisted.text === approvedActionText, 'Test record did not persist across isolated server restart.');
     ensure(!(await direct(ownerB, '/api/stories')).body.some(s => s.id === storyId), 'Restart exposed withdrawn story.');
-  }, haveStory && results.find(x => x.name === 'Withdrawal removes story and audio from B immediately; downloaded copies are outside this test')?.status === 'PASS');
+  }, haveStory && results.find(x => x.name === 'Withdrawal confirmation, withdrawn label, private/public re-approval wording, and public restoration')?.status === 'PASS');
 
   await record('Raw owner tokens are absent from responses, URLs, logs, and screenshots', async () => {
     await delay(200);

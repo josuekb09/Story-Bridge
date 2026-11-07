@@ -72,6 +72,8 @@ export default function App() {
   const [captureBusy, setCaptureBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [review, setReview] = useState(null);
+  const [reviewVisibility, setReviewVisibility] = useState('private');
+  const [withdrawConfirmationId, setWithdrawConfirmationId] = useState('');
   const [checkedBy, setCheckedBy] = useState('');
   const captureBusyRef = useRef(false);
 
@@ -132,6 +134,7 @@ export default function App() {
       const savedAudio = !!file && !!story.audio;
       setAudioSaved(savedAudio);
       setReview({ ...story, audioSaved: savedAudio });
+      setReviewVisibility(story.visibility || 'private');
       setPage('review');
       await refresh();
     } catch (cause) {
@@ -149,9 +152,23 @@ export default function App() {
     return story;
   }
 
+  function pendingReviewEdits() {
+    if (!review) return {};
+    const saved = current?.id === review.id ? current : null;
+    const edits = {};
+    if (!saved || review.text !== saved.text) edits.text = review.text;
+    if (!saved || review.translation !== saved.translation) edits.translation = review.translation;
+    return edits;
+  }
+
+  async function saveReviewChanges(extra = {}) {
+    return update(review.id, { ...pendingReviewEdits(), ...extra });
+  }
+
   async function saveReview(approve) {
     try {
-      await update(review.id, { visibility: document.querySelector('input[name=visibility]:checked')?.value || review.visibility, approve });
+      setError('');
+      await saveReviewChanges({ visibility: reviewVisibility, approve });
       setPage('mine');
     } catch (cause) { setError(cause.message); }
   }
@@ -159,6 +176,8 @@ export default function App() {
   function startReview(story) {
     setReview(story);
     setCurrent(story);
+    setReviewVisibility(story.visibility || 'private');
+    setWithdrawConfirmationId('');
     setCheckedBy(story.checkedBy || '');
     setPage('review');
   }
@@ -225,24 +244,25 @@ export default function App() {
         <AudioPlayer story={review} privateAudio/>
         {review.audio && <p className="recording-saved" role="status" aria-live="polite">Saved with your story.</p>}
         <label>Original text<textarea aria-label="Original text" rows="6" maxLength="12000" value={review.text} onChange={event => setReview(previous => ({ ...previous, text: event.target.value }))}/></label>
-        <button className="secondary" onClick={async () => { try { await update(review.id, { text: review.text }); } catch (cause) { setError(cause.message); } }}>Save original edit</button>
+        <button className="secondary" onClick={async () => { try { await saveReviewChanges(); } catch (cause) { setError(cause.message); } }}>Save original edit</button>
       </section>
       <section className="panel"><h2>Translation</h2>{review.translation ? <>
         <p>Translation entered by the author · {review.translationLanguage}</p>
         <textarea aria-label="Translation entered by you" rows="5" value={review.translation} onChange={event => setReview(previous => ({ ...previous, translation: event.target.value }))}/>
-        <button className="secondary" onClick={async () => { try { await update(review.id, { translation: review.translation }); } catch (cause) { setError(cause.message); } }}>Save translation edit</button>
+        <button className="secondary" onClick={async () => { try { await saveReviewChanges(); } catch (cause) { setError(cause.message); } }}>Save translation edit</button>
         <p className="muted">A checked label is self-declared by the author.</p>
         <label>Speaker name<input value={checkedBy} onChange={event => setCheckedBy(event.target.value)}/></label>
-        <button className="secondary" onClick={async () => { try { await update(review.id, { checkTranslation: true, checkedBy }); } catch (cause) { setError(cause.message); } }}>Mark as checked</button>
+        <button className="secondary" onClick={async () => { try { await saveReviewChanges({ checkTranslation: true, checkedBy }); } catch (cause) { setError(cause.message); } }}>Mark as checked</button>
         {review.translationChecked && <div className="notice">Checked by {review.checkedBy}, as stated by the author</div>}
         {!review.translationChecked && <div className="notice">Not yet checked by a speaker of this language</div>}
       </> : <p>No translation added.</p>}</section>
       <p className="muted">Illustrated video is not part of this version.</p>
       <fieldset><legend>Who can see this story?</legend>
-        <label className="check"><input type="radio" name="visibility" value="private" defaultChecked={review.visibility !== 'public'}/> Only me</label>
-        <label className="check"><input type="radio" name="visibility" value="public" defaultChecked={review.visibility === 'public'}/> Anyone who opens this app</label>
+        <label className="check"><input type="radio" name="visibility" value="private" checked={reviewVisibility === 'private'} onChange={() => setReviewVisibility('private')}/> Only me</label>
+        <label className="check"><input type="radio" name="visibility" value="public" checked={reviewVisibility === 'public'} onChange={() => setReviewVisibility('public')}/> Anyone who opens this app</label>
+        {review.status === 'withdrawn' && <p className="muted" role="status">{reviewVisibility === 'public' ? 'This story will become public again.' : 'This approval will keep the story private to you.'}</p>}
       </fieldset>
-      <div className="actions"><button className="primary" onClick={() => saveReview(true)}>Approve and share</button><button className="secondary" onClick={() => saveReview(false)}>Save as draft</button></div>
+      <div className="actions"><button className="primary" onClick={() => saveReview(true)}>{review.status === 'withdrawn' && reviewVisibility === 'public' ? 'Publish again' : reviewVisibility === 'public' ? 'Approve and share' : 'Approve for only me'}</button><button className="secondary" onClick={() => saveReview(false)}>Save as draft</button></div>
     </main>}
 
     {page === 'mine' && <main>
@@ -250,12 +270,19 @@ export default function App() {
       {mine.length === 0 ? <p className="empty">No stories saved here yet.</p> : <div className="cards">{mine.map(story =>
         <article className="story-card mine-card" key={story.id}>
           <b>{story.storytellerName || 'Anonymous'}</b>
-          <span>{story.originalLanguage} · {story.status === 'shared' && story.visibility === 'public' ? 'Shared publicly' : story.status === 'shared' ? 'Private' : 'Draft'}</span>
+          <span>{story.originalLanguage} · {story.status === 'withdrawn' ? 'Withdrawn' : story.status === 'shared' && story.visibility === 'public' ? 'Shared publicly' : story.status === 'shared' ? 'Private' : 'Draft'}</span>
           <div className="actions">
             <button className="secondary" onClick={() => showStory(story, true)}>Open</button>
             <button className="secondary" onClick={() => startReview(story)}>Review</button>
-            <button className="danger" onClick={async () => { try { await update(story.id, { withdraw: true }); setPage('mine'); } catch (cause) { setError(cause.message); } }}>Withdraw</button>
+            {story.status !== 'withdrawn' && <button className="danger" onClick={() => setWithdrawConfirmationId(story.id)}>Withdraw</button>}
           </div>
+          {withdrawConfirmationId === story.id && <div className="notice" role="group" aria-label="Confirm withdrawal">
+            <p>Withdraw this story from sharing? Other people will no longer be able to open it. It will remain in My stories; downloaded copies are not deleted.</p>
+            <div className="actions">
+              <button className="secondary" onClick={() => setWithdrawConfirmationId('')}>Keep story</button>
+              <button className="danger" onClick={async () => { try { await update(story.id, { withdraw: true }); setWithdrawConfirmationId(''); } catch (cause) { setError(cause.message); } }}>Withdraw story</button>
+            </div>
+          </div>}
         </article>)}
       </div>}
     </main>}
