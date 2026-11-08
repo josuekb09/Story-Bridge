@@ -26,9 +26,15 @@ create table if not exists public.stories (
   status text not null default 'draft' check (status in ('draft','shared','withdrawn')),
   audio_key text unique,
   audio_mime text not null default '',
+  audio_sha256 text not null default '' check (audio_sha256 = '' or audio_sha256 ~ '^[a-f0-9]{64}$'),
+  version_log jsonb not null default '[]'::jsonb check (jsonb_typeof(version_log) = 'array'),
   created_at timestamptz not null default now(),
   constraint stories_one_owner check ((owner_user_id is null) <> (owner_hash is null))
 );
+
+-- Safe when applying this migration to a project created before story records were added.
+alter table public.stories add column if not exists version_log jsonb not null default '[]'::jsonb;
+alter table public.stories add column if not exists audio_sha256 text not null default '';
 
 alter table public.profiles enable row level security;
 alter table public.stories enable row level security;

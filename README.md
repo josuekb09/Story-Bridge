@@ -2,7 +2,9 @@
 
 Story Bridge is a proof of concept for sharing African stories in the storyteller's original language and voice. Storytellers can write or record a story, add their own translation, save a draft, and choose whether to share it publicly.
 
-Translations and translation checks are human-entered. Automatic translation and generated speech are not implemented.
+The public landing page leads into Listen, where visitors can open stories without signing in. Share is a four-step language, tell, translate, and review flow; publishing remains a separate approval. Story detail includes a version list and SHA-256 fingerprint for each recorded text/translation version. When browser speech recognition is supported, recording can fill the editable story text locally in the browser; it is not an OpenAI transcription service.
+
+Translations may be written by the storyteller or drafted on demand by OpenAI when the server has `OPENAI_API_KEY`. A draft is visibly marked unapproved, editing it clears approval, and only the explicit approval followed by saving stores it as an AI draft approved by the storyteller. The request sends the original story to OpenAI only when the storyteller chooses Draft with AI. If the key is absent or the provider fails, manual translation remains available. This feature has mocked-provider tests but has not been exercised against a live key/provider. Speech transcription depends on built-in browser support and may require browser-specific speech services; choose text entry or upload audio when it is unavailable. Automated safety review and generated speech are not implemented.
 
 ## Demo and current status
 
@@ -22,8 +24,16 @@ This is a demonstration build, not a production service for sensitive stories or
 - Preview a recording before saving and retry after a failed save.
 - Save private drafts, edit story text and translations, and choose whether to show the storyteller's name.
 - Share a story publicly or withdraw it from public view.
-- Add a translation and record the name of a person who checked it. A checked label is self-reported by the owner, not independent certification.
+- Add a human-written or explicitly approved AI-drafted translation and record its origin. A translation check label is self-reported by the owner, not independent certification.
 - Use email one-time codes and a display-name profile in account mode. Google sign-in is optional and requires separate provider configuration.
+- In account mode, use My workspace to resume drafts and view collection totals, and filter My stories by draft, public, private, or withdrawn status. Totals and lists are loaded from the account API.
+- Unsaved text and audio are held in the page. Leaving a changed creation or review screen asks for confirmation; successful story creation keeps the saved story in review and clears the next creation form.
+- Workspace and story lists distinguish loading, empty, and recoverable error states; malformed API list responses are treated as errors and can be retried.
+- Recording playback distinguishes no recording, loading, and errors; a failed private recording request can be retried through the authenticated owner path.
+- Public visitors can browse fictional community stories and open detail pages. Share uses four visible steps and requires a separate approval from the saved draft before publication.
+- Story detail exposes timestamped change notes and SHA-256 fingerprints. The fingerprint covers original language, original text, translation language, translation origin, translation, and (when present) the audio file hash; it excludes names and owner identity.
+- Listen also contains a cultural-record seed for Luluwa/Lulua art. It is labelled as a project draft, uses the supplied English summary, leaves French and Tshiluba blank, has no image, and asks for community verification of custodianship and regional details. A speaker can start a separate story from the record; the association is held in the current browser only.
+- Browser-native speech recognition can populate editable text during a microphone recording where the browser supports it. Story Bridge does not send that audio to OpenAI.
 
 The app uses React and Vite for the frontend, Express for the API, and Supabase for account authentication, database storage, and private audio storage in the deployed mode.
 
@@ -51,7 +61,9 @@ STORY_AUTH_MODE=legacy
 
 Stories are stored in `data/stories.json` and recordings in `uploads/`. The browser keeps an owner token in localStorage; losing it or switching browsers means losing access to private stories and drafts. This mode does not provide account sign-in and is refused by the production entry point.
 
-`npm run seed` creates two clearly fictional placeholder stories for a disposable local demo. It refuses to overwrite an existing nonempty or invalid story file by default. Seeding is not required, and should not be run against real story data.
+`npm run seed` creates six fictional public stories in English, French and Swahili for the local demo. It refuses to overwrite an existing nonempty or invalid story file by default. Seeding is optional and should not be run against real story data.
+
+Run `npm run test:screens` after `npm run build` to generate isolated public landing, Listen, story detail, four Share steps, review, and My stories screenshots at 375px, 768px, and 1280px, plus a mocked account-mode sign-in view at 375px and 1280px. The script uses fictional data under `.test-data/` and writes evidence under `test-evidence/`. The repository browser harness separately captures account-mode Profile at 375px and 1280px.
 
 ### Supabase account mode
 
@@ -66,13 +78,17 @@ SUPABASE_SECRET_KEY=YOUR_SERVER_ONLY_SECRET_KEY
 SUPABASE_BUCKET=story-bridge-audio
 STORY_EMAIL_CODE_SIGN_IN=true
 STORY_GOOGLE_SIGN_IN=false
+OPENAI_API_KEY= # Optional server-only key for translation drafts; never add a VITE_ prefix.
+OPENAI_TRANSLATION_MODEL= # Optional; defaults to gpt-6-luna.
 ```
 
 Replace the placeholders locally. `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are browser-safe configuration. `SUPABASE_SECRET_KEY` is server-only: never commit it, put it in frontend code, or give it a `VITE_` prefix. Leave `STORY_TEST_JWKS` unset outside automated tests.
 
+`OPENAI_API_KEY` is optional and server-only. The translation service calls the OpenAI Responses API only when a storyteller requests a draft. The browser never receives this key. API use may incur provider charges; do not set a key unless the project owner has chosen to enable the feature. The model defaults to `gpt-6-luna`; `OPENAI_TRANSLATION_MODEL` can override it.
+
 For a new installation:
 
-1. Select a dedicated Supabase project. Review [the account migration](supabase/migrations/202611070001_story_bridge_accounts.sql) before applying it to the intended project. It creates the tables, access controls, and private `story-bridge-audio` bucket. Do not apply it to an unrelated project.
+1. Select a dedicated Supabase project. Review [the account migration](supabase/migrations/202611070001_story_bridge_accounts.sql), then [the translation-origin migration](supabase/migrations/202611080001_add_translation_origin.sql) and the separate [story-record columns migration](supabase/migrations/202611080002_add_story_record_columns.sql) before applying them to the intended project, in that order. They create the tables, access controls, private `story-bridge-audio` bucket, story version records, and translation origin field. Do not apply them to an unrelated project.
 2. Configure Supabase email delivery and the email templates used for sign-in. Include `{{ .Token }}` so users can enter a code, and identify the app as Story Bridge. Supabase sends the email; the app does not call Resend directly.
 3. Configure the Site URL and permitted redirect URLs for the actual local or deployed origin. If enabling Google, configure the Google provider and its callback and redirect settings before setting `STORY_GOOGLE_SIGN_IN=true`.
 4. Restart the app after changing the environment. Check sign-in, saving and reopening a text draft, and saving and playing a private recording against your own configuration.
@@ -83,7 +99,7 @@ Existing local JSON stories and recordings are not automatically migrated to Sup
 
 ## Deploy
 
-Configure the Supabase account-mode variables above in the hosting service's private environment settings, then use:
+Configure the Supabase account-mode variables above in the hosting service's private environment settings. Add `OPENAI_API_KEY` only if the owner enables AI translation. Then use:
 
 ```sh
 npm ci && npm run build

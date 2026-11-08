@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const dist = path.resolve(process.env.STORY_BRIDGE_BUILD_DIR || 'dist');
 const knownSecretNames = ['VITE_SUPABASE_SECRET_KEY','VITE_SUPABASE_SERVICE_ROLE_KEY','VITE_SUPABASE_SERVICE_KEY'];
+const serverOnlySecretNames = ['OPENAI_API_KEY'];
 const configuredSecretNames = Object.keys(process.env).filter(name => name.startsWith('VITE_') && ['SECRET','SERVICE_ROLE','SERVICE_KEY','PRIVATE_KEY'].some(marker => name.includes(marker)));
 const builtFiles = [];
 function visit(directory, files) {
@@ -23,7 +24,9 @@ for (const file of ['README.md','PLAN.md','.gitignore','package.json','.env.exam
 for (const file of [...builtFiles,...sourceFiles]) {
   const body = fs.readFileSync(file);
   if (process.env.SUPABASE_SECRET_KEY && body.includes(Buffer.from(process.env.SUPABASE_SECRET_KEY))) throw new Error('The configured server-only Supabase key appears in project source or dist.');
+  if (process.env.OPENAI_API_KEY && body.includes(Buffer.from(process.env.OPENAI_API_KEY))) throw new Error('A configured server-only OpenAI key appears in project source or dist.');
   if (knownSecretNames.some(name => body.includes(Buffer.from(name)))) throw new Error('A VITE_ server-secret variable name appears in project source or dist.');
+  if (builtFiles.includes(file) && serverOnlySecretNames.some(name => body.includes(Buffer.from(name)))) throw new Error('A server-only OpenAI secret variable name appears in the client bundle.');
 }
 if (configuredSecretNames.length) throw new Error('A VITE_-prefixed server-secret variable is configured.');
 console.log('Configured Supabase secret and VITE_ server-secret checks passed for project source and dist.');

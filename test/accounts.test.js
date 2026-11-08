@@ -41,8 +41,8 @@ function fixtureStore() {
   };
   return store;
 }
-async function serverFor(store=fixtureStore()) {
-  const app=express();app.use(express.json());mountAccountRoutes(app,config,{store,verify:createTokenVerifier(config)});app.use((_req,res)=>res.status(503).end());
+async function serverFor(store=fixtureStore(),draftTranslation=async()=> 'Synthetic mock translation') {
+  const app=express();app.use(express.json());mountAccountRoutes(app,config,{store,verify:createTokenVerifier(config),draftTranslation});app.use((_req,res)=>res.status(503).end());
   const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
   return {base:`http://127.0.0.1:${server.address().port}`,server,store};
 }
@@ -135,6 +135,30 @@ test('account isolation covers private, draft, withdrawn and public stories plus
   assert.equal((await fetch(`${base}/api/stories/b-public`,{headers:{authorization:`Bearer ${token('user-a',{exp:1})}`}})).status,200);
 });
 
+test('account stories expose version fingerprints on creation and append a version after edits',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const audio=Buffer.from('synthetic version audio');const form=new FormData();form.append('originalLanguage','Synthetic language');form.append('text','Synthetic account story');form.append('translationLanguage','English');form.append('translation','Synthetic translation');form.append('audio',new Blob([audio],{type:'audio/webm'}),'synthetic.webm');
+  const created=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(created.status,201);
+  const story=await created.json();assert.equal(story.versionLog.length,1);assert.equal(story.versionLog[0].change,'Story created');assert.match(story.versionLog[0].fingerprint,/^[a-f0-9]{64}$/);assert.equal(store.rows.get(story.id).audio_sha256,hash(audio));
+  const edited=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({text:'Synthetic account story edited'})});assert.equal(edited.status,200);
+  const saved=await edited.json();assert.equal(saved.versionLog.length,2);assert.equal(saved.versionLog[1].change,'Original story edited');assert.notEqual(saved.versionLog[0].fingerprint,saved.versionLog[1].fingerprint);assert.equal(store.rows.get(story.id).version_log.length,2);
+});
+
+test('AI translation draft route requires an account and stores origin only after explicit approval',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const denied=await fetch(`${base}/api/translation-draft`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'Private synthetic story',originalLanguage:'Synthetic',targetLanguage:'English'})});
+  assert.equal(denied.status,401);
+  const draft=await fetch(`${base}/api/translation-draft`,{method:'POST',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({text:'Private synthetic story',originalLanguage:'Synthetic',targetLanguage:'English'})});
+  const draftBody=await draft.json();assert.equal(draft.status,200);assert.equal(draftBody.origin,'ai_draft_unapproved');assert.equal(draftBody.translation,'Synthetic mock translation');
+  const form=new FormData();form.append('originalLanguage','Synthetic');form.append('text','Private synthetic story');form.append('translationLanguage','English');form.append('translation','Synthetic mock translation');form.append('translationOrigin','ai_approved');form.append('translationApproved','false');
+  const blocked=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(blocked.status,400);assert.equal(store.rows.size,0);
+  form.set('translationApproved','true');
+  const saved=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(saved.status,201);
+  const story=await saved.json();assert.equal(story.translationOrigin,'ai_approved');assert.match(story.versionLog[0].fingerprint,/^[a-f0-9]{64}$/);
+  const edited=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({translation:'Storyteller-edited translation'})});
+  assert.equal(edited.status,200);assert.equal((await edited.json()).translationOrigin,'storyteller');
+});
+
 test('legacy claim is conditional, single-owner, token-bound and race-safe', async t=>{
   const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
   const legacy='l'.repeat(48);store.rows.set('old',storyRow('old',null,'draft','private'));store.rows.get('old').owner_hash=hash(legacy);
@@ -153,6 +177,25 @@ test('legacy claim is conditional, single-owner, token-bound and race-safe', asy
   assert.equal((await fetch(`${base}/api/stories/old`,{method:'PUT',headers:{'x-owner-token':legacy,'content-type':'application/json'},body:'{"text":"edit"}'})).status,401);
   assert.equal((await fetch(`${base}/api/stories/old`,{method:'PUT',headers:{'x-owner-token':legacy,'content-type':'application/json'},body:'{"withdraw":true}'})).status,401);
   assert.equal((await fetch(`${base}/api/stories/old/audio`,{headers:{'x-owner-token':legacy}})).status,404);
+});
+
+test('account draft transition hides a formerly public story and audio, while owner access and republishing remain available',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  store.rows.set('workflow',storyRow('workflow','user-a','shared','public','synthetic-audio'));
+  const url=`${base}/api/stories/workflow`,audioUrl=`${url}/audio`;
+  assert.equal((await fetch(url)).status,200);assert.equal((await fetch(audioUrl)).status,200);
+  const edit=body=>fetch(url,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify(body)});
+  await edit({text:'Synthetic public edit without a status request.'});
+  let row=store.rows.get('workflow');assert.equal(row.status,'shared');
+  await edit({visibility:'public',approve:false});
+  row=store.rows.get('workflow');assert.equal(row.status,'draft');assert.equal(row.visibility,'public');
+  assert.equal((await (await fetch(`${base}/api/stories`)).json()).some(item=>item.id==='workflow'),false);
+  assert.equal((await fetch(url)).status,404);assert.equal((await fetch(audioUrl)).status,404);
+  assert.equal((await fetch(url,{headers:auth('user-a')})).status,200);assert.equal((await fetch(audioUrl,{headers:auth('user-a')})).status,200);
+  await edit({text:'Synthetic draft edit without a status request.'});assert.equal(store.rows.get('workflow').status,'draft');
+  await edit({visibility:'public',approve:true});
+  row=store.rows.get('workflow');assert.equal(row.status,'shared');assert.equal(row.visibility,'public');
+  assert.equal((await fetch(url)).status,200);assert.equal((await fetch(audioUrl)).status,200);
 });
 
 test('profile is per-account and only stores a display name', async t=>{

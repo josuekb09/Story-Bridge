@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs'; import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -13,7 +14,36 @@ const create=async(token=owner, extra={})=>{const fd=new FormData();for(const [k
 const put=(id,token,body)=>fetch(`${base}/api/stories/${id}`,{method:'PUT',headers:{'content-type':'application/json','x-owner-token':token},body:JSON.stringify(body)});
 test('draft, private approval, public sharing and owner-token confidentiality',async()=>{let [r,s]=await create();assert.equal(r.status,201);const id=s.id;assert.equal(s.ownerToken,undefined);assert.equal((await fetch(`${base}/api/stories/${id}`)).status,404);assert.equal((await fetch(`${base}/api/stories/${id}`,{headers:{'x-owner-token':other}})).status,404);assert.equal((await put(id,other,{approve:true})).status,403);assert.equal((await put(id,other,{checkTranslation:true,checkedBy:'X'})).status,403);assert.equal((await put(id,other,{withdraw:true})).status,403);assert.equal((await put(id,owner,{visibility:'private',approve:true})).status,200);assert.equal((await fetch(`${base}/api/stories/${id}`)).status,404);assert.equal((await fetch(`${base}/api/stories/${id}`,{headers:{'x-owner-token':owner}})).status,200);await put(id,owner,{visibility:'public',approve:true});const pubResponse=await fetch(`${base}/api/stories/${id}`);const pub=await pubResponse.json();assert.equal(Object.hasOwn(pub,'storytellerName'),false);assert.equal(JSON.stringify(pub).includes(owner),false);assert.equal(JSON.stringify(pub).includes(other),false);const list=await (await fetch(`${base}/api/stories`)).json();assert.equal(list.some(x=>x.id===id),true);});
 test('audio authorization and withdraw immediately hides story and audio',async()=>{const fd=new FormData();fd.append('originalLanguage','Language A');fd.append('text','audio');fd.append('audio',new Blob([Buffer.from('fake audio')],{type:'audio/webm'}),'untrusted.webm');let r=await fetch(`${base}/api/stories`,{method:'POST',headers:{'x-owner-token':owner},body:fd});let s=await r.json();const url=`${base}/api/stories/${s.id}/audio`;assert.equal((await fetch(url)).status,404);assert.equal((await fetch(url,{headers:{'x-owner-token':owner}})).status,200);await put(s.id,owner,{visibility:'private',approve:true});assert.equal((await fetch(url)).status,404);assert.equal((await fetch(url,{headers:{'x-owner-token':owner}})).status,200);await put(s.id,owner,{visibility:'public',approve:true});assert.equal((await fetch(url)).status,200);await put(s.id,owner,{withdraw:true});assert.equal((await fetch(url)).status,404);assert.equal((await fetch(`${base}/api/stories/${s.id}`)).status,404);});
+
+test('explicit draft transition hides a formerly public legacy story and audio, while owner access and republishing remain available',async()=>{
+  const form=new FormData();form.append('originalLanguage','Synthetic language');form.append('text','Synthetic public story.');form.append('audio',new Blob([Buffer.from('synthetic audio bytes')],{type:'audio/webm'}),'synthetic.webm');
+  const created=await fetch(`${base}/api/stories`,{method:'POST',headers:{'x-owner-token':owner},body:form});assert.equal(created.status,201);const story=await created.json();assert.equal(story.versionLog.length,1);assert.equal(story.translationOrigin,'storyteller');const audioHash=crypto.createHash('sha256').update('synthetic audio bytes').digest('hex');const expected=crypto.createHash('sha256').update(['Synthetic language','Synthetic public story.','','','storyteller',audioHash].join('\0')).digest('hex');assert.equal(story.versionLog[0].fingerprint,expected);const url=`${base}/api/stories/${story.id}`;const audioUrl=`${url}/audio`;
+  await put(story.id,owner,{visibility:'public',approve:true});
+  assert.equal((await fetch(url)).status,200);assert.equal((await fetch(audioUrl)).status,200);
+  await put(story.id,owner,{text:'Synthetic public edit without a status request.'});
+  let saved=await (await fetch(url,{headers:{'x-owner-token':owner}})).json();assert.equal(saved.status,'shared');assert.equal(saved.versionLog.length,3);assert.equal((await fetch(url)).status,200);
+  await put(story.id,owner,{visibility:'public',approve:false});
+  saved=await (await fetch(url,{headers:{'x-owner-token':owner}})).json();assert.equal(saved.status,'draft');assert.equal(saved.visibility,'public');
+  assert.equal((await (await fetch(`${base}/api/stories`)).json()).some(item=>item.id===story.id),false);
+  assert.equal((await fetch(url)).status,404);assert.equal((await fetch(audioUrl)).status,404);
+  assert.equal((await fetch(url,{headers:{'x-owner-token':owner}})).status,200);assert.equal((await fetch(audioUrl,{headers:{'x-owner-token':owner}})).status,200);
+  await put(story.id,owner,{text:'Synthetic draft edit without a status request.'});
+  saved=await (await fetch(url,{headers:{'x-owner-token':owner}})).json();assert.equal(saved.status,'draft');
+  await put(story.id,owner,{visibility:'public',approve:true});
+  saved=await (await fetch(url,{headers:{'x-owner-token':owner}})).json();assert.equal(saved.status,'shared');assert.equal(saved.visibility,'public');
+  assert.equal((await fetch(url)).status,200);assert.equal((await fetch(audioUrl)).status,200);
+});
 test('translation checked label only changes for owner and edits reset status',async()=>{const [,s]=await create(owner,{translation:'A translation',translationLanguage:'Language B'});assert.equal((await put(s.id,other,{checkTranslation:true,checkedBy:'Speaker'})).status,403);await put(s.id,owner,{checkTranslation:true,checkedBy:'Speaker'});let x=await (await fetch(`${base}/api/stories/${s.id}`,{headers:{'x-owner-token':owner}})).json();assert.equal(x.translationChecked,true);assert.equal(x.checkedBy,'Speaker');await put(s.id,owner,{translation:'Changed'});x=await (await fetch(`${base}/api/stories/${s.id}`,{headers:{'x-owner-token':owner}})).json();assert.equal(x.translationChecked,false);});
+
+test('legacy translation draft is optional when unconfigured and saving an AI draft requires approval',async()=>{
+  const prior=process.env.OPENAI_API_KEY;delete process.env.OPENAI_API_KEY;
+  try {
+    const unauth=await fetch(`${base}/api/translation-draft`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'Synthetic story',originalLanguage:'A',targetLanguage:'B'})});assert.equal(unauth.status,401);
+    const unavailable=await fetch(`${base}/api/translation-draft`,{method:'POST',headers:{'x-owner-token':owner,'content-type':'application/json'},body:JSON.stringify({text:'Synthetic story',originalLanguage:'A',targetLanguage:'B'})});const error=await unavailable.json();assert.equal(unavailable.status,503);assert.match(error.error,/write the translation yourself/);assert.doesNotMatch(JSON.stringify(error),/OPENAI_API_KEY/);
+    const denied=await create(owner,{translation:'Synthetic AI translation',translationOrigin:'ai_approved',translationApproved:'false'});assert.equal(denied[0].status,400);
+    const accepted=await create(owner,{translation:'Synthetic AI translation',translationOrigin:'ai_approved',translationApproved:'true'});assert.equal(accepted[0].status,201);assert.equal(accepted[1].translationOrigin,'ai_approved');
+  } finally { if(prior===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=prior; }
+});
 test('audio upload rejects non-audio and oversized files; text length limited',async()=>{let fd=new FormData();fd.append('originalLanguage','A');fd.append('audio',new Blob(['x'],{type:'text/plain'}),'bad.txt');assert.equal((await fetch(`${base}/api/stories`,{method:'POST',headers:{'x-owner-token':owner},body:fd})).status,400);fd=new FormData();fd.append('originalLanguage','A');fd.append('audio',new Blob([new Uint8Array(10*1024*1024+1)],{type:'audio/wav'}),'big.wav');assert.equal((await fetch(`${base}/api/stories`,{method:'POST',headers:{'x-owner-token':owner},body:fd})).status,413);assert.equal((await create(owner,{text:'x'.repeat(12001)}))[0].status,413);});
 
 test('seed honors STORY_DATA_DIR and refuses to replace stories unless --force is explicit',()=>{
@@ -30,7 +60,7 @@ test('seed honors STORY_DATA_DIR and refuses to replace stories unless --force i
     const forced=spawnSync(process.execPath,[path.join(projectRoot,'scripts','seed.js'),'--force'],{cwd:projectRoot,env,encoding:'utf8'});
     assert.equal(forced.status,0,forced.stderr);
     assert.ok(forced.stdout.includes(seedFile),'Forced seed did not print its isolated target path.');
-    assert.equal(JSON.parse(fs.readFileSync(seedFile,'utf8')).length,2,'Explicit --force did not replace the isolated fixture.');
+    assert.equal(JSON.parse(fs.readFileSync(seedFile,'utf8')).length,6,'Explicit --force did not create the six public demo stories.');
   }finally{}
 });
 

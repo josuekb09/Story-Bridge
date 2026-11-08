@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 360" role="img" aria-labelledby="title description" preserveAspectRatio="xMidYMid meet">
+  <title id="title">Bridge carrying voices across a river</title>
+  <desc id="description">Three forest-green arches span a quiet sand-colored river, with a clay waveform at the centre.</desc>
+  <rect width="560" height="360" rx="20" fill="#F4EDE0"/>
+  <circle cx="432" cy="90" r="54" fill="#E9B44C"/>
+  <path d="M44 238a82 82 0 0 1 164 0m0 0a82 82 0 0 1 164 0m0 0a82 82 0 0 1 144 0" fill="none" stroke="#1F4D3A" stroke-width="11" stroke-linecap="round"/>
+  <path d="M30 242h500" fill="none" stroke="#1F4D3A" stroke-width="11" stroke-linecap="round"/>
+  <path d="M0 287c58-22 91-22 140 0s92 22 140 0 91-22 140 0 91 22 140 0v73H0z" fill="#3F7A5C"/>
+  <g fill="#C4663F"><rect x="210" y="298" width="8" height="22" rx="4"/><rect x="226" y="290" width="8" height="38" rx="4"/><rect x="242" y="281" width="8" height="56" rx="4"/><rect x="258" y="295" width="8" height="28" rx="4"/><rect x="274" y="286" width="8" height="46" rx="4"/><rect x="290" y="299" width="8" height="20" rx="4"/><rect x="306" y="291" width="8" height="36" rx="4"/><rect x="322" y="297" width="8" height="24" rx="4"/></g>
+</svg>

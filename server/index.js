@@ -9,6 +9,8 @@ import { parseAccountConfig } from './auth.js';
 import { mountAccountRoutes } from './account-routes.js';
 import { createFileAccountStore } from './file-account-store.js';
 import { contentSecurityPolicy } from './csp.js';
+import { appendStoryVersion, makeStoryVersion, storyRecord } from './story-record.js';
+import { createTranslationDraftService, isTranslationApproved, translationDraftHandler } from './translation-draft.js';
 
 export const MODE = parseAccountConfig();
 
@@ -28,6 +30,7 @@ const WRITE_RATE_WINDOW_MS = positiveInteger(process.env.STORY_WRITE_RATE_WINDOW
 const BACKUP_COUNT = 3;
 const uploadReservations = new Map();
 const writeWindows = new Map();
+const draftTranslation = createTranslationDraftService();
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value || '', 10);
@@ -74,8 +77,10 @@ function validateStore(value) {
       if (typeof story[key] !== 'string') throw new StoreError(`invalid-${key}-type`);
     }
     if (typeof story.translationChecked !== 'boolean' || typeof story.showName !== 'boolean') throw new StoreError('invalid-boolean-field');
+    if (story.translationOrigin !== undefined && !['storyteller', 'ai_approved'].includes(story.translationOrigin)) throw new StoreError('invalid-translation-origin');
     if (!['private', 'public'].includes(story.visibility) || !['draft', 'shared', 'withdrawn'].includes(story.status)) throw new StoreError('invalid-visibility-or-status');
     if (story.audio && (path.basename(story.audio) !== story.audio || /[\\/\0]/.test(story.audio))) throw new StoreError('invalid-audio-path');
+    if (story.versionLog !== undefined && (!Array.isArray(story.versionLog) || story.versionLog.some(version => !version || typeof version.timestamp !== 'string' || typeof version.language !== 'string' || typeof version.change !== 'string' || typeof version.fingerprint !== 'string' || !/^[a-f0-9]{64}$/i.test(version.fingerprint)))) throw new StoreError('invalid-version-log');
   }
   return value;
 }
@@ -133,7 +138,8 @@ const isOwner = (req, story) => {
   return !!token && crypto.timingSafeEqual(Buffer.from(hash(token)), Buffer.from(story.ownerHash));
 };
 const clean = (story, owner) => {
-  const result = { id: story.id, originalLanguage: story.originalLanguage, text: story.text, translationLanguage: story.translationLanguage, translation: story.translation, translationChecked: story.translationChecked, checkedBy: story.translationChecked ? story.checkedBy : '', visibility: story.visibility, status: story.status, createdAt: story.createdAt, audio: !!story.audio };
+  const result = { id: story.id, originalLanguage: story.originalLanguage, text: story.text, translationLanguage: story.translationLanguage, translation: story.translation, translationOrigin: story.translationOrigin || 'storyteller', translationChecked: story.translationChecked, checkedBy: story.translationChecked ? story.checkedBy : '', visibility: story.visibility, status: story.status, createdAt: story.createdAt, audio: !!story.audio };
+  result.versionLog=storyRecord(story);
   if (story.showName || owner) result.storytellerName = story.storytellerName;
   return result;
 };
@@ -153,9 +159,15 @@ app.use(express.json({ limit: '256kb' }));
 
 if (MODE.authMode === 'account') {
   const accountStore = MODE.backend === 'supabase' ? undefined : createFileAccountStore(path.resolve(process.env.STORY_ACCOUNT_DATA_DIR || path.join(ROOT,'account-data')));
-  mountAccountRoutes(app, MODE, { store:accountStore, rateLimit: rateLimitWrites });
+  mountAccountRoutes(app, MODE, { store:accountStore, rateLimit: rateLimitWrites, draftTranslation });
   app.use('/api', (_req, res) => res.status(503).json({ error: 'This account operation is not available.' }));
-} else app.get('/api/account/config', (_req, res) => res.json({ account: false, brand: 'Story Bridge' }));
+} else {
+  app.get('/api/account/config', (_req, res) => res.json({ account: false, brand: 'Story Bridge' }));
+  app.post('/api/translation-draft', rateLimitWrites, (req, res, next) => {
+    if (!ownerToken(req)) return res.status(401).json({ error: 'Start a local story session before requesting an AI translation.' });
+    next();
+  }, translationDraftHandler(draftTranslation));
+}
 
 function rateLimitWrites(req, res, next) {
   const now = Date.now();
@@ -242,6 +254,7 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/storie
     if (text.length > 12_000) return res.status(413).json({ error: 'Story text is limited to 12,000 characters.' });
     if (String(body.originalLanguage || '').trim().length > 80 || String(body.translation || '').length > 12_000) return res.status(413).json({ error: 'Language or translation is too long.' });
     if (!String(body.originalLanguage || '').trim()) return res.status(400).json({ error: 'Enter the language of the story.' });
+    if (body.translationOrigin === 'ai_approved' && !isTranslationApproved(body.translationApproved)) return res.status(400).json({ error: 'Approve the AI translation before saving it.' });
 
     const all = readDb();
     const ownerHash = hash(token);
@@ -265,10 +278,12 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/storie
     const story = {
       id, ownerHash, originalLanguage: String(body.originalLanguage).trim(), text,
       translationLanguage: String(body.translationLanguage || '').trim(), translation: String(body.translation || ''),
+      translationOrigin: body.translation ? (body.translationOrigin === 'ai_approved' && isTranslationApproved(body.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller',
       translationChecked: false, checkedBy: '', storytellerName: String(body.storytellerName || '').slice(0, 120),
       showName: body.showName === 'true', visibility: 'private', status: 'draft', createdAt: new Date().toISOString(),
-      audio: audioName, mime: req.file?.mimetype || '',
+      audio: audioName, mime: req.file?.mimetype || '', audioFingerprint:audioName?crypto.createHash('sha256').update(fs.readFileSync(path.join(UPLOADS,audioName))).digest('hex'):'',
     };
+    story.versionLog=[makeStoryVersion(story,'Story created')];
     all.push(story);
     try { writeDb(all); }
     catch (error) {
@@ -295,8 +310,13 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories
   if (!story) return res.sendStatus(404);
   if (!isOwner(req, story)) return res.sendStatus(403);
   const body = req.body || {};
+  const before={...story};
   if (body.text !== undefined) { if (typeof body.text !== 'string' || body.text.length > 12_000) return res.status(413).json({ error: 'Story text is limited to 12,000 characters.' }); story.text = body.text; }
   if (body.translation !== undefined) { if (typeof body.translation !== 'string' || body.translation.length > 12_000) return res.status(413).json({ error: 'Translation is limited to 12,000 characters.' }); story.translation = body.translation; story.translationChecked = false; story.checkedBy = ''; }
+  if (body.translation !== undefined || body.translationOrigin !== undefined) {
+    if (body.translationOrigin === 'ai_approved' && !isTranslationApproved(body.translationApproved)) return res.status(400).json({ error: 'Approve the AI translation before saving it.' });
+    story.translationOrigin = story.translation ? (body.translationOrigin === 'ai_approved' && isTranslationApproved(body.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller';
+  }
   if (body.translationLanguage !== undefined) story.translationLanguage = String(body.translationLanguage).slice(0, 80);
   if (body.originalLanguage !== undefined) story.originalLanguage = String(body.originalLanguage).slice(0, 80);
   if (body.storytellerName !== undefined) story.storytellerName = String(body.storytellerName).slice(0, 120);
@@ -304,7 +324,19 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories
   if (body.checkTranslation === true) { const name = String(body.checkedBy || '').trim().slice(0, 120); if (!name || !story.translation) return res.status(400).json({ error: 'Enter the checker name and a translation.' }); story.translationChecked = true; story.checkedBy = name; }
   if (body.visibility !== undefined) { if (!['private', 'public'].includes(body.visibility)) return res.status(400).json({ error: 'Invalid visibility.' }); story.visibility = body.visibility; }
   if (body.approve === true) story.status = 'shared';
+  else if (body.approve === false) story.status = 'draft';
   if (body.withdraw === true) { story.status = 'withdrawn'; story.visibility = 'private'; }
+  const versionChanges=[];
+  if(before.originalLanguage!==story.originalLanguage)versionChanges.push('Original language changed');
+  if(before.text!==story.text)versionChanges.push('Original story edited');
+  if(before.translationLanguage!==story.translationLanguage)versionChanges.push('Translation language changed');
+  if(before.translation!==story.translation)versionChanges.push('Translation edited');
+  if(before.translationOrigin!==story.translationOrigin)versionChanges.push(`Translation origin set to ${story.translationOrigin === 'ai_approved' ? 'AI draft approved by the storyteller' : 'written by the storyteller'}`);
+  if(before.translationChecked!==story.translationChecked)versionChanges.push('Translation review label changed');
+  if(before.storytellerName!==story.storytellerName||before.showName!==story.showName)versionChanges.push('Name display choice changed');
+  if(before.visibility!==story.visibility)versionChanges.push(`Visibility changed to ${story.visibility}`);
+  if(before.status!==story.status)versionChanges.push(story.status==='shared'?'Approved for sharing':story.status==='withdrawn'?'Story withdrawn':'Saved as draft');
+  if(versionChanges.length)story.versionLog=appendStoryVersion(story,versionChanges.join('; '));
   writeDb(all);
   res.json(clean(story, true));
 });

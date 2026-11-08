@@ -46,7 +46,7 @@ function recordingError(error) {
   }
 }
 
-export default function RecordingCapture({ file, fileKind, saved, disabled = false, onChange, onBusyChange }) {
+export default function RecordingCapture({ file, fileKind, saved, disabled = false, onChange, onBusyChange, language='', onTranscript=()=>{} }) {
   const [phase, setPhase] = useState('ready');
   const [error, setError] = useState('');
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -58,6 +58,8 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
   const timerRef = useRef(null);
   const startTimeRef = useRef(0);
   const mountedRef = useRef(true);
+  const recognitionRef=useRef(null);
+  const [transcriptStatus,setTranscriptStatus]=useState('');
 
   const busy = phase === 'requesting' || phase === 'recording' || phase === 'stopping';
   const clearTimer = useCallback(() => {
@@ -82,6 +84,7 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
       try { recorderRef.current.stop(); } catch { /* Track cleanup below still runs. */ }
     }
     stopTracks();
+    try{recognitionRef.current?.stop()}catch{} recognitionRef.current=null;
   }, [clearTimer, onBusyChange, stopTracks]);
 
   useEffect(() => {
@@ -127,6 +130,16 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
       }
       streamRef.current = stream;
 
+      const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+      setTranscriptStatus(SpeechRecognition?'Listening for words…':'Speech transcription is unavailable in this browser. You can type the story or use an audio file.');
+      if(SpeechRecognition){
+        const recognition=new SpeechRecognition();recognitionRef.current=recognition;recognition.lang=/kiswahili|swahili/i.test(language)?'sw-KE':/français|french/i.test(language)?'fr-FR':'en-US';recognition.continuous=true;recognition.interimResults=true;
+        recognition.onresult=event=>{let finalText='';for(let i=0;i<event.results.length;i++)if(event.results[i].isFinal)finalText+=event.results[i][0].transcript+' ';if(finalText.trim())onTranscript(finalText.trim())};
+        recognition.onerror=()=>setTranscriptStatus('Transcription stopped. Your recording is still available; you can type or edit the text.');
+        recognition.onend=()=>{if(recognitionRef.current===recognition){recognitionRef.current=null;setTranscriptStatus('Transcription ended. Please review and edit the transcript before saving.')}};
+        try{recognition.start()}catch{setTranscriptStatus('Transcription could not start. You can type the story while keeping the recording.')}
+      }
+
       const recorder = new window.MediaRecorder(stream);
       recorderRef.current = recorder;
       chunksRef.current = [];
@@ -140,6 +153,7 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
         if (recorderRef.current !== recorder) return;
         clearTimer();
         stopTracks();
+        try{recognitionRef.current?.stop()}catch{} recognitionRef.current=null;
         const duration = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
         if (mountedRef.current) setElapsedMs(duration);
         const chunks = chunksRef.current;
@@ -239,6 +253,8 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
   const duration = fileKind === 'recording' ? elapsedMs : mediaDurationMs;
 
   return <div className="record">
+    <p className="muted">Recording can produce a browser speech transcript. Review and edit it before saving. Availability and speech handling depend on your browser settings; Story Bridge does not send transcript audio to its own server.</p>
+    {transcriptStatus&&<p role="status" className="transcript-status">{transcriptStatus}</p>}
     <div className="recording-status" role="status" aria-live="polite" aria-atomic="true">{status}</div>
     {phase === 'recording' && <span className="muted" role="timer" aria-label={`Recording elapsed ${formatDuration(elapsedMs)}`}>Elapsed: {formatDuration(elapsedMs)}</span>}
     {error && <p className="recording-error" role="alert">{error}</p>}

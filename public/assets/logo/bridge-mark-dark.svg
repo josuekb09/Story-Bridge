@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" role="img" aria-label="Story Bridge mark">
+  <path d="M6 42 A18 18 0 0 1 42 42" fill="none" stroke="#FBF8F2" stroke-width="4" stroke-linecap="round"/>
+  <path d="M42 42 A18 18 0 0 1 78 42" fill="none" stroke="#FBF8F2" stroke-width="4" stroke-linecap="round"/>
+  <line x1="4" y1="42" x2="92" y2="42" stroke="#FBF8F2" stroke-width="4" stroke-linecap="round"/>
+  <rect x="28" y="52" width="3" height="8" rx="1.5" fill="#C4663F"/><rect x="34" y="49" width="3" height="14" rx="1.5" fill="#C4663F"/><rect x="40" y="46" width="3" height="20" rx="1.5" fill="#C4663F"/><rect x="46" y="50" width="3" height="12" rx="1.5" fill="#C4663F"/><rect x="52" y="47" width="3" height="18" rx="1.5" fill="#C4663F"/><rect x="58" y="51" width="3" height="10" rx="1.5" fill="#C4663F"/><rect x="64" y="48" width="3" height="16" rx="1.5" fill="#C4663F"/>
+</svg>

@@ -12,6 +12,7 @@
     "check:dist-secrets": "node scripts/check-dist-secrets.js",
     "test": "node --test --test-concurrency=1",
     "test:browser": "node scripts/run-browser-tests.js",
+    "test:screens": "node scripts/capture-product-screens.mjs",
     "test:all": "npm run build && npm test && npm run test:browser && npm run check:dist-secrets",
     "seed": "node scripts/seed.js"
   },

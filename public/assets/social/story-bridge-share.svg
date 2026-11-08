@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Story Bridge</title><desc id="desc">Your story, in your own voice, carried across languages.</desc>
+  <rect width="1200" height="630" fill="#F4EDE0"/><circle cx="970" cy="130" r="240" fill="#E9B44C" opacity=".28"/>
+  <g transform="translate(750 185) scale(3)"><path d="M6 42 A18 18 0 0 1 42 42M42 42 A18 18 0 0 1 78 42" fill="none" stroke="#1F4D3A" stroke-width="4" stroke-linecap="round"/><line x1="4" y1="42" x2="92" y2="42" stroke="#1F4D3A" stroke-width="4" stroke-linecap="round"/><g fill="#C4663F"><rect x="28" y="52" width="3" height="8" rx="1.5"/><rect x="34" y="49" width="3" height="14" rx="1.5"/><rect x="40" y="46" width="3" height="20" rx="1.5"/><rect x="46" y="50" width="3" height="12" rx="1.5"/><rect x="52" y="47" width="3" height="18" rx="1.5"/><rect x="58" y="51" width="3" height="10" rx="1.5"/><rect x="64" y="48" width="3" height="16" rx="1.5"/></g></g>
+  <text x="86" y="162" fill="#3F7A5C" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" letter-spacing="4">STORY BRIDGE</text>
+  <text x="86" y="268" fill="#1D2B24" font-family="Fraunces,Georgia,serif" font-size="58" font-weight="600">Your story, in your</text><text x="86" y="338" fill="#1D2B24" font-family="Fraunces,Georgia,serif" font-size="58" font-weight="600">own voice.</text>
+  <text x="86" y="408" fill="#4B5A52" font-family="Inter,Arial,sans-serif" font-size="23">Carried across languages. Shared on your terms.</text>
+</svg>

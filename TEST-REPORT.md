@@ -1,7 +1,27 @@
 # Test report
 
-Current status: **PASS** — the latest `npm run test:all` exited 0: 11 Node tests passed, the build passed, and all 74 browser entries passed (0 FAIL, 0 NOT TESTED).
-Latest full run: **2026-11-07 06:20:27 UTC** (2026-11-07T06-20-27-184Z; evidence written at 08:21 local time).
+## Cultural record implementation — 8 November 2026
+
+- Added a Luluwa/Lulua project-draft cultural record to Listen and its own detail view. Its English summary follows the supplied brief; French and Tshiluba placeholders are empty; no image is present. The record links the three requested Wikipedia pages and says it was not written by a community member.
+- Added a restricted-record view rule: non-owners see only title, region, access label, and “This object is shared with its community.”; owners can see the full record.
+- “Add a speaker’s voice” opens the ordinary four-step Share flow with the record context. The story remains separate through the existing story API and has its own author choice and version fingerprint. The object/story relationship is held in current browser state only; it is not synchronized or persisted server-side.
+- Cultural record unit tests: restricted non-owner redaction, project-draft attribution, and author/fingerprint preservation all pass. The cited sources are secondary references and do not amount to community verification. Current custodianship remains unverified; no image was added.
+- Responsive screenshots (including the object detail and object-prefilled Share view) are under [design-review-2026-11-08T14-53-47-157Z](test-evidence/design-review-2026-11-08T14-53-47-157Z/). At 375px, 768px, and 1280px, measured document width equaled viewport width on Landing, Listen, object detail, object-prefilled Share, story detail, all four Share steps, review, and My stories. Sign-in was measured at 375px and 1280px, also without horizontal overflow.
+- Final Node test result: 42 passed, 0 failed. The production build passed with Vite's existing 500 KB chunk-size warning. The dist-secret check passed after build.
+- Latest full browser run: [results.json](test-evidence/2026-11-08T14-54-20-672Z/results.json) — 73 PASS, 7 FAIL, 2 NOT TESTED. Identity races C, D1, D2, E; profile F; and all three double-click/retry G checks passed. The remaining failures are in older audio/save/listing assertions: one screenshot assertion treats the native file input as clipped, one 375px screen reports document width 436px, and subsequent legacy review/publication assertions fail after that path. Those cases are not claimed as passing. Withdraw/reload checks depending on that path are NOT TESTED. The new object UI flow itself passed the separate responsive capture assertion; its access/provenance logic passed unit tests.
+- Object/story linking currently exists in browser state only. The story is saved as a distinct story via the existing API and carries its own author and fingerprint, but the association is not persisted or synchronized across browsers.
+
+## Earlier stabilization run — historical, superseded
+
+At that point, the isolated browser run had 94 PASS entries, 0 FAIL, and 0 NOT TESTED. Node tests passed 29/29; the build and secret check passed. This is historical evidence and is superseded by the current results above. Browser output and synthetic responsive captures are in [results.json](test-evidence/2026-11-08T11-34-50-051Z/results.json). All browser data and uploaded fixtures used isolated `.test-data` storage.
+
+The run covers the legacy end-to-end story flow, hidden storyteller identity, author-entered translation and self-reported check label, draft/public/private/withdrawn access for A and B, owner access to draft text/audio, failed-save retention and retry, next-form reset, profile load/save recovery, malformed list recovery, responsive workspace/collection/profile views, and delayed double-click guards. Identity race results are separately named in the results file: C (private detail), D1 (profile response), D2 (late mutation error), and E (same-user renewal event). Audio reports absent/loading/error states and retries private audio through the authenticated owner request; the suite checks a simulated failed request then retry. The dialogue helpers use named listeners, verify the chosen action, remove listeners in `finally`, and remove no-dialog observers after their action.
+
+Limitations: E uses a locally generated, valid synthetic JWT delivered through a same-user storage event; it checks preservation when the session object is renewed but does not contact a real auth provider or exercise a network token-refresh response. Account-mode sign-in/provider flows use local mocks and file-backed isolated storage, not a deployed Supabase project. Real phone compatibility, physical microphone hardware, independently audible playback, downloaded-copy deletion, and production readiness remain outside this proof of concept. No deployment or publication was performed.
+
+The first focused run exposed a fixture sequencing issue in the list retry scenario; the fixture was corrected and the full browser suite then passed. The earlier `spawn EPERM` occurred before test/build execution inside the sandbox; approved runs outside it completed successfully.
+
+Historical status at 2026-11-07 06:20:27 UTC: `npm run test:all` exited 0 with 11 Node tests and 74 browser entries. This has been superseded by the 2026-11-08 stabilization run above.
 During recovery, `data/stories.json` and files under `uploads/` were checked by size and modified time only. Their current metadata is recorded below; the earlier report asserted a match but did not preserve numeric baseline values for comparison.
 
 ## Stage 1 hardening recovery
