@@ -51,6 +51,9 @@ const results = [];
 const responseBodies = [];
 const urls = [];
 const consoleMessages = [];
+const consoleErrors = [];
+const resourceErrors = [];
+const pageErrors = [];
 const serverLogs = [];
 let apiServer;
 let webServer;
@@ -104,7 +107,14 @@ async function captureEvidence(name, capture) {
 }
 function observePage(page) {
   page.on('request', req => urls.push(req.url()));
-  page.on('console', msg => consoleMessages.push(msg.text()));
+  page.on('console', msg => {
+    consoleMessages.push(msg.text());
+    if (msg.type() === 'error') {
+      if (msg.text().startsWith('Failed to load resource:')) resourceErrors.push(msg.text());
+      else consoleErrors.push(msg.text());
+    }
+  });
+  page.on('pageerror', error => pageErrors.push(String(error?.stack || error)));
   page.on('response', response => {
     if (response.url().includes('/api/') && response.headers()['content-type']?.includes('application/json')) {
       response.text().then(text => responseBodies.push(text)).catch(() => {});
@@ -134,7 +144,7 @@ async function waitFor(url) {
 function child(command, args, env) {
   const p = spawn(command, args, { cwd: root, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   p.stdout.on('data', b => serverLogs.push(b.toString()));
-  p.stderr.on('data', b => serverLogs.push(b.toString()));
+  p.stderr.on('data', b => { serverLogs.push(b.toString()); process.stderr.write(b); });
   return p;
 }
 async function stop(p) {
@@ -167,14 +177,14 @@ async function captureScreen(page, name, width, captureLower = true) {
   const metrics = await page.evaluate(() => {
     const visible = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
     const controls = [...document.querySelectorAll('button,input:not([type=checkbox]):not([type=radio]),textarea,audio')].filter(visible);
-    const clipped = controls.filter(el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth + 1 || r.width < 24 || r.height < 20; }).map(el => el.tagName);
-    const tiny = [...document.querySelectorAll('body *')].filter(visible).map(el => parseFloat(getComputedStyle(el).fontSize)).filter(n => n > 0 && n < 12);
+    const clipped = controls.filter(el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth + 1 || r.width < 24 || r.height < 20; }).map(el => `${el.tagName.toLowerCase()}${el.type?`[type=${el.type}]`:''}${el.getAttribute('aria-label')?`[aria-label=${el.getAttribute('aria-label')}]`:''}(${Math.round(el.getBoundingClientRect().left)},${Math.round(el.getBoundingClientRect().right)},${Math.round(el.getBoundingClientRect().width)}x${Math.round(el.getBoundingClientRect().height)})`);
+    const tiny = [...document.querySelectorAll('body *')].filter(visible).map(el => ({ size:parseFloat(getComputedStyle(el).fontSize), selector:`${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? `.${el.className.trim().replace(/\s+/g,'.')}` : ''}`, text:(el.innerText||'').trim().slice(0,50) })).filter(item => item.size > 0 && item.size < 12);
     const main = document.querySelector('main')?.getBoundingClientRect(); const nav = document.querySelector('.bottom-nav')?.getBoundingClientRect();
-    return { viewport: innerWidth, document: document.documentElement.scrollWidth, clippedControls: clipped, tinyTextCount: tiny.length, mainX: main?.x, mainRight: main?.right, mainBottom: main?.bottom, navTop: nav?.top, navWidth: nav?.width };
+    return { viewport: innerWidth, document: document.documentElement.scrollWidth, clippedControls: clipped, tinyText: tiny, mainX: main?.x, mainRight: main?.right, mainBottom: main?.bottom, navTop: nav?.top, navWidth: nav?.width };
   });
   ensure(metrics.document <= width + 1, `Horizontal overflow at ${width}px (document ${metrics.document}px; viewport ${width}px).`);
   ensure(metrics.clippedControls.length === 0, `Clipped or undersized controls at ${width}px: ${metrics.clippedControls.join(', ')}.`);
-  ensure(metrics.tinyTextCount === 0, `Text below 12px found at ${width}px.`);
+  ensure(metrics.tinyText.length === 0, `Text below 12px found at ${width}px: ${metrics.tinyText.slice(0,8).map(item=>`${item.selector} (${item.size}px) “${item.text}”`).join('; ')}.`);
   ensure(metrics.mainX >= -1 && metrics.mainRight <= width + 1, `Main content clipped at ${width}px.`);
   ensure(metrics.navWidth <= width + 1 && metrics.mainBottom <= metrics.navTop + 1, `Main content overlaps the bottom navigation at ${width}px.`);
   const file = path.join(evidenceDir, `${name}-${width}.png`);
@@ -220,7 +230,7 @@ async function observeNoDialog(page, action) {
   finally { page.off('dialog', handler); }
 }
 async function captureWidths(page, name) {
-  for (const width of [1280, 375]) {
+  for (const width of [1280, 375, 320]) {
     const shot = await captureScreen(page, name, width, true);
     results.push({ name: `${name} screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
   }
@@ -268,6 +278,7 @@ try {
     contextB = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     contextCapture = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     contextUnsupported = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    for (const context of [contextA, contextB, contextCapture, contextUnsupported]) await context.route('https://fonts.googleapis.com/**', route => route.abort());
     for (const context of [contextA, contextB, contextCapture, contextUnsupported]) await context.addInitScript(() => {
       window.__storyBridgeCspViolations = [];
       document.addEventListener('securitypolicyviolation', event => window.__storyBridgeCspViolations.push({ directive: event.violatedDirective, blocked: event.blockedURI }));
@@ -314,10 +325,10 @@ try {
       });
     });
     await pageUnsupported.addInitScript(() => { Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: undefined }); });
-    await pageA.goto(webOrigin); await pageA.getByRole('heading', { name: 'Tell it in your own voice.' }).waitFor(); await pageA.locator('.hero-actions').getByRole('button',{name:'Listen to stories'}).click(); await pageA.getByRole('heading',{name:'Listen'}).waitFor();
-    await pageB.goto(webOrigin); await pageB.getByRole('heading', { name: 'Tell it in your own voice.' }).waitFor(); await pageB.locator('.hero-actions').getByRole('button',{name:'Listen to stories'}).click(); await pageB.getByRole('heading',{name:'Listen'}).waitFor();
-    await pageCapture.goto(webOrigin); await pageCapture.getByRole('heading', { name: 'Tell it in your own voice.' }).waitFor(); await pageCapture.locator('.hero-actions').getByRole('button',{name:'Listen to stories'}).click(); await pageCapture.getByRole('heading',{name:'Listen'}).waitFor();
-    await pageUnsupported.goto(webOrigin); await pageUnsupported.getByRole('heading', { name: 'Tell it in your own voice.' }).waitFor(); await pageUnsupported.locator('.hero-actions').getByRole('button',{name:'Listen to stories'}).click(); await pageUnsupported.getByRole('heading',{name:'Listen'}).waitFor();
+    await pageA.goto(webOrigin,{waitUntil:'domcontentloaded'}); await pageA.getByRole('heading', { name: 'Share your culture. Learn from every other.' }).waitFor(); await pageA.locator('.home-actions').getByRole('button',{name:'Explore stories'}).click(); await pageA.getByRole('heading',{name:'Listen'}).waitFor();
+    await pageB.goto(webOrigin,{waitUntil:'domcontentloaded'}); await pageB.getByRole('heading', { name: 'Share your culture. Learn from every other.' }).waitFor(); await pageB.locator('.home-actions').getByRole('button',{name:'Explore stories'}).click(); await pageB.getByRole('heading',{name:'Listen'}).waitFor();
+    await pageCapture.goto(webOrigin,{waitUntil:'domcontentloaded'}); await pageCapture.getByRole('heading', { name: 'Share your culture. Learn from every other.' }).waitFor(); await pageCapture.locator('.home-actions').getByRole('button',{name:'Explore stories'}).click(); await pageCapture.getByRole('heading',{name:'Listen'}).waitFor();
+    await pageUnsupported.goto(webOrigin,{waitUntil:'domcontentloaded'}); await pageUnsupported.getByRole('heading', { name: 'Share your culture. Learn from every other.' }).waitFor(); await pageUnsupported.locator('.home-actions').getByRole('button',{name:'Explore stories'}).click(); await pageUnsupported.getByRole('heading',{name:'Listen'}).waitFor();
     ownerA = await pageA.evaluate(() => localStorage.getItem('story-bridge-owner') || '');
     ownerB = await pageB.evaluate(() => localStorage.getItem('story-bridge-owner') || '');
     ownerCapture = await pageCapture.evaluate(() => localStorage.getItem('story-bridge-owner') || '');
@@ -582,6 +593,7 @@ try {
     await pageCapture.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click();
     await pageCapture.getByLabel('Language told in').fill('Synthetic recording language');
     await pageCapture.getByRole('button',{name:'Continue to your story'}).click();
+    await pageCapture.getByLabel('Post title').fill('Synthetic audio post');
     await pageCapture.getByLabel('Your story').fill('Synthetic fake-microphone capture for save retry coverage.');
     await pageCapture.getByRole('button', { name: 'Record voice' }).click();
     await pageCapture.getByRole('status').getByText('Recording.').waitFor();
@@ -595,6 +607,7 @@ try {
       else await route.continue();
     });
     await pageCapture.getByRole('button', { name: 'Continue to translation' }).click(); await pageCapture.getByRole('button', { name: 'Continue to review' }).click();
+    await pageCapture.getByLabel('This is mine, or I have permission from the person telling it.').check();
     const retainedUrl = await pageCapture.locator('audio[aria-label="Preview of unsaved audio"]').getAttribute('src');
     await pageCapture.getByRole('button', { name: 'Save draft and open review' }).click();
     await pageCapture.getByRole('alert').getByText('Synthetic save failure').waitFor();
@@ -648,6 +661,7 @@ try {
     await pageA.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click();
     await pageA.getByLabel('Language told in').fill('Synthetic original language');
     await pageA.getByRole('button', { name: 'Continue to your story' }).click();
+    await pageA.getByLabel('Post title').fill('Synthetic AI translation post');
     await pageA.getByLabel('Your story').fill('Synthetic original story for the translation draft.');
     await pageA.getByRole('button', { name: 'Continue to translation' }).click();
     await pageA.getByLabel('Translation language (optional)').fill('Synthetic target language');
@@ -689,12 +703,14 @@ try {
     const text = "Synthetic test story.\n<script>window.__storyBridgeInjected=true</script>\nLiteral text remains text.";
     await pageA.getByLabel('Language told in').fill('Test language');
     await pageA.getByRole('button',{name:'Continue to your story'}).click();
+    await pageA.getByLabel('Post title').fill('Synthetic browser story');
     await pageA.getByLabel('Your story').fill(text);
     await pageA.getByLabel(/Or choose an audio file/).setInputFiles(fixturePath);
     await pageA.getByRole('button',{name:'Continue to translation'}).click();
     await pageA.getByLabel('Translation language (optional)').fill('Second test language');
     await pageA.getByLabel('Your translation or AI draft').fill('Manual test translation.');
     await pageA.getByRole('button',{name:'Continue to review'}).click();
+    await pageA.getByLabel('This is mine, or I have permission from the person telling it.').check();
     await pageA.getByLabel('Your name (optional)').fill('Synthetic Hidden Author');
     ensure(!(await pageA.getByLabel('Show my name on this story').isChecked()), 'Show-name default should be off.');
     const createResponsePromise = pageA.waitForResponse(response => response.url() === `${webOrigin}/api/stories` && response.request().method() === 'POST');
@@ -803,12 +819,12 @@ try {
     ensure(visitorView.status === 200 && visitorView.body.text === approvedActionText && visitorView.body.translation === approvedActionTranslation, 'B API response did not contain the exact approved edits.');
     await pageB.reload();
     await pageB.getByRole('heading', { name: 'Listen' }).waitFor();
-    const publicCard = pageB.locator('.story-card').filter({ hasText: approvedActionText });
+    const publicCard = pageB.locator('.post').filter({ hasText: approvedActionText });
     await publicCard.waitFor({ state: 'visible' });
-    await publicCard.click();
     await pageB.getByText(approvedActionText, { exact: true }).waitFor({ state: 'visible' });
-    await pageB.getByRole('button', { name: 'View translation' }).click();
-    await pageB.getByText(approvedActionTranslation, { exact: true }).waitFor({ state: 'visible' });
+    await publicCard.getByRole('button', { name: /Translation/ }).click();
+    await publicCard.locator('.post-translation').getByText(approvedActionTranslation, { exact: true }).waitFor({ state: 'visible' });
+    await publicCard.getByRole('button', { name: /Original/ }).waitFor({ state: 'visible' });
   }, haveStory);
 
   await record('Only me approval remains private and B direct mutations are forbidden', async () => {
@@ -845,11 +861,11 @@ try {
   }, haveStory);
 
   await record('Excessive text and invalid or oversized audio are rejected', async () => {
-    let fd = new FormData(); fd.append('originalLanguage', 'Test language'); fd.append('text', 'x'.repeat(12001));
+    let fd = new FormData(); for(const [key,value] of Object.entries({title:'Oversize synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'}))fd.append(key,value); fd.append('originalLanguage', 'Test language'); fd.append('text', 'x'.repeat(12001));
     ensure((await direct(ownerA, '/api/stories', 'POST', fd)).status === 413, 'API accepted excessive story text.');
-    fd = new FormData(); fd.append('originalLanguage', 'Test language'); fd.append('audio', new Blob(['not audio'], { type: 'text/plain' }), 'bad.txt');
+    fd = new FormData(); for(const [key,value] of Object.entries({title:'Bad media post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'}))fd.append(key,value); fd.append('originalLanguage', 'Test language'); fd.append('audio', new Blob(['not audio'], { type: 'text/plain' }), 'bad.txt');
     ensure((await direct(ownerA, '/api/stories', 'POST', fd)).status === 400, 'API accepted non-audio MIME type.');
-    fd = new FormData(); fd.append('originalLanguage', 'Test language'); fd.append('audio', new Blob([new Uint8Array(10 * 1024 * 1024 + 1)], { type: 'audio/wav' }), 'oversize.wav');
+    fd = new FormData(); for(const [key,value] of Object.entries({title:'Oversize audio post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'}))fd.append(key,value); fd.append('originalLanguage', 'Test language'); fd.append('audio', new Blob([new Uint8Array(10 * 1024 * 1024 + 1)], { type: 'audio/wav' }), 'oversize.wav');
     ensure((await direct(ownerA, '/api/stories', 'POST', fd)).status === 413, 'API accepted audio over 10 MB.');
   }, haveStory);
 
@@ -860,10 +876,10 @@ try {
     ensure((await direct(ownerA, `/api/stories/${storyId}/audio`)).status === 200, 'Owner could not read public audio.');
     const bList = await direct(ownerB, '/api/stories'); ensure(bList.body.some(s => s.id === storyId), 'Public story absent from B list.');
     await pageB.reload(); await pageB.getByRole('heading', { name: 'Listen' }).waitFor();
-    await pageB.locator('.story-card').filter({hasText:approvedActionText}).getByRole('button',{name:'Open story'}).click(); await pageB.getByRole('heading', { name: approvedActionText }).waitFor();
+    await pageB.locator('.post').filter({hasText:approvedActionText}).getByRole('button',{name:/Read/}).click(); await pageB.getByRole('heading', { name: 'Synthetic browser story' }).waitFor();
     ensure(!(await pageB.getByText('Synthetic Hidden Author', { exact: false }).count()), 'Hidden author name appeared in public UI.');
     ensure(await pageB.getByText(approvedActionText, { exact: true }).isVisible(), 'Original text is not visible.');
-    ensure(await pageB.getByText('Translation by the storyteller').isVisible(), 'Storyteller translation attribution missing.');
+    ensure(await pageB.getByText('Written by the storyteller').isVisible(), 'Storyteller translation attribution missing.');
     await pageB.getByText('Not yet checked by a speaker of this language').waitFor({state:'visible'});
     const publicResponse = await direct(ownerB, `/api/stories/${storyId}`);
     ensure(publicResponse.body.text === approvedActionText && publicResponse.body.translation === approvedActionTranslation && publicResponse.body.translationChecked === false, 'Public response did not contain the edited and honestly labeled version.');
@@ -974,7 +990,7 @@ try {
     jwksServer = http.createServer((_req,res) => { res.writeHead(200, { 'content-type':'application/json' }); res.end(JSON.stringify({ keys:[testJwk] })); });
     await new Promise(resolve => jwksServer.listen(0, '127.0.0.1', resolve));
     const jwksUrl = `http://127.0.0.1:${jwksServer.address().port}/jwks.json`;
-    accountServer = child(process.execPath, ['server/static-test-server.js'], { HOST:'127.0.0.1', PORT:String(accountPort), STORY_BACKEND:'file', STORY_AUTH_MODE:'account', STORY_SERVE_STATIC:'1', STORY_NO_LISTEN:'0', STORY_ACCOUNT_DATA_DIR:path.join(isolated,'account-data'), STORY_DATA_DIR:path.join(isolated,'account-stories'), STORY_UPLOAD_DIR:path.join(isolated,'account-uploads'), STORY_BRIDGE_BUILD_DIR:buildDir, STORY_SKIP_DOTENV:'1', STORY_JWKS_URL:jwksUrl, SUPABASE_URL:'https://story-bridge-test.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake_local_test_key_123456', SUPABASE_SECRET_KEY:'sb_secret_fake_local_test_key_123456', SUPABASE_BUCKET:'story-bridge-audio', STORY_EMAIL_CODE_SIGN_IN:'true', STORY_GOOGLE_SIGN_IN:'false' });
+    accountServer = child(process.execPath, ['server/static-test-server.js'], { HOST:'127.0.0.1', PORT:String(accountPort), STORY_BACKEND:'file', STORY_AUTH_MODE:'account', STORY_SERVE_STATIC:'1', STORY_NO_LISTEN:'0', STORY_ACCOUNT_DATA_DIR:path.join(isolated,'account-data'), STORY_DATA_DIR:path.join(isolated,'account-stories'), STORY_UPLOAD_DIR:path.join(isolated,'account-uploads'), STORY_BRIDGE_BUILD_DIR:buildDir, STORY_SKIP_DOTENV:'1', STORY_JWKS_URL:jwksUrl, STORY_BRIDGE_OBJECT_ADMIN_ID:'browser-test-user', SUPABASE_URL:'https://story-bridge-test.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_fake_local_test_key_123456', SUPABASE_SECRET_KEY:'sb_secret_fake_local_test_key_123456', SUPABASE_BUCKET:'story-bridge-audio', STORY_EMAIL_CODE_SIGN_IN:'true', STORY_GOOGLE_SIGN_IN:'true' });
     await waitFor(`${webOrigin}/api/account/config`);
     const supabaseMock = async route => {
       const cors = { 'access-control-allow-origin':webOrigin, 'access-control-allow-headers':'*', 'access-control-allow-methods':'GET,POST,PUT,OPTIONS' };
@@ -982,7 +998,10 @@ try {
       return route.fulfill({ status:200, contentType:'application/json', headers:cors, body:'{}' });
     };
     const accountContext = await browser.newContext({ viewport:{width:375,height:900} });
+    await accountContext.route('https://fonts.googleapis.com/**', route => route.fulfill({status:200,contentType:'text/css',body:''}));
+    await accountContext.route('https://fonts.gstatic.com/**', route => route.fulfill({status:204,body:''}));
     const accountPage = await accountContext.newPage();
+    observePage(accountPage);
     await accountPage.route('**/api/account/profile', route => route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:''})}));
     await accountPage.route('**/api/account/claim', route => route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'No unclaimed stories matched this browser token.'})}));
     await accountPage.route('**/api/stories', route => route.fulfill({status:200,contentType:'application/json',body:'[]'}));
@@ -990,22 +1009,46 @@ try {
     await accountPage.route('https://story-bridge-test.supabase.co/**', supabaseMock);
     const cspViolations = [];
     accountPage.on('console', message => { if (/Content[- ]Security[- ]Policy/i.test(message.text())) cspViolations.push(message.text().slice(0,120)); });
-    const accountResponse = await accountPage.goto(webOrigin);
+    const accountResponse = await accountPage.goto(webOrigin, { waitUntil:'domcontentloaded' });
     ensure((await accountResponse.headerValue('content-security-policy')).includes("connect-src 'self' https://story-bridge-test.supabase.co"), 'The server CSP did not allow the configured Supabase origin.');
-    await accountPage.getByRole('heading',{name:'Tell it in your own voice.'}).waitFor();
-    await accountPage.getByRole('button',{name:'Open navigation menu'}).click(); await accountPage.getByRole('button',{name:'Sign in'}).click();
-    await accountPage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor();
-    await captureEvidence('Account sign-in captures 375px and 1280px', async()=>{ const shots=[]; for(const width of [375,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-sign-in-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); shots.push({file,metrics:{width}}); } return shots; });
+    await accountPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
+    if(await accountPage.getByRole('button',{name:'Sign in'}).count()===0)await accountPage.getByRole('button',{name:'Menu'}).click();await accountPage.getByRole('button',{name:'Sign in'}).click();
+    await accountPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
+    ensure(await accountPage.getByRole('button',{name:'Continue with Google'}).isVisible(),'Google button was missing when enabled in the account config.');
+    await captureEvidence('Account sign-in captures at 375px, 768px, and 1280px', async()=>{ const shots=[]; for(const width of [375,768,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-sign-in-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); shots.push({file,metrics:{width}}); } return shots; });
     await accountPage.getByLabel('Email address').fill('reader@example.test');
-    await accountPage.getByRole('button',{name:'Email me a sign-in code'}).click();
-    await accountPage.getByRole('heading',{name:'Enter your code'}).waitFor({timeout:5000});
+    await accountPage.getByRole('button',{name:'Email me a code'}).click();
+    await accountPage.getByRole('heading',{name:'Check your email'}).waitFor({timeout:5000});
+    ensure(await accountPage.getByRole('group',{name:'6-digit sign-in code'}).locator('input').count()===6,'The email code screen did not show the configured number of separate digit fields.');
+    ensure(await accountPage.getByRole('button',{name:/Resend code in 30s/}).isDisabled(),'Resend cooldown was not shown immediately after requesting a code.');
     ensure(cspViolations.length === 0, `CSP blocked a request: ${cspViolations.join('; ')}`);
-    await captureEvidence('Email code captures 375px and 1280px', async()=>{ const shots=[]; for(const width of [375,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-email-code-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); shots.push({file,metrics:{width}}); } return shots; });
+    await captureEvidence('Email code captures at 375px, 768px, and 1280px', async()=>{ const shots=[]; for(const width of [375,768,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-email-code-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); shots.push({file,metrics:{width}}); } return shots; });
     await accountPage.close(); await accountContext.close();
+    const googleDisabledContext=await browser.newContext({viewport:{width:1280,height:900}});await googleDisabledContext.route('**/api/account/config',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({account:true,url:'https://story-bridge-test.supabase.co',publishableKey:'sb_publishable_fake_local_test_key_123456',email:true,google:false})}));await googleDisabledContext.route('**/api/stories',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));await googleDisabledContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await googleDisabledContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));const googleDisabledPage=await googleDisabledContext.newPage();observePage(googleDisabledPage);await googleDisabledPage.goto(webOrigin,{waitUntil:'domcontentloaded'});await googleDisabledPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();await googleDisabledPage.getByRole('button',{name:'Sign in'}).click();await googleDisabledPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();ensure(await googleDisabledPage.getByRole('button',{name:'Continue with Google'}).count()===0,'Google sign-in was visible while disabled in the server config.');pass('Google button stays hidden when disabled by server config');await googleDisabledContext.close();
+
+    const welcomeContext=await browser.newContext({viewport:{width:375,height:900}});
+    await welcomeContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await welcomeContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
+    const welcomeToken=signTestToken({sub:'welcome-user',iss:'https://story-bridge-test.supabase.co/auth/v1',aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600,email:'welcome@example.test'},testSigningKey.privateKey,'browser-local-key');
+    await welcomeContext.addInitScript(tokenValue=>localStorage.setItem('sb-story-bridge-test-auth-token',JSON.stringify({access_token:tokenValue,refresh_token:'synthetic-refresh',token_type:'bearer',expires_at:4102444800,user:{id:'welcome-user',aud:'authenticated',email:'welcome@example.test',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-01-01T00:00:00Z'}})),welcomeToken);
+    const welcomePage=await welcomeContext.newPage();observePage(welcomePage);
+    await welcomePage.route('**/api/account/claim',route=>route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'No unclaimed stories matched this browser token.'})}));
+    await welcomePage.route('**/api/stories',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));await welcomePage.route('**/api/mine',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));
+    await welcomePage.route('https://story-bridge-test.supabase.co/**',supabaseMock);
+    await welcomePage.route('https://story-bridge-test.supabase.co/auth/v1/user',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:'welcome-user',aud:'authenticated',role:'authenticated',email:'welcome@example.test',app_metadata:{provider:'email'},user_metadata:{story_bridge_welcome_completed:true},created_at:'2026-01-01T00:00:00Z',updated_at:new Date().toISOString()})}));
+    await welcomePage.goto(webOrigin,{waitUntil:'domcontentloaded'});await welcomePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
+    await welcomePage.getByLabel('Display name').fill('A New Storyteller');await welcomePage.getByLabel('Country').fill('Kenya');await welcomePage.getByLabel('Languages you speak').fill('Swahili, English');
+    await welcomePage.getByLabel(/I accept the/).check();
+    await captureEvidence('Welcome profile captures at 375px, 768px, and 1280px',async()=>{const shots=[];for(const width of [375,768,1280]){await welcomePage.setViewportSize({width,height:900});const file=path.join(evidenceDir,`welcome-profile-${width}.png`);await welcomePage.screenshot({path:file,fullPage:true});shots.push({file,metrics:{width}})}return shots});
+    await welcomePage.getByRole('button',{name:'Continue'}).click();await welcomePage.getByRole('heading',{name:'Welcome, A New Storyteller'}).waitFor();
+    pass('Welcome flow: new account saves name, country, languages, and required consent');
+    await welcomeContext.close();
 
     const profileContext = await browser.newContext({viewport:{width:375,height:900}});
-    await profileContext.addInitScript(() => localStorage.setItem('sb-story-bridge-test-auth-token',JSON.stringify({access_token:'synthetic-local-session',refresh_token:'synthetic-refresh',token_type:'bearer',expires_at:4102444800,user:{id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',email:'reader@example.test',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-01-01T00:00:00Z'}})));
+    await profileContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));
+    await profileContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
+    await profileContext.addInitScript(() => localStorage.setItem('sb-story-bridge-test-auth-token',JSON.stringify({access_token:'synthetic-local-session',refresh_token:'synthetic-refresh',token_type:'bearer',expires_at:4102444800,user:{id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',email:'reader@example.test',app_metadata:{provider:'email'},user_metadata:{story_bridge_welcome_completed:true},created_at:'2026-01-01T00:00:00Z'}})));
     const profilePage=await profileContext.newPage();
+    observePage(profilePage);
     let profileLoadAttempts=0, profileSaveAttempts=0;
     await profilePage.route('**/api/account/profile', async route => {
       if(route.request().method()==='PUT') {
@@ -1017,7 +1060,7 @@ try {
       profileLoadAttempts++;
       return profileLoadAttempts===1
         ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic profile load failure.'})})
-        : route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:''}),delay:40});
+      : route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:profileSaveAttempts > 1 ? 'Canonical server name' : ''}),delay:40});
     });
     await profilePage.route('**/api/account/claim', route => route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'No unclaimed stories matched this browser token.'})}));
     let profileStoriesAttempts=0, profileMineAttempts=0, storyRetryStage=0;
@@ -1030,14 +1073,14 @@ try {
     await profilePage.route('**/api/stories', route => { profileStoriesAttempts++; if(storyRetryStage===0)return route.fulfill({status:503,contentType:'application/json',body:'{}'}); if(storyRetryStage===1)return route.fulfill({status:200,contentType:'application/json',body:'{}'}); return route.fulfill({status:200,contentType:'application/json',body:'[]'}); });
     await profilePage.route('**/api/mine', route => { profileMineAttempts++; return profileMineAttempts===1 ? route.fulfill({status:503,contentType:'application/json',body:'{}'}) : route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(collectionFixture)}); });
     await profilePage.route('https://story-bridge-test.supabase.co/**', supabaseMock);
-    await profilePage.goto(webOrigin); await profilePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
+    await profilePage.goto(webOrigin,{waitUntil:'domcontentloaded'}); await profilePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     await profilePage.getByRole('alert').getByText('This list could not be loaded.').waitFor();
     ensure(await profilePage.getByRole('button',{name:'Create a story'}).isVisible(),'Workspace hid the create action during a list error.');
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
     await profilePage.getByText('Your collection').waitFor();
     ensure(await profilePage.getByRole('button',{name:'Drafts 1'}).isVisible(),'Draft count did not use the status and visibility rules.');
     ensure(await profilePage.getByRole('button',{name:'Public 1'}).isVisible()&&await profilePage.getByRole('button',{name:'Private 1'}).isVisible()&&await profilePage.getByRole('button',{name:'Withdrawn 1'}).isVisible(),'Workspace category totals were inaccurate.');
-    await captureEvidence('Workspace captures at 375px, 1280px, and 320px overflow check', async()=>{ const shots=[]; for(const width of [375,1280,320]) shots.push(await captureScreen(profilePage,'account-workspace',width,false)); return shots; });
+    await captureEvidence('Workspace captures at 375px, 768px, 1280px, and 320px overflow check', async()=>{ const shots=[]; for(const width of [375,768,1280,320]) shots.push(await captureScreen(profilePage,'account-workspace',width,false)); return shots; });
     await profilePage.getByRole('button',{name:'Discover'}).click();
     storyRetryStage=1;
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
@@ -1046,14 +1089,14 @@ try {
     pass('Workspace lists: malformed API response remains a retryable error');
     storyRetryStage=2;
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
-    await profilePage.getByText('No stories match those filters yet.').waitFor();
+    await profilePage.getByText('The first stories are waiting to be told.').waitFor();
     await profilePage.getByRole('button',{name:'My stories'}).click();
     await profilePage.getByRole('heading',{name:'My stories'}).waitFor();
     await profilePage.getByRole('button',{name:/Drafts \(1\)/}).click();
     ensure(await profilePage.locator('.mine-card').count()===1,'Draft filter did not isolate the synthetic draft.');
     ensure(await profilePage.getByText('Audio recording attached').count()===0,'Draft card showed incorrect audio presence.');
-    await captureEvidence('Collection captures at 375px, 1280px, and 320px overflow check', async()=>{ const shots=[]; for(const width of [375,1280,320]) shots.push(await captureScreen(profilePage,'account-collection',width,false)); return shots; });
-    await profilePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Profile'}).click(); await profilePage.getByRole('heading',{name:'Your profile'}).waitFor();
+    await captureEvidence('Collection captures at 375px, 768px, 1280px, and 320px overflow check', async()=>{ const shots=[]; for(const width of [375,768,1280,320]) shots.push(await captureScreen(profilePage,'account-collection',width,false)); return shots; });
+    await profilePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Profile'}).click();
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).waitFor();
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
     await profilePage.getByLabel('Display name').waitFor();
@@ -1067,26 +1110,32 @@ try {
     await profilePage.getByRole('button',{name:'Saving…'}).waitFor();
     ensure(await profilePage.getByLabel('Display name').isVisible()&&await profilePage.getByRole('button',{name:'Saving…'}).isDisabled(),'Profile form disappeared or remained active while saving.');
     await profilePage.getByRole('status').getByText('Profile saved.').waitFor();
-    ensure(await profilePage.getByLabel('Display name').inputValue()==='Canonical server name','Successful profile save did not use the server-returned name.');
+    await profilePage.getByRole('heading',{name:'Canonical server name'}).waitFor();
     await profilePage.getByRole('button',{name:'My workspace',exact:true}).click();
     await profilePage.getByRole('heading',{name:'Welcome, Canonical server name'}).waitFor();
     pass('Profile F: retry, navigation cancel, save failure retention, busy state, and canonical success');
-    await captureEvidence('Profile captures at 375px and 1280px', async()=>{ await profilePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Profile'}).click(); await profilePage.getByLabel('Display name').waitFor(); const shots=[]; for(const width of [375,1280]) shots.push(await captureScreen(profilePage,'account-profile',width,false)); return shots; });
+    await captureEvidence('Profile captures at 375px, 768px, and 1280px', async()=>{ await profilePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Profile'}).click(); await profilePage.getByRole('heading',{name:'Canonical server name'}).waitFor(); const shots=[]; for(const width of [375,768,1280]) shots.push(await captureScreen(profilePage,'account-profile',width,false)); return shots; });
     await profileContext.close();
     const configRetryContext=await browser.newContext({viewport:{width:375,height:900}});
+    await configRetryContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));
+    await configRetryContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
     const configRetryPage=await configRetryContext.newPage(); let failConfigOnce=true;
+    observePage(configRetryPage);
     await configRetryPage.route('**/api/account/config',route=>{if(failConfigOnce){failConfigOnce=false;return route.fulfill({status:503,contentType:'application/json',body:'{}'});}return route.continue();});
-    await configRetryPage.goto(webOrigin); await configRetryPage.getByRole('heading',{name:'Story Bridge is unavailable'}).waitFor();
+    await configRetryPage.goto(webOrigin,{waitUntil:'domcontentloaded'}); await configRetryPage.getByRole('heading',{name:'Story Bridge is unavailable'}).waitFor();
     ensure(await configRetryPage.getByText('Story Bridge could not load its configuration. Try again.').isVisible(),'Configuration failure did not show a recoverable error.');
     ensure(await configRetryPage.getByRole('button',{name:'Listen',exact:true}).count()===0,'Configuration failure silently selected legacy mode.');
-    await configRetryPage.getByRole('button',{name:'Try again'}).click(); await configRetryPage.getByRole('heading',{name:'Tell it in your own voice.'}).waitFor(); await configRetryPage.getByRole('button',{name:'Open navigation menu'}).click(); await configRetryPage.getByRole('button',{name:'Sign in'}).click(); await configRetryPage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor();
+    await configRetryPage.getByRole('button',{name:'Try again'}).click(); await configRetryPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor(); if(await configRetryPage.getByRole('button',{name:'Sign in'}).count()===0)await configRetryPage.getByRole('button',{name:'Menu'}).click();await configRetryPage.getByRole('button',{name:'Sign in'}).click(); await configRetryPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await configRetryContext.close();
     const liveContext = await browser.newContext({ viewport:{width:1280,height:900} });
+    await liveContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));
+    await liveContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
     await liveContext.addInitScript(() => {
       window.__storyBridgeCspViolations = [];
       document.addEventListener('securitypolicyviolation', event => window.__storyBridgeCspViolations.push({ directive:event.violatedDirective, blocked:event.blockedURI }));
     });
     const livePage = await liveContext.newPage(); livePage.setDefaultTimeout(8000); accountFlowPage = livePage;
+    observePage(livePage);
     const signedInToken = signTestToken({ sub:'browser-test-user', iss:'https://story-bridge-test.supabase.co/auth/v1', aud:'authenticated', exp:Math.floor(Date.now()/1000)+3600, email:'reader@example.test' }, testSigningKey.privateKey, 'browser-local-key');
     const secondUserToken = signTestToken({ sub:'browser-test-user-b', iss:'https://story-bridge-test.supabase.co/auth/v1', aud:'authenticated', exp:Math.floor(Date.now()/1000)+3600, email:'second@example.test' }, testSigningKey.privateKey, 'browser-local-key');
     await livePage.route('https://story-bridge-test.supabase.co/**', async route => {
@@ -1096,18 +1145,17 @@ try {
       if (providerPath === '/auth/v1/otp') return route.fulfill({ status:200, contentType:'application/json', headers:cors, body:'{}' });
       if (providerPath === '/auth/v1/verify') {
         const payload=route.request().postDataJSON(); const isSecond=payload?.email==='second@example.test';
-        return route.fulfill({ status:200, contentType:'application/json', headers:cors, body:JSON.stringify({ access_token:isSecond?secondUserToken:signedInToken, refresh_token:'synthetic-refresh', token_type:'bearer', expires_in:3600, expires_at:Math.floor(Date.now()/1000)+3600, user:{ id:isSecond?'browser-test-user-b':'browser-test-user', aud:'authenticated', email:isSecond?'second@example.test':'reader@example.test', app_metadata:{ provider:'email' }, user_metadata:{}, created_at:'2026-01-01T00:00:00Z' } }) });
+        return route.fulfill({ status:200, contentType:'application/json', headers:cors, body:JSON.stringify({ access_token:isSecond?secondUserToken:signedInToken, refresh_token:'synthetic-refresh', token_type:'bearer', expires_in:3600, expires_at:Math.floor(Date.now()/1000)+3600, user:{ id:isSecond?'browser-test-user-b':'browser-test-user', aud:'authenticated', email:isSecond?'second@example.test':'reader@example.test', app_metadata:{ provider:'email' }, user_metadata:{story_bridge_welcome_completed:true}, created_at:'2026-01-01T00:00:00Z' } }) });
       }
       return route.fulfill({ status:404, contentType:'application/json', headers:cors, body:JSON.stringify({ message:'Unexpected provider request in local test.' }) });
     });
-    await livePage.goto(webOrigin);
-    await livePage.getByRole('heading',{name:'Tell it in your own voice.'}).waitFor();
+    await livePage.goto(webOrigin,{waitUntil:'domcontentloaded'});
+    await livePage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
     await livePage.getByRole('button',{name:'Sign in'}).click();
-    await livePage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor();
+    await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await livePage.getByLabel('Email address').fill('reader@example.test');
-    await livePage.getByRole('button',{name:'Email me a sign-in code'}).click();
-    await livePage.getByLabel('One-time code').fill('123456');
-    await livePage.getByRole('button',{name:'Verify code'}).click();
+    await livePage.getByRole('button',{name:'Email me a code'}).click();
+    for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
     await livePage.getByRole('button',{name:'Sign out'}).waitFor();
     ensure(await livePage.getByText('reader@example.test',{exact:true}).isVisible(), 'Signed-in email did not appear in the real account header.');
     await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
@@ -1140,10 +1188,12 @@ try {
     await livePage.getByRole('button',{name:'Create a story',exact:true}).click();
     await livePage.getByLabel('Language told in').fill('Synthetic language');
     await livePage.getByRole('button',{name:'Continue to your story'}).click();
+    await livePage.getByLabel('Post title').fill('Synthetic signed-in post');
     await livePage.getByLabel('Your story').fill('A synthetic signed-in draft before editing.');
     await livePage.getByLabel(/Or choose an audio file/).setInputFiles({name:'synthetic-account-audio.webm',mimeType:'audio/webm',buffer:Buffer.from('synthetic account audio')});
     await livePage.getByRole('button',{name:'Continue to translation'}).click();
     await livePage.getByRole('button',{name:'Continue to review'}).click();
+    await livePage.getByLabel('This is mine, or I have permission from the person telling it.').check();
     const accountCreatePromise=livePage.waitForResponse(response=>response.url()===`${webOrigin}/api/stories`&&response.request().method()==='POST');
     await livePage.getByRole('button',{name:'Save draft and open review'}).click();
     const accountCreateResponse=await accountCreatePromise;
@@ -1159,8 +1209,9 @@ try {
     pass('Story A: successful save leaves a fresh next creation form');
     await livePage.getByLabel('Language told in').fill('Retry language');
     await livePage.getByRole('button',{name:'Continue to your story'}).click();
+    await livePage.getByLabel('Post title').fill('Synthetic retry post');
     await livePage.getByLabel('Your story').fill('Keep this synthetic text after a failed creation.');
-    await livePage.getByRole('button',{name:'Continue to translation'}).click();await livePage.getByRole('button',{name:'Continue to review'}).click();
+    await livePage.getByRole('button',{name:'Continue to translation'}).click();await livePage.getByRole('button',{name:'Continue to review'}).click();await livePage.getByLabel('This is mine, or I have permission from the person telling it.').check();
     await livePage.route('**/api/stories',route=>route.request().method()==='POST' ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic create failure.'})}) : route.continue());
     await livePage.getByRole('button',{name:'Save draft and open review'}).click();
     await livePage.getByRole('alert').getByText('Synthetic create failure.').waitFor();
@@ -1190,19 +1241,20 @@ try {
     const ownCard = livePage.locator('.mine-card').filter({ hasText:'Synthetic language' });
     await ownCard.waitFor({state:'visible'});
     await ownCard.getByRole('button',{name:'Open'}).click();
-    await livePage.getByRole('heading',{name:'Edited by the signed-in browser flow'}).waitFor();
+    await livePage.getByRole('heading',{name:'Synthetic signed-in post'}).waitFor();
     ensure(await livePage.getByText('Edited by the signed-in browser flow.',{exact:true}).isVisible(), 'Saved signed-in edit was not returned by the real story API.');
     await livePage.getByRole('button',{name:'← Back'}).click();
     const accountCard=livePage.locator('.mine-card').filter({hasText:'Synthetic language'});
     await accountCard.getByRole('button',{name:'Review',exact:true}).click();
     await livePage.getByRole('heading',{name:'Review your story'}).waitFor();
     const review375=await captureScreen(livePage,'account-review-status',375,true);
+    const review768=await captureScreen(livePage,'account-review-status',768,true);
     const review1280=await captureScreen(livePage,'account-review-status',1280,true);
     await livePage.setViewportSize({width:320,height:900});
     const narrowMetrics=await livePage.evaluate(()=>({viewport:innerWidth,document:document.documentElement.scrollWidth}));
     ensure(narrowMetrics.document<=321,`Review screen overflows horizontally at 320px: ${JSON.stringify(narrowMetrics)}.`);
     const narrowFile=path.join(evidenceDir,'account-review-status-320.png');await livePage.screenshot({path:narrowFile,animations:'disabled'});
-    results.push({name:'Account review screen screenshots 375px, 1280px, and 320px overflow check',status:'PASS',evidence:[review375.file,review1280.file,narrowFile].map(file=>path.relative(root,file)),detail:JSON.stringify(narrowMetrics)});
+    results.push({name:'Account review screen screenshots 375px, 768px, 1280px, and 320px overflow check',status:'PASS',evidence:[review375.file,review768.file,review1280.file,narrowFile].map(file=>path.relative(root,file)),detail:JSON.stringify(narrowMetrics)});
 
     const storyPattern=`**/api/stories/${accountStoryId}`;
     const doubleClick=async name=>livePage.getByRole('button',{name,exact:true}).evaluate(button=>{button.click();button.click();});
@@ -1220,8 +1272,10 @@ try {
     await livePage.unroute(storyPattern);
     ensure(publishRequests===1,`Double click submitted ${publishRequests} publish requests.`);
     pass('Mutation G: delayed publish double click submits once');
+    const adminApprovalResponse=livePage.waitForResponse(response=>response.url()===`${webOrigin}/api/admin/posts/${accountStoryId}/approve`&&response.request().method()==='POST');await livePage.getByRole('button',{name:'Approve first post',exact:true}).click();const adminApprovalResult=await adminApprovalResponse;ensure(adminApprovalResult.status()===200,`Admin approval returned HTTP ${adminApprovalResult.status()}.`);
+    await livePage.waitForFunction(async id=>{const r=await fetch('/api/stories');const rows=await r.json();return rows.some(story=>story.id===id)},accountStoryId);
     const publicList=await livePage.evaluate(async()=>{const r=await fetch('/api/stories');return r.json();});
-    ensure(publicList.some(story=>story.id===accountStoryId),'Explicit publish did not add the account story to the public list.');
+    if(!publicList.some(story=>story.id===accountStoryId)){const privateStatus=await livePage.evaluate(async id=>{const session=Object.entries(localStorage).map(([,value])=>{try{return JSON.parse(value)}catch{return null}}).find(value=>value?.access_token&&value?.user?.id==='browser-test-user');const auth=session?{authorization:`Bearer ${session.access_token}`}:{},detail=await fetch(`/api/stories/${id}`,{headers:auth}),mine=await fetch('/api/mine',{headers:auth}),pending=await fetch('/api/admin/posts/pending',{headers:auth}),d=detail.ok?await detail.json():null,m=mine.ok?await mine.json():[],p=pending.ok?await pending.json():[];return{detailStatus:detail.status,mineStatus:mine.status,pendingStatus:pending.status,detailState:d?{id:d.id,status:d.status,visibility:d.visibility,moderationStatus:d.moderationStatus}:null,mineIds:m.map(item=>item.id),pendingIds:p.map(item=>item.id)}},accountStoryId);throw new Error(`Explicit publish missing from public feed after successful admin response: ${JSON.stringify({publicIds:publicList.map(story=>story.id),privateStatus})}`)}
 
     const publicCard=livePage.locator('.mine-card').filter({hasText:'Synthetic language'});
     await publicCard.getByRole('button',{name:'Review',exact:true}).click();
@@ -1299,9 +1353,9 @@ try {
     ensure(withdrawn===404,'Withdrawn story remained available without an owner session.');
 
     const loginAs=async email=>{
-      if(await livePage.getByLabel('Email address').count()===0) { await livePage.getByRole('button',{name:'Sign in'}).click(); await livePage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor(); }
-      await livePage.getByLabel('Email address').fill(email); await livePage.getByRole('button',{name:'Email me a sign-in code'}).click();
-      await livePage.getByLabel('One-time code').fill('123456'); await livePage.getByRole('button',{name:'Verify code'}).click();
+      if(await livePage.getByLabel('Email address').count()===0) { await livePage.getByRole('button',{name:'Sign in'}).click(); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor(); }
+      await livePage.getByLabel('Email address').fill(email); await livePage.getByRole('button',{name:'Email me a code'}).click();
+      for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
       await livePage.getByRole('button',{name:'Sign out'}).waitFor(); await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     };
     // Hold an A-owned private detail response across sign-out and B sign-in.
@@ -1311,7 +1365,7 @@ try {
     const detailRequested=new Promise(resolve=>{detailReached=resolve;});
     await livePage.route(storyPattern,async route=>{if(route.request().method()==='GET'){detailReached();await detailHeld;return route.continue();}return route.continue();});
     await withdrawnCard.getByRole('button',{name:'Open'}).click(); await detailRequested;
-    await livePage.getByRole('button',{name:'Sign out'}).click(); await livePage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor();
+    await livePage.getByRole('button',{name:'Sign out'}).click(); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await loginAs('second@example.test'); releaseDetail(); await delay(350);
     ensure(!(await livePage.locator('body').innerText()).includes('Edited by the signed-in browser flow.'),'A delayed A detail response appeared after B signed in.');
     pass('Identity race C: delayed private A detail cannot render for B');
@@ -1325,7 +1379,7 @@ try {
       return route.continue();
     });
     await livePage.reload(); await livePage.getByRole('button',{name:'Sign out'}).waitFor(); await profileRequested;
-    await livePage.getByRole('button',{name:'Sign out'}).click(); await livePage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor();
+    await livePage.getByRole('button',{name:'Sign out'}).click(); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await loginAs('reader@example.test'); releaseProfile(); await delay(350);
     ensure((await livePage.locator('body').innerText()).includes('Welcome, Canonical server name')===false,'A stale profile response restored the other user’s saved profile name.');
     ensure(!(await livePage.locator('body').innerText()).includes('Stale second user'),'A delayed profile response from the previous identity was rendered.');
@@ -1339,7 +1393,7 @@ try {
     const mutationRequested=new Promise(resolve=>{mutationReached=resolve;});
     await livePage.route(storyPattern,async route=>{if(route.request().method()==='PUT'){mutationReached();await mutationHeld;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic delayed mutation failure.'})});}return route.continue();});
     await livePage.getByRole('button',{name:'Save original edit'}).click(); await mutationRequested;
-    await confirmAction(livePage,livePage.getByRole('button',{name:'Sign out'}),true); await livePage.getByRole('heading',{name:'Sign in to Story Bridge'}).waitFor();
+    await confirmAction(livePage,livePage.getByRole('button',{name:'Sign out'}),true); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await loginAs('second@example.test'); releaseMutation(); await delay(350);
     ensure(!(await livePage.locator('body').innerText()).includes('Late mutation from the previous identity.'),'A delayed mutation response changed the next identity’s screen.');
     ensure(!(await livePage.locator('body').innerText()).includes('Synthetic delayed mutation failure.')&&await livePage.getByRole('heading',{name:'Your storytelling space'}).isVisible(),'A delayed mutation error appeared in the next identity’s session or navigated it away.');
@@ -1350,6 +1404,11 @@ try {
     await liveContext.close();
     jwksServer.close(); jwksServer = undefined;
     return {detail:'Existing sign-in/profile views use mocked API responses; the added browser session mocks only Supabase auth. Real account-mode server, real same-origin routes, real isolated file account storage, local JWKS signature verification, and enforced CSP cover public-to-draft-to-public transitions, authenticated owner draft audio, non-owner denial, delayed double-click guards, failure recovery, and withdrawal.'};
+  }, browserReady);
+  await record('No app console or uncaught JavaScript errors', async () => {
+    ensure(consoleErrors.length === 0, `Browser console errors: ${consoleErrors.join(' | ')}`);
+    ensure(pageErrors.length === 0, `Uncaught JavaScript errors: ${pageErrors.join(' | ')}`);
+    return `Checked ${consoleMessages.length} console messages across ${urls.length} browser requests; ${resourceErrors.length} resource-load errors came from the suite’s expected network-failure, missing-media, or blocked-font scenarios.`;
   }, browserReady);
 } catch (error) {
   if (!(error instanceof FocusedPreviewComplete)) {

@@ -1,8 +1,8 @@
 node_modules/
 dist/
-data/
-uploads/
-account-data/
+/data/
+/uploads/
+/account-data/
 _tmp/
 _npm-cache/
 .test-data/

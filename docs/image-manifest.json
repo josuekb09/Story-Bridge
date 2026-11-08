@@ -1,0 +1,384 @@
+{
+  "generatedAt": "2026-11-08T20:52:41.012Z",
+  "note": "Review every entry. Remove or pin any image that shows identifiable people or is not what the caption says.",
+  "items": [
+    {
+      "id": "za-table-mountain",
+      "country": "South Africa",
+      "countryCode": "ZA",
+      "region": "Southern Africa",
+      "culture": "Cape Town",
+      "subject": "Table Mountain above Cape Town",
+      "commons": [
+        "Table Mountain Cape Town Bloubergstrand",
+        "Table Mountain Cape Town",
+        "Tafelberg Kaapstad"
+      ],
+      "hero": true,
+      "image": {
+        "id": "za-table-mountain",
+        "src": "/assets/photos/africa/web/za-table-mountain-1280.webp",
+        "srcset": "/assets/photos/africa/web/za-table-mountain-640.webp 640w, /assets/photos/africa/web/za-table-mountain-1280.webp 1280w, /assets/photos/africa/web/za-table-mountain-1920.webp 1920w",
+        "width": 1280,
+        "height": 853,
+        "title": "New 7 Wonder of Nature. Table Mountain, Cape Town. 1.jpg",
+        "author": "A3alb",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:New_7_Wonder_of_Nature._Table_Mountain,_Cape_Town._1.jpg"
+      }
+    },
+    {
+      "id": "za-ndebele-murals",
+      "country": "South Africa",
+      "countryCode": "ZA",
+      "region": "Southern Africa",
+      "culture": "Ndebele",
+      "subject": "Painted Ndebele homestead walls",
+      "commons": [
+        "Ndebele house painting",
+        "Ndebele painted house",
+        "Ndebele mural",
+        "Botshabelo Ndebele",
+        "Ndebele wall art"
+      ],
+      "minWidth": 1000,
+      "hero": true,
+      "image": {
+        "id": "za-ndebele-murals",
+        "src": "/assets/photos/africa/web/za-ndebele-murals-1280.webp",
+        "srcset": "/assets/photos/africa/web/za-ndebele-murals-640.webp 640w, /assets/photos/africa/web/za-ndebele-murals-1280.webp 1280w, /assets/photos/africa/web/za-ndebele-murals-1920.webp 1920w",
+        "width": 1280,
+        "height": 853,
+        "title": "Ndebele Architecture.jpg",
+        "author": "Angela Abel",
+        "licence": "CC BY 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ndebele_Architecture.jpg"
+      }
+    },
+    {
+      "id": "za-zulu-beadwork",
+      "country": "South Africa",
+      "countryCode": "ZA",
+      "region": "Southern Africa",
+      "culture": "Zulu",
+      "subject": "Zulu beadwork",
+      "commons": [
+        "Zulu beadwork",
+        "Zulu beads",
+        "Zulu beaded necklace",
+        "Brooklyn Museum Zulu",
+        "Zulu beadwork collection"
+      ],
+      "minWidth": 800,
+      "hero": false,
+      "image": {
+        "id": "za-zulu-beadwork",
+        "src": "/assets/photos/africa/web/za-zulu-beadwork-1280.webp",
+        "srcset": "/assets/photos/africa/web/za-zulu-beadwork-640.webp 640w, /assets/photos/africa/web/za-zulu-beadwork-1280.webp 1280w, /assets/photos/africa/web/za-zulu-beadwork-1920.webp 1920w",
+        "width": 1280,
+        "height": 969,
+        "title": "A Zulu and his wives, South Africa LCCN2017657661.jpg",
+        "author": "Photoglob Co., publisher; Wilson, G. W. (George Washington), 1823-1…",
+        "licence": "Public domain",
+        "licenceUrl": "",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:A_Zulu_and_his_wives,_South_Africa_LCCN2017657661.jpg"
+      }
+    },
+    {
+      "id": "cd-luluwa-figure",
+      "country": "DR Congo",
+      "countryCode": "CD",
+      "region": "Central Africa",
+      "culture": "Luluwa (Kasai)",
+      "subject": "Luluwa figure, Ethnologisches Museum Berlin",
+      "local": {
+        "src": "/assets/photos/lulua/web/Statue_Luluwa-Musée_ethnologique_de_Berlin.jpg",
+        "width": 1200,
+        "height": 1600,
+        "author": "Ji-Elle",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Statue_Luluwa-Mus%C3%A9e_ethnologique_de_Berlin.jpg",
+        "title": "Statue Luluwa-Musée ethnologique de Berlin.jpg"
+      },
+      "hero": true,
+      "image": {
+        "id": "cd-luluwa-figure",
+        "src": "/assets/photos/lulua/web/Statue_Luluwa-Musée_ethnologique_de_Berlin.jpg",
+        "srcset": "",
+        "width": 1200,
+        "height": 1600,
+        "title": "Statue Luluwa-Musée ethnologique de Berlin.jpg",
+        "author": "Ji-Elle",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Statue_Luluwa-Mus%C3%A9e_ethnologique_de_Berlin.jpg"
+      }
+    },
+    {
+      "id": "cd-kuba-textile",
+      "country": "DR Congo",
+      "countryCode": "CD",
+      "region": "Central Africa",
+      "culture": "Kuba",
+      "subject": "Kuba raffia textile",
+      "commons": [
+        "Kuba textile",
+        "Kuba raffia cloth",
+        "Kuba cloth Shoowa"
+      ],
+      "minWidth": 1000,
+      "hero": false,
+      "image": {
+        "id": "cd-kuba-textile",
+        "src": "/assets/photos/africa/web/cd-kuba-textile-1280.webp",
+        "srcset": "/assets/photos/africa/web/cd-kuba-textile-640.webp 640w, /assets/photos/africa/web/cd-kuba-textile-1280.webp 1280w, /assets/photos/africa/web/cd-kuba-textile-1920.webp 1920w",
+        "width": 1280,
+        "height": 1106,
+        "title": "Raffia cloth, Kuba kingdom, c. 1909, HMA.JPG",
+        "author": "Hiart",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Raffia_cloth,_Kuba_kingdom,_c._1909,_HMA.JPG"
+      }
+    },
+    {
+      "id": "et-lalibela",
+      "country": "Ethiopia",
+      "countryCode": "ET",
+      "region": "East Africa",
+      "culture": "Lalibela",
+      "subject": "Church of Saint George, Lalibela",
+      "commons": [
+        "Bete Giyorgis Lalibela",
+        "Church of Saint George Lalibela",
+        "Lalibela rock church"
+      ],
+      "hero": true,
+      "image": {
+        "id": "et-lalibela",
+        "src": "/assets/photos/africa/web/et-lalibela-1280.webp",
+        "srcset": "/assets/photos/africa/web/et-lalibela-640.webp 640w, /assets/photos/africa/web/et-lalibela-1280.webp 1280w, /assets/photos/africa/web/et-lalibela-1920.webp 1920w",
+        "width": 1280,
+        "height": 1649,
+        "title": "Bete Giyorgis 03.jpg",
+        "author": "Bernard Gagnon",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Bete_Giyorgis_03.jpg"
+      }
+    },
+    {
+      "id": "tz-zanzibar-door",
+      "country": "Tanzania",
+      "countryCode": "TZ",
+      "region": "East Africa",
+      "culture": "Swahili coast",
+      "subject": "Carved door, Stone Town, Zanzibar",
+      "commons": [
+        "Zanzibar carved door Stone Town",
+        "Zanzibar door"
+      ],
+      "hero": false,
+      "image": {
+        "id": "tz-zanzibar-door",
+        "src": "/assets/photos/africa/web/tz-zanzibar-door-1280.webp",
+        "srcset": "/assets/photos/africa/web/tz-zanzibar-door-640.webp 640w, /assets/photos/africa/web/tz-zanzibar-door-1280.webp 1280w, /assets/photos/africa/web/tz-zanzibar-door-1920.webp 1920w",
+        "width": 1280,
+        "height": 2048,
+        "title": "Rectangular Carved Door Stone Town Oct26 A7CR 14405.jpg",
+        "author": "Timothy A. Gonsalves",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Rectangular_Carved_Door_Stone_Town_Oct26_A7CR_14405.jpg"
+      }
+    },
+    {
+      "id": "ke-nairobi",
+      "country": "Kenya",
+      "countryCode": "KE",
+      "region": "East Africa",
+      "culture": "Nairobi",
+      "subject": "Nairobi skyline",
+      "commons": [
+        "Nairobi skyline",
+        "Nairobi skyline night",
+        "Nairobi Central Business District",
+        "Kenyatta International Convention Centre",
+        "Nairobi from Uhuru Park"
+      ],
+      "hero": true,
+      "image": {
+        "id": "ke-nairobi",
+        "src": "/assets/photos/africa/web/ke-nairobi-1280.webp",
+        "srcset": "/assets/photos/africa/web/ke-nairobi-640.webp 640w, /assets/photos/africa/web/ke-nairobi-1280.webp 1280w, /assets/photos/africa/web/ke-nairobi-1920.webp 1920w",
+        "width": 1280,
+        "height": 853,
+        "title": "Buffalo Nairobi Skyline Savannah Kenya May19 R1600769.jpg",
+        "author": "Timothy A",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Buffalo_Nairobi_Skyline_Savannah_Kenya_May19_R1600769.jpg"
+      }
+    },
+    {
+      "id": "ml-djenne",
+      "country": "Mali",
+      "countryCode": "ML",
+      "region": "West Africa",
+      "culture": "Djenné",
+      "subject": "Great Mosque of Djenné",
+      "commons": [
+        "Great Mosque of Djenné",
+        "Grande mosquée de Djenné",
+        "Djenne mosque"
+      ],
+      "hero": true,
+      "image": {
+        "id": "ml-djenne",
+        "src": "/assets/photos/africa/web/ml-djenne-1280.webp",
+        "srcset": "/assets/photos/africa/web/ml-djenne-640.webp 640w, /assets/photos/africa/web/ml-djenne-1280.webp 1280w, /assets/photos/africa/web/ml-djenne-1920.webp 1920w",
+        "width": 1280,
+        "height": 593,
+        "title": "MaliDjennéMosquée.JPG",
+        "author": "BluesyPete",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:MaliDjenn%C3%A9Mosqu%C3%A9e.JPG"
+      }
+    },
+    {
+      "id": "gh-kente",
+      "country": "Ghana",
+      "countryCode": "GH",
+      "region": "West Africa",
+      "culture": "Asante and Ewe",
+      "subject": "Kente cloth",
+      "commons": [
+        "Kente cloth",
+        "Kente Ghana",
+        "Kente textile"
+      ],
+      "minWidth": 1000,
+      "hero": false,
+      "image": {
+        "id": "gh-kente",
+        "src": "/assets/photos/africa/web/gh-kente-1280.webp",
+        "srcset": "/assets/photos/africa/web/gh-kente-640.webp 640w, /assets/photos/africa/web/gh-kente-1280.webp 1280w, /assets/photos/africa/web/gh-kente-1920.webp 1920w",
+        "width": 1280,
+        "height": 1017,
+        "title": "Different Kente cloth, Tafi, Volta region.jpg",
+        "author": "Warmglow",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Different_Kente_cloth,_Tafi,_Volta_region.jpg"
+      }
+    },
+    {
+      "id": "ng-lagos",
+      "country": "Nigeria",
+      "countryCode": "NG",
+      "region": "West Africa",
+      "culture": "Lagos",
+      "subject": "Lekki–Ikoyi Link Bridge, Lagos",
+      "commons": [
+        "Lekki Ikoyi Link Bridge",
+        "Lekki-Ikoyi bridge Lagos",
+        "Lagos skyline"
+      ],
+      "hero": true,
+      "image": {
+        "id": "ng-lagos",
+        "src": "/assets/photos/africa/web/ng-lagos-1280.webp",
+        "srcset": "/assets/photos/africa/web/ng-lagos-640.webp 640w, /assets/photos/africa/web/ng-lagos-1280.webp 1280w, /assets/photos/africa/web/ng-lagos-1920.webp 1920w",
+        "width": 1280,
+        "height": 742,
+        "title": "Lekki Ikoyi Link Bridge.jpg",
+        "author": "Chippla",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Lekki_Ikoyi_Link_Bridge.jpg"
+      }
+    },
+    {
+      "id": "ma-ait-benhaddou",
+      "country": "Morocco",
+      "countryCode": "MA",
+      "region": "North Africa",
+      "culture": "Amazigh",
+      "subject": "Ksar of Aït Benhaddou",
+      "commons": [
+        "Ait Benhaddou",
+        "Aït-Ben-Haddou ksar",
+        "Ait Ben Haddou"
+      ],
+      "hero": true,
+      "image": {
+        "id": "ma-ait-benhaddou",
+        "src": "/assets/photos/africa/web/ma-ait-benhaddou-1280.webp",
+        "srcset": "/assets/photos/africa/web/ma-ait-benhaddou-640.webp 640w, /assets/photos/africa/web/ma-ait-benhaddou-1280.webp 1280w, /assets/photos/africa/web/ma-ait-benhaddou-1920.webp 1920w",
+        "width": 1280,
+        "height": 792,
+        "title": "Ksar Aït Benhaddou, Marocco (أيت بن حدو، المغرب, ⴰⵢⵜ ⵃⴰⴷⴷⵓ).jpg",
+        "author": "Petar Milošević",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ksar_A%C3%AFt_Benhaddou,_Marocco_(%D8%A3%D9%8A%D8%AA_%D8%A8%D9%86_%D8%AD%D8%AF%D9%88%D8%8C_%D8%A7%D9%84%D9%85%D8%BA%D8%B1%D8%A8,_%E2%B4%B0%E2%B5%A2%E2%B5%9C_%E2%B5%83%E2%B4%B0%E2%B4%B7%E2%B4%B7%E2%B5%93).jpg"
+      }
+    },
+    {
+      "id": "mg-baobabs",
+      "country": "Madagascar",
+      "countryCode": "MG",
+      "region": "Southern Africa",
+      "culture": "Menabe",
+      "subject": "Avenue of the Baobabs, Morondava",
+      "commons": [
+        "Avenue of the Baobabs",
+        "Allée des Baobabs Morondava",
+        "Baobab alley Madagascar"
+      ],
+      "hero": true,
+      "image": {
+        "id": "mg-baobabs",
+        "src": "/assets/photos/africa/web/mg-baobabs-1280.webp",
+        "srcset": "/assets/photos/africa/web/mg-baobabs-640.webp 640w, /assets/photos/africa/web/mg-baobabs-1280.webp 1280w, /assets/photos/africa/web/mg-baobabs-1920.webp 1920w",
+        "width": 1280,
+        "height": 1707,
+        "title": "Adansonia grandidieri04.jpg",
+        "author": "Bernard Gagnon",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Adansonia_grandidieri04.jpg"
+      }
+    },
+    {
+      "id": "zw-great-zimbabwe",
+      "country": "Zimbabwe",
+      "countryCode": "ZW",
+      "region": "Southern Africa",
+      "culture": "Shona",
+      "subject": "Great Enclosure, Great Zimbabwe",
+      "commons": [
+        "Great Zimbabwe Great Enclosure",
+        "Great Zimbabwe",
+        "Great Zimbabwe ruins"
+      ],
+      "hero": false,
+      "image": {
+        "id": "zw-great-zimbabwe",
+        "src": "/assets/photos/africa/web/zw-great-zimbabwe-1280.webp",
+        "srcset": "/assets/photos/africa/web/zw-great-zimbabwe-640.webp 640w, /assets/photos/africa/web/zw-great-zimbabwe-1280.webp 1280w, /assets/photos/africa/web/zw-great-zimbabwe-1920.webp 1920w",
+        "width": 1280,
+        "height": 851,
+        "title": "Great-zim-aerial-looking-West.JPG",
+        "author": "Janice Bell",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Great-zim-aerial-looking-West.JPG"
+      }
+    }
+  ]
+}

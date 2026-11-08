@@ -37,6 +37,7 @@ async function withServer(label, config, callback) {
 
 async function makeStory(base, token = owner, text = 'Synthetic isolated story.', extraHeaders = {}) {
   const body = new FormData();
+  for (const [key,value] of Object.entries({title:'Synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'})) body.append(key,value);
   body.append('originalLanguage', 'Synthetic language');
   body.append('text', text);
   return fetch(`${base}/api/stories`, { method: 'POST', headers: { 'x-owner-token': token, ...extraHeaders }, body });
@@ -51,6 +52,7 @@ test('store first run accepts an uploaded story, writes atomically, and keeps th
     assert.deepEqual(await (await fetch(`${base}/api/stories`)).json(), []);
     assert.deepEqual(await (await fetch(`${base}/api/mine`, { headers: { 'x-owner-token': owner } })).json(), []);
     const form = new FormData();
+    for (const [key,value] of Object.entries({title:'Synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'})) form.append(key,value);
     form.append('originalLanguage', 'Synthetic language');
     form.append('text', 'Synthetic first-run story with audio.');
     form.append('audio', new Blob([new Uint8Array(128)], { type: 'audio/wav' }), 'fixture.wav');
@@ -93,7 +95,7 @@ test('invalid or missing-with-remnants stores fail closed and never overwrite da
       assert.ok(!listText.includes('synthetic store'), 'Raw stored content escaped in the response.');
       assert.equal((await fetch(`${base}/api/mine`)).status, 500, `mine route: ${name}`);
       assert.equal((await fetch(`${base}/api/stories/anything`)).status, 500, `read route: ${name}`);
-      const body = new FormData(); body.append('originalLanguage', 'Synthetic'); body.append('text', 'Must not save');
+      const body = new FormData(); for (const [key,value] of Object.entries({title:'Synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'})) body.append(key,value); body.append('originalLanguage', 'Synthetic'); body.append('text', 'Must not save');
       const create = await fetch(`${base}/api/stories`, { method: 'POST', headers: { 'x-owner-token': token }, body });
       assert.equal(create.status, 500, `create route: ${name}`);
       assert.deepEqual(fs.readFileSync(storePath), before, `Store changed for ${name}.`);
@@ -132,7 +134,7 @@ test('write rate, owner-story and on-disk upload limits return clear 429 or 413'
     assert.equal((await makeStory(base, 'g'.repeat(48), 'Different client IP.', { 'x-forwarded-for': '203.0.113.11' })).status, 201);
 
     const upload = async (token, bytes, ip) => {
-      const body = new FormData(); body.append('originalLanguage', 'Synthetic');
+      const body = new FormData(); for (const [key,value] of Object.entries({title:'Synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'})) body.append(key,value); body.append('originalLanguage', 'Synthetic');
       body.append('audio', new Blob([new Uint8Array(bytes)], { type: 'audio/wav' }), 'fixture.wav');
       return fetch(`${base}/api/stories`, { method: 'POST', headers: { 'x-owner-token': token, 'x-forwarded-for': ip }, body });
     };

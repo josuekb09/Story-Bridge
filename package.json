@@ -14,7 +14,8 @@
     "test:browser": "node scripts/run-browser-tests.js",
     "test:screens": "node scripts/capture-product-screens.mjs",
     "test:all": "npm run build && npm test && npm run test:browser && npm run check:dist-secrets",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "images:fetch": "node scripts/fetch-africa-images.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
@@ -22,7 +23,8 @@
     "jose": "^6.2.15",
     "multer": "^2.0.2",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.0.2",

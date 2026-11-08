@@ -11,6 +11,8 @@ import { createFileAccountStore } from './file-account-store.js';
 import { contentSecurityPolicy } from './csp.js';
 import { appendStoryVersion, makeStoryVersion, storyRecord } from './story-record.js';
 import { createTranslationDraftService, isTranslationApproved, translationDraftHandler } from './translation-draft.js';
+import { OBJECT_IDS, OBJECT_RECORDS } from '../src/object-records.js';
+import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
 
 export const MODE = parseAccountConfig();
 
@@ -23,6 +25,7 @@ fs.mkdirSync(UPLOADS, { recursive: true });
 
 const DB_FILE = path.join(DATA, 'stories.json');
 const MAX_AUDIO_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_POST_UPLOAD_BYTES = MAX_AUDIO_FILE_BYTES + 6 * IMAGE_MAX_BYTES;
 const MAX_UPLOAD_BYTES = positiveInteger(process.env.STORY_MAX_UPLOAD_BYTES, 1024 * 1024 * 1024);
 const MAX_STORIES_PER_OWNER = positiveInteger(process.env.STORY_MAX_STORIES_PER_OWNER, 500);
 const WRITE_RATE_LIMIT = positiveInteger(process.env.STORY_WRITE_RATE_LIMIT, 60);
@@ -48,7 +51,7 @@ function hasUploadFiles(directory) {
     catch { throw new StoreError('data-directory-unreadable'); }
   for (const entry of entries) {
     const entryPath = path.join(directory, entry.name);
-    const currentUpload = [...uploadReservations.values()].some(reservation => reservation.filename === entry.name);
+    const currentUpload = [...uploadReservations.values()].some(reservation => reservation.filename === entry.name || reservation.filenames?.includes(entry.name));
     if (entry.isFile() && !entry.name.startsWith('.incoming-') && !currentUpload) return true;
     if (entry.isDirectory() && hasUploadFiles(entryPath)) return true;
   }
@@ -78,6 +81,8 @@ function validateStore(value) {
     }
     if (typeof story.translationChecked !== 'boolean' || typeof story.showName !== 'boolean') throw new StoreError('invalid-boolean-field');
     if (story.translationOrigin !== undefined && !['storyteller', 'ai_approved'].includes(story.translationOrigin)) throw new StoreError('invalid-translation-origin');
+    if (story.objectId !== undefined && story.objectId !== null && !OBJECT_IDS.includes(story.objectId)) throw new StoreError('invalid-object-id');
+    if (story.postMedia !== undefined && (!Array.isArray(story.postMedia) || story.postMedia.length>7 || story.postMedia.some(media=>!media||!['image','audio'].includes(media.kind)||typeof media.storage_key!=='string'||path.basename(media.storage_key)!==media.storage_key||!/^([0-9a-f-]{36})\.(webp|audio)$/i.test(media.storage_key)||typeof media.sha256!=='string'||!/^[a-f0-9]{64}$/i.test(media.sha256)||(media.kind==='image'&&(!media.alt_text||typeof media.alt_text!=='string'))))) throw new StoreError('invalid-post-media');
     if (!['private', 'public'].includes(story.visibility) || !['draft', 'shared', 'withdrawn'].includes(story.status)) throw new StoreError('invalid-visibility-or-status');
     if (story.audio && (path.basename(story.audio) !== story.audio || /[\\/\0]/.test(story.audio))) throw new StoreError('invalid-audio-path');
     if (story.versionLog !== undefined && (!Array.isArray(story.versionLog) || story.versionLog.some(version => !version || typeof version.timestamp !== 'string' || typeof version.language !== 'string' || typeof version.change !== 'string' || typeof version.fingerprint !== 'string' || !/^[a-f0-9]{64}$/i.test(version.fingerprint)))) throw new StoreError('invalid-version-log');
@@ -138,7 +143,8 @@ const isOwner = (req, story) => {
   return !!token && crypto.timingSafeEqual(Buffer.from(hash(token)), Buffer.from(story.ownerHash));
 };
 const clean = (story, owner) => {
-  const result = { id: story.id, originalLanguage: story.originalLanguage, text: story.text, translationLanguage: story.translationLanguage, translation: story.translation, translationOrigin: story.translationOrigin || 'storyteller', translationChecked: story.translationChecked, checkedBy: story.translationChecked ? story.checkedBy : '', visibility: story.visibility, status: story.status, createdAt: story.createdAt, audio: !!story.audio };
+  const result = { id: story.id, objectId:story.objectId || null,title:story.title||'',kind:story.kind||'story',section:story.section||'stories',trustLabel:story.trustLabel||'Told by a community member',licence:story.licence||'All rights reserved',region:story.region||'',people:story.people||'',tags:story.tags||[],sources:story.sources||[],consentConfirmed:!!story.consentConfirmed,access:story.access||'Public', originalLanguage: story.originalLanguage, text: story.text, translationLanguage: story.translationLanguage, translation: story.translation, translationOrigin: story.translationOrigin || 'storyteller', translationChecked: story.translationChecked, checkedBy: story.translationChecked ? story.checkedBy : '', visibility: story.visibility, status: story.status, createdAt: story.createdAt, audio: !!story.audio };
+  result.images=(story.postMedia||[]).filter(item=>item.kind==='image').map(item=>({id:item.id,kind:item.kind,altText:item.alt_text,credit:item.credit,licence:item.licence,width:item.width,height:item.height,sha256:item.sha256,url:`/api/posts/${story.id}/media/${encodeURIComponent(item.storage_key)}`}));
   result.versionLog=storyRecord(story);
   if (story.showName || owner) result.storytellerName = story.storytellerName;
   return result;
@@ -163,6 +169,7 @@ if (MODE.authMode === 'account') {
   app.use('/api', (_req, res) => res.status(503).json({ error: 'This account operation is not available.' }));
 } else {
   app.get('/api/account/config', (_req, res) => res.json({ account: false, brand: 'Story Bridge' }));
+  app.get('/api/objects', (_req,res)=>res.json({objects:OBJECT_RECORDS.map(({id,access})=>({id,access})),canManage:false}));
   app.post('/api/translation-draft', rateLimitWrites, (req, res, next) => {
     if (!ownerToken(req)) return res.status(401).json({ error: 'Start a local story session before requesting an AI translation.' });
     next();
@@ -182,16 +189,11 @@ function rateLimitWrites(req, res, next) {
 }
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, callback) => callback(null, UPLOADS),
-    filename: (req, _file, callback) => callback(null, req.uploadTempName),
-  }),
-  limits: { fileSize: MAX_AUDIO_FILE_BYTES, files: 1 },
-  fileFilter: (_req, file, callback) => {
-    if (!/^audio\/[a-z0-9.+-]+$/i.test(file.mimetype)) return callback(Object.assign(new Error('invalid audio'), { code: 'INVALID_AUDIO' }));
-    callback(null, true);
-  },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_AUDIO_FILE_BYTES, files: 7 },
+  fileFilter: (_req, file, callback) => /^(audio\/[a-z0-9.+-]+|image\/(jpeg|png|webp))$/i.test(file.mimetype) ? callback(null,true) : callback(Object.assign(new Error('invalid media'), { code: 'INVALID_MEDIA' })),
 });
+const limitPostBody=(req,res,next)=>{const size=Number(req.get('content-length'));if(Number.isFinite(size)&&size>MAX_POST_UPLOAD_BYTES+512*1024)return res.status(413).json({error:'A post may contain up to six 8 MB images and one 10 MB audio recording.'});next()};
 
 function uploadDiskBytes() {
   let total = 0;
@@ -202,7 +204,7 @@ function uploadDiskBytes() {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) visit(fullPath);
       else if (entry.isFile()) {
-        const active = entry.name.startsWith('.incoming-') && [...uploadReservations.values()].some(reservation => reservation.filename === entry.name);
+        const active = entry.name.startsWith('.incoming-') && [...uploadReservations.values()].some(reservation => reservation.filename === entry.name || reservation.filenames?.includes(entry.name));
         if (!active) total += fs.statSync(fullPath).size;
       }
     }
@@ -213,9 +215,9 @@ function uploadDiskBytes() {
 
 function reserveUploadSpace(req, res, next) {
   if (!/^multipart\/form-data(?:;|$)/i.test(req.get('content-type') || '')) return next();
-  let expected = MAX_AUDIO_FILE_BYTES;
+  let expected = MAX_POST_UPLOAD_BYTES;
   const contentLength = Number(req.get('content-length'));
-  if (Number.isSafeInteger(contentLength) && contentLength > 0) expected = Math.min(MAX_AUDIO_FILE_BYTES, contentLength);
+  if (Number.isSafeInteger(contentLength) && contentLength > 0) expected = Math.min(MAX_POST_UPLOAD_BYTES, contentLength);
   const reserved = [...uploadReservations.values()].reduce((sum, reservation) => sum + reservation.amount, 0);
   try {
     if (uploadDiskBytes() + reserved + expected > MAX_UPLOAD_BYTES) return res.status(413).json({ error: 'Upload storage limit reached. Remove older recordings before uploading more.' });
@@ -236,23 +238,28 @@ function storeGuard(_req, _res, next) {
 }
 
 function find(id, stories = readDb()) { return stories.find(story => story.id === id); }
-const access = (req, story) => MODE.backend === 'file' && isOwner(req, story) || (story.status === 'shared' && story.visibility === 'public');
+const access = (req, story) => MODE.backend === 'file' && isOwner(req, story) || (story.status === 'shared' && story.visibility === 'public' && story.access !== 'Community only');
 
-if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories', (_req, res) => res.json(readDb().filter(story => story.status === 'shared' && story.visibility === 'public').map(story => clean(story, false))));
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories', (_req, res) => res.json(readDb().filter(story => story.status === 'shared' && story.visibility === 'public' && story.access!=='Community only').sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)).map(story => clean(story, false))));
 if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/mine', (req, res) => {
   const stories = readDb();
   if (!ownerToken(req)) return res.status(400).json({ error: 'A browser owner token is required.' });
   res.json(stories.filter(story => isOwner(req, story)).map(story => clean(story, true)));
 });
 
-if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/stories', rateLimitWrites, storeGuard, reserveUploadSpace, upload.single('audio'), async (req, res, next) => {
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/stories', rateLimitWrites, storeGuard, limitPostBody, reserveUploadSpace, upload.fields([{name:'audio',maxCount:1},{name:'images',maxCount:6}]), async (req, res, next) => {
   try {
     const token = ownerToken(req);
     if (!token) return res.status(400).json({ error: 'A browser owner token is required.' });
     const body = req.body || {};
+    const audioFile=req.files?.audio?.[0];const imageFiles=req.files?.images||[];
+    const metadataError=validatePostMetadata(body);if(metadataError)return res.status(400).json({error:metadataError});
+    let imageMetadata=[];try{imageMetadata=JSON.parse(body.imageMetadata||'[]')}catch{return res.status(400).json({error:'Image details could not be read.'})}
+    const imageMetadataError=validateImageMetadata(imageFiles,imageMetadata);if(imageMetadataError)return res.status(400).json({error:imageMetadataError});
     const text = String(body.text || '');
     if (text.length > 12_000) return res.status(413).json({ error: 'Story text is limited to 12,000 characters.' });
     if (String(body.originalLanguage || '').trim().length > 80 || String(body.translation || '').length > 12_000) return res.status(413).json({ error: 'Language or translation is too long.' });
+    if (body.objectId !== undefined && body.objectId !== '' && !OBJECT_IDS.includes(body.objectId)) return res.status(400).json({error:'Choose a valid object record.'});
     if (!String(body.originalLanguage || '').trim()) return res.status(400).json({ error: 'Enter the language of the story.' });
     if (body.translationOrigin === 'ai_approved' && !isTranslationApproved(body.translationApproved)) return res.status(400).json({ error: 'Approve the AI translation before saving it.' });
 
@@ -260,48 +267,63 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/storie
     const ownerHash = hash(token);
     if (all.filter(story => story.ownerHash === ownerHash).length >= MAX_STORIES_PER_OWNER) return res.status(429).json({ error: 'This browser has reached its story limit.' });
 
-    if (req.file) {
+    const uploadBytes=(audioFile?.size||0)+imageFiles.reduce((sum,file)=>sum+file.size,0);
+    if (uploadBytes > MAX_POST_UPLOAD_BYTES) return res.status(413).json({error:'Post media upload is too large.'});
+    if (uploadBytes) {
       const otherReservations = [...uploadReservations.entries()].filter(([id]) => id !== req.uploadReservationId).reduce((sum, [, reservation]) => sum + reservation.amount, 0);
-      if (uploadDiskBytes() + otherReservations + req.file.size > MAX_UPLOAD_BYTES) {
-        try { fs.unlinkSync(req.file.path); } catch {}
+      if (uploadDiskBytes() + otherReservations + uploadBytes > MAX_UPLOAD_BYTES) {
         return res.status(413).json({ error: 'Upload storage limit reached. Remove older recordings before uploading more.' });
       }
     }
 
     const id = crypto.randomUUID();
-    const audioName = req.file ? `${crypto.randomUUID()}.audio` : '';
-    if (req.file) {
-      fs.renameSync(req.file.path, path.join(UPLOADS, audioName));
+    const audioName = audioFile ? `${crypto.randomUUID()}.audio` : '';
+    const savedMedia=[];
+    if (audioFile) {
+      fs.writeFileSync(path.join(UPLOADS,audioName),audioFile.buffer,{flag:'wx'});savedMedia.push(audioName);
       const reservation = uploadReservations.get(req.uploadReservationId);
       if (reservation) reservation.filename = audioName;
     }
+    const postMedia=[];
+    if(audioFile)postMedia.push({id:crypto.randomUUID(),kind:'audio',storage_key:audioName,alt_text:null,credit:'',licence:normalizePostMetadata(body).licence,width:null,height:null,sha256:crypto.createHash('sha256').update(audioFile.buffer).digest('hex')});
+    for(let index=0;index<imageFiles.length;index++){
+      let prepared;try{prepared=await validateAndReencodeImage(imageFiles[index].buffer)}catch(error){for(const saved of savedMedia)try{fs.unlinkSync(path.join(UPLOADS,saved))}catch{}return res.status(error.message==='image-too-large'?413:400).json({error:error.message==='image-too-large'?'Image files are limited to 8 MB.':'An uploaded image is not a valid JPEG, PNG or WebP.'})}
+      const key=`${crypto.randomUUID()}.webp`;fs.writeFileSync(path.join(UPLOADS,key),prepared.buffer,{flag:'wx'});savedMedia.push(key);postMedia.push({id:crypto.randomUUID(),kind:'image',storage_key:key,alt_text:imageMetadata[index].altText.trim(),credit:imageMetadata[index].credit.trim(),licence:normalizePostMetadata(body).licence,width:prepared.width,height:prepared.height,sha256:prepared.sha256});
+    }
+    const reservation=uploadReservations.get(req.uploadReservationId);if(reservation)reservation.filenames=savedMedia;
+    const post=normalizePostMetadata(body);
     const story = {
-      id, ownerHash, originalLanguage: String(body.originalLanguage).trim(), text,
+      title:post.title,kind:post.kind,section:post.section,trustLabel:post.trust_label,licence:post.licence,region:post.region,people:post.people,tags:post.tags,sources:post.sources,consentConfirmed:post.consent_confirmed,access:post.access,
+      id, ownerHash, objectId:body.objectId || null, originalLanguage: String(body.originalLanguage).trim(), text,
       translationLanguage: String(body.translationLanguage || '').trim(), translation: String(body.translation || ''),
       translationOrigin: body.translation ? (body.translationOrigin === 'ai_approved' && isTranslationApproved(body.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller',
       translationChecked: false, checkedBy: '', storytellerName: String(body.storytellerName || '').slice(0, 120),
       showName: body.showName === 'true', visibility: 'private', status: 'draft', createdAt: new Date().toISOString(),
-      audio: audioName, mime: req.file?.mimetype || '', audioFingerprint:audioName?crypto.createHash('sha256').update(fs.readFileSync(path.join(UPLOADS,audioName))).digest('hex'):'',
+      audio: audioName, mime: audioFile?.mimetype || '', audioFingerprint:audioName?crypto.createHash('sha256').update(fs.readFileSync(path.join(UPLOADS,audioName))).digest('hex'):'',postMedia,
     };
     story.versionLog=[makeStoryVersion(story,'Story created')];
     all.push(story);
     try { writeDb(all); }
     catch (error) {
-      if (audioName) { try { fs.unlinkSync(path.join(UPLOADS, audioName)); } catch {} }
+      for(const saved of savedMedia)try{fs.unlinkSync(path.join(UPLOADS,saved))}catch{}
       throw error;
     }
     res.status(201).json(clean(story, true));
   } catch (error) { next(error); }
-  finally {
-    if (req.file?.path) { try { fs.unlinkSync(req.file.path); } catch {} }
-    releaseUpload(req);
-  }
+  finally { releaseUpload(req); }
 });
 
 if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories/:id', (req, res) => {
   const story = find(req.params.id);
   if (!story || !access(req, story)) return res.sendStatus(404);
   res.json(clean(story, isOwner(req, story)));
+});
+
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/posts/:id/media/:key', (req,res)=>{
+  const story=find(req.params.id);if(!story||!access(req,story))return res.sendStatus(404);
+  const media=(story.postMedia||[]).find(item=>item.kind==='image'&&item.storage_key===req.params.key);if(!media)return res.sendStatus(404);
+  const root=path.resolve(UPLOADS);const file=path.resolve(root,media.storage_key);if(!file.startsWith(`${root}${path.sep}`)||!fs.existsSync(file)||!fs.statSync(file).isFile())return res.sendStatus(404);
+  res.set('X-Content-Type-Options','nosniff').set('Cache-Control','public, max-age=300').type('image/webp').send(fs.readFileSync(file));
 });
 
 if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories/:id', rateLimitWrites, (req, res) => {
@@ -321,6 +343,8 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories
   if (body.originalLanguage !== undefined) story.originalLanguage = String(body.originalLanguage).slice(0, 80);
   if (body.storytellerName !== undefined) story.storytellerName = String(body.storytellerName).slice(0, 120);
   if (body.showName !== undefined) story.showName = !!body.showName;
+  if(body.title!==undefined){if(typeof body.title!=='string'||!body.title.trim()||body.title.length>160)return res.status(400).json({error:'Post title must be 1–160 characters.'});story.title=body.title.trim()}
+  if(body.access!==undefined){if(!['Public','Community only'].includes(body.access))return res.status(400).json({error:'Choose Public or Community only access.'});story.access=body.access}
   if (body.checkTranslation === true) { const name = String(body.checkedBy || '').trim().slice(0, 120); if (!name || !story.translation) return res.status(400).json({ error: 'Enter the checker name and a translation.' }); story.translationChecked = true; story.checkedBy = name; }
   if (body.visibility !== undefined) { if (!['private', 'public'].includes(body.visibility)) return res.status(400).json({ error: 'Invalid visibility.' }); story.visibility = body.visibility; }
   if (body.approve === true) story.status = 'shared';
@@ -329,6 +353,8 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories
   const versionChanges=[];
   if(before.originalLanguage!==story.originalLanguage)versionChanges.push('Original language changed');
   if(before.text!==story.text)versionChanges.push('Original story edited');
+  if(before.title!==story.title)versionChanges.push('Post title changed');
+  if(before.access!==story.access)versionChanges.push('Post access changed');
   if(before.translationLanguage!==story.translationLanguage)versionChanges.push('Translation language changed');
   if(before.translation!==story.translation)versionChanges.push('Translation edited');
   if(before.translationOrigin!==story.translationOrigin)versionChanges.push(`Translation origin set to ${story.translationOrigin === 'ai_approved' ? 'AI draft approved by the storyteller' : 'written by the storyteller'}`);
@@ -363,8 +389,9 @@ if (process.env.NODE_ENV === 'production' || process.env.STORY_SERVE_STATIC === 
 
 export function safeErrorHandler(error, req, res, _next) {
   releaseUpload(req);
-  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Audio upload limit is 10 MB.' });
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Each image is limited to 8 MB and audio to 10 MB.' });
   if (error?.code === 'INVALID_AUDIO') return res.status(400).json({ error: 'Choose a supported audio file.' });
+  if (error?.code === 'INVALID_MEDIA') return res.status(400).json({ error: 'Choose JPEG, PNG, WebP images or supported audio.' });
   if (error instanceof StoreError) {
     console.error(`Story Bridge story store unavailable (STORE_UNAVAILABLE, ${error.reason}).`);
     return res.status(500).json({ error: 'Story data is unavailable. No changes were saved.' });

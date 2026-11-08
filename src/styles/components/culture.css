@@ -1,0 +1,30 @@
+
+.reveal-on-scroll.is-visible{opacity:1;transform:none}
+
+@media(prefers-reduced-motion:reduce){.reveal-on-scroll,.reveal-on-scroll.is-visible,.objects-strip-item{transition:none;transform:none;opacity:1}.objects-strip-item:hover{transform:none}}
+
+@media(max-width:767px){.gallery-hero{grid-template-columns:1fr;gap:24px;min-height:0}.gallery-hero h1{font-size:clamp(36px,10vw,44px)}.gallery-photo{max-width:100%;padding:12px}.gallery-photo .hero-illustration{max-height:500px}.objects-strip-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gallery-why{grid-template-columns:1fr;gap:18px}.gallery-why .peace-symbol .bridge-mark{width:90px;height:60px}.rights-grid{grid-template-columns:1fr}.museum-layout{grid-template-columns:1fr}.museum-layout .museum-image{position:static}.museum-layout .museum-record{order:2}}
+
+@media(max-width:360px){.objects-strip,.rights-section{padding-inline:16px}.objects-strip-grid{gap:10px}.objects-strip-item{padding:7px}.gallery-photo figcaption{font-size:.8rem}.gallery-hero .hero-actions>*{max-width:100%}}
+
+.object-context{margin:1rem 0 1.5rem;padding:1rem;border-left:3px solid var(--moss);background:var(--sand)}
+
+.object-context p{margin:.4rem 0}
+
+.story-record code{display:block;max-width:100%;overflow-wrap:anywhere;word-break:break-all}
+
+.audio-tools{flex-wrap:wrap}
+
+.audio-tools label{min-width:0;max-width:100%;flex-wrap:wrap}
+
+.audio-tools input{width:min(240px,100%);max-width:100%}
+
+.trust-label{color:var(--forest);font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.post-trust{font-size:12px}
+.post-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem;margin:1.5rem 0}
+.post-gallery figure{margin:0;border:1px solid var(--line);padding:.75rem;background:var(--paper)}
+.post-gallery img{display:block;width:100%;max-height:32rem;object-fit:contain;background:var(--sand)}
+.post-gallery figcaption{padding-top:.6rem;color:var(--ink-soft);font-size:.9rem}
+.pending-posts article{border-top:1px solid var(--line);padding:1rem 0}
+.image-details{border:1px solid var(--line);border-radius:var(--radius);padding:1rem}
+.image-details legend{font-family:Fraunces,serif;color:var(--forest)}

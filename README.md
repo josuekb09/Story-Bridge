@@ -12,7 +12,7 @@ Translations may be written by the storyteller or drafted on demand by OpenAI wh
 
 As of 7 November 2026:
 
-- The public sign-in page is reachable. Email-code sign-in is enabled for this demo; Google sign-in is not configured.
+- Email-code sign-in is enabled. Google sign-in is enabled in the local `.env` with `STORY_GOOGLE_SIGN_IN=true`; a working OAuth round trip still depends on the Google provider and redirect settings in the configured Supabase project.
 - Email-code sign-in, text draft persistence, and private audio saving and playback have been checked locally against the configured Supabase project.
 - The signed-in flow on the deployed site and the exact commit served by the deployment have not yet been verified.
 
@@ -25,14 +25,16 @@ This is a demonstration build, not a production service for sensitive stories or
 - Save private drafts, edit story text and translations, and choose whether to show the storyteller's name.
 - Share a story publicly or withdraw it from public view.
 - Add a human-written or explicitly approved AI-drafted translation and record its origin. A translation check label is self-reported by the owner, not independent certification.
-- Use email one-time codes and a display-name profile in account mode. Google sign-in is optional and requires separate provider configuration.
+- Use email one-time codes or Google OAuth in account mode. New accounts get a welcome form for display name, country, languages, optional profile photo, and required Terms and Privacy acceptance. Google requires separate provider configuration.
 - In account mode, use My workspace to resume drafts and view collection totals, and filter My stories by draft, public, private, or withdrawn status. Totals and lists are loaded from the account API.
 - Unsaved text and audio are held in the page. Leaving a changed creation or review screen asks for confirmation; successful story creation keeps the saved story in review and clears the next creation form.
 - Workspace and story lists distinguish loading, empty, and recoverable error states; malformed API list responses are treated as errors and can be retried.
 - Recording playback distinguishes no recording, loading, and errors; a failed private recording request can be retried through the authenticated owner path.
 - Public visitors can browse fictional community stories and open detail pages. Share uses four visible steps and requires a separate approval from the saved draft before publication.
 - Story detail exposes timestamped change notes and SHA-256 fingerprints. The fingerprint covers original language, original text, translation language, translation origin, translation, and (when present) the audio file hash; it excludes names and owner identity.
-- Listen also contains a cultural-record seed for Luluwa/Lulua art. It is labelled as a project draft, uses the supplied English summary, leaves French and Tshiluba blank, has no image, and asks for community verification of custodianship and regional details. A speaker can start a separate story from the record; the association is held in the current browser only.
+- Listen also contains a cultural-record seed for Luluwa/Lulua art. It is labelled as a project draft, uses the supplied English summary, leaves French and Tshiluba blank, has no image, and asks for community verification of custodianship and regional details. A speaker can start a separate story from the record; the server stores its object id on the story, while the story keeps its own author and fingerprint.
+- `/objects` presents four public museum reference records for Luluwa/Lulua objects. The museum record and image credit are distinct from separately authored speaker stories. Image originals are preserved in `public/assets/photos/lulua/`; copies resized to 1200px maximum width are in `web/`. See [image credits](docs/credits.md). The server stores each speaker story’s object id while the story retains its own author and fingerprint.
+- First-post approval is an admin-only, conditional update. Failures produce a structured stage and storage error code without logging story content or account identifiers. Migration 0006 adds WebP to the allowlist of the existing private media bucket; the owner has applied it in production. See [migration notes](docs/migrations.md).
 - Browser-native speech recognition can populate editable text during a microphone recording where the browser supports it. Story Bridge does not send that audio to OpenAI.
 
 The app uses React and Vite for the frontend, Express for the API, and Supabase for account authentication, database storage, and private audio storage in the deployed mode.
@@ -147,3 +149,17 @@ Account deletion does not clean up stored audio objects, and the Supabase adapte
 ## Project origin and tools
 
 The project owner's concept and instructions guided this workspace. Codex built the MVP and the visible implementation, documentation, and test iterations here. Earlier iterations and test-discovered fixes, including browser layout, audio handling, recording feedback, and the approved logo integration, are documented in [PLAN.md](PLAN.md), [REVIEW.md](REVIEW.md), and [TEST-REPORT.md](TEST-REPORT.md). This statement covers work visible in this workspace and makes no claims about tools used elsewhere.
+
+
+Object page content follows docs/object-documentation.md. Each page includes a bilingual What we know block, a What we do not know block, and source links; /objects includes the shared context and its source links. Community questions each open the linked-story share flow.
+
+Email and Google sign-in use Supabase Auth. Code confirmation creates a new account automatically when the email is not already registered, and the same email continues to identify the same Supabase user. The email code view has six individually labelled boxes, paste support, automatic verification after six digits, resend cooldown, and a change-email action. The welcome step saves profile fields and optional owner-only WebP photo. Local `.env` flags are read by `server/env.js`; process variables take precedence, so restart the local server after editing `.env`. The test provider is mocked: real email delivery and Google OAuth are not verified here.
+
+
+## Documented posts (Phase 1)
+
+The compose flow records a title, post type and section, trust label, source links, licence, region/people/tags, access choice, and required permission confirmation. Images are limited to six at 8 MiB each, checked by signature, re-encoded to WebP at up to 1600 px, and stored with alt text, credit, dimensions and SHA-256. Audio uses the existing upload flow and is also recorded in post_media. The first public approval for a new account is held private as Pending review until an administrator identified by STORY_BRIDGE_OBJECT_ADMIN_ID approves it. Apply supabase/migrations/202611080005_learning_posts.sql after the existing migrations; see docs/migrations.md. No migration was applied to a live project.
+
+## Frontend structure
+
+`src/App.jsx` is the stable React entry point. Stateful application orchestration lives under `src/state/`; screen components live under `src/pages/`; reusable audio components live under `src/components/`; `src/lib/api.js` owns same-origin API headers and the session token, and `src/lib/i18n.js` owns shared translation labels. CSS tokens and base styles live in `src/styles/`, with screen styling in `src/styles/components/`. This organization pass preserves the current routes and services.

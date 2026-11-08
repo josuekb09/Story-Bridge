@@ -6,6 +6,7 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import express from 'express';
+import sharp from 'sharp';
 import { parseAccountConfig, createTokenVerifier, signTestToken } from '../server/auth.js';
 import { mountAccountRoutes } from '../server/account-routes.js';
 import { createFileAccountStore } from '../server/file-account-store.js';
@@ -20,15 +21,17 @@ const token = (sub, extra) => signTestToken(baseClaims(sub, extra), pair.private
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 
 function fixtureStore() {
-  const rows = new Map(); const profiles = new Map(); let lock = Promise.resolve();
+  const rows = new Map(); const profiles = new Map();const media=[];const images=new Map();const avatars=new Map(); let lock = Promise.resolve();
   const store = {
     rows,
     async listPublic() { return [...rows.values()].filter(row => row.status==='shared' && row.visibility==='public'); },
     async listMine(userId) { return [...rows.values()].filter(row => row.owner_user_id===userId); },
+    async listPending() { return [...rows.values()].filter(row=>row.moderation_status==='pending_review'); },
     async get(id) { return rows.get(id) || null; },
     async create(row) { const saved={id:crypto.randomUUID(),created_at:new Date().toISOString(),...row};rows.set(saved.id,saved);return saved; },
     async update(id,userId,changes) { const row=rows.get(id);if(!row||row.owner_user_id!==userId)return null;Object.assign(row,changes);return row; },
     async countMine(userId) { return [...rows.values()].filter(row=>row.owner_user_id===userId).length; },
+    async putPostImage(key,buffer){images.set(key,buffer);},async createPostMedia(list){media.push(...list);return list;},async listPostMedia(id){return media.filter(item=>item.post_id===id);},async getPostImage(key){return{buffer:images.get(key),mime:'image/webp'};},
     async claimLegacy(ownerHash,userId) {
       let release; const prior=lock;lock=new Promise(resolve=>release=resolve);await prior;
       try { const matches=[...rows.values()].filter(row=>row.owner_user_id===null&&row.owner_hash===ownerHash);for(const row of matches){row.owner_user_id=userId;row.owner_hash=null;}return matches.length; }
@@ -36,13 +39,14 @@ function fixtureStore() {
     },
     async claim(id,ownerHash,userId) { const row=rows.get(id);if(!row||row.owner_user_id!==null||row.owner_hash!==ownerHash)return false;row.owner_user_id=userId;row.owner_hash=null;return true; },
     async profile(id) { return profiles.get(id)||null; },
-    async saveProfile(id,name) { const result={display_name:name};profiles.set(id,result);return result; },
+    async saveProfile(id,profile) { const result={user_id:id,...(profiles.get(id)||{}),...profile};profiles.set(id,result);return result; },
+    async putProfileAvatar(key,buffer){avatars.set(key,buffer);},async getProfileAvatar(key){return{buffer:avatars.get(key),mime:'image/webp'};},async removeProfileAvatar(key){avatars.delete(key);},
     async putAudio() {}, async removeAudio() {}, async audioUsage(){return 0;}, async audioResponse(){return new Response(new Uint8Array([1,2,3]),{headers:{'content-type':'audio/webm'}});},
   };
   return store;
 }
-async function serverFor(store=fixtureStore(),draftTranslation=async()=> 'Synthetic mock translation') {
-  const app=express();app.use(express.json());mountAccountRoutes(app,config,{store,verify:createTokenVerifier(config),draftTranslation});app.use((_req,res)=>res.status(503).end());
+async function serverFor(store=fixtureStore(),draftTranslation=async()=> 'Synthetic mock translation',options={}) {
+  const app=express();app.use(express.json());mountAccountRoutes(app,config,{store,verify:createTokenVerifier(config),draftTranslation,objectAdminId:options.objectAdminId||''});app.use((_req,res)=>res.status(503).end());
   const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
   return {base:`http://127.0.0.1:${server.address().port}`,server,store};
 }
@@ -54,6 +58,7 @@ test('account config fails closed and production never silently selects file sto
   assert.throws(()=>parseAccountConfig({STORY_BACKEND:'file',STORY_AUTH_MODE:'legacy',NODE_ENV:'production'}),/local development/);
   const valid=parseAccountConfig({STORY_BACKEND:'supabase',STORY_AUTH_MODE:'account',NODE_ENV:'production',SUPABASE_URL:config.url,SUPABASE_PUBLISHABLE_KEY:config.publishableKey,SUPABASE_SECRET_KEY:config.secretKey,SUPABASE_BUCKET:config.bucket,STORY_EMAIL_CODE_SIGN_IN:'true'});
   assert.equal(valid.backend,'supabase');assert.equal(valid.account,true);assert.equal(valid.email,true);
+  assert.equal(parseAccountConfig({STORY_BACKEND:'supabase',STORY_AUTH_MODE:'account',NODE_ENV:'test',SUPABASE_URL:config.url,SUPABASE_PUBLISHABLE_KEY:config.publishableKey,SUPABASE_SECRET_KEY:config.secretKey,SUPABASE_BUCKET:config.bucket,STORY_GOOGLE_SIGN_IN:'true'}).google,true);
   assert.throws(()=>parseAccountConfig({STORY_BACKEND:'file',STORY_AUTH_MODE:'account',NODE_ENV:'development'}),/Supabase URL/);
   assert.throws(()=>parseAccountConfig({STORY_BACKEND:'supabase',STORY_AUTH_MODE:'account',NODE_ENV:'test',STORY_TEST_JWKS:'{'}),/key set is invalid/);
   const child=spawnSync(process.execPath,['-e',"import('./server/index.js')"],{cwd:process.cwd(),encoding:'utf8',env:{...process.env,NODE_ENV:'production',STORY_BACKEND:'supabase',STORY_AUTH_MODE:'account',SUPABASE_URL:'',SUPABASE_PUBLISHABLE_KEY:'',SUPABASE_SECRET_KEY:'',STORY_NO_LISTEN:'1'}});
@@ -79,6 +84,8 @@ test('local account file adapter serializes claim checks and writes', async()=>{
   const row=(await store.listMine('user-a'))[0] || (await store.listMine('user-b'))[0];
   assert.ok(row);assert.equal(row.owner_hash,null);assert.ok(['user-a','user-b'].includes(row.owner_user_id));
   assert.equal(await store.claimLegacy(legacy,row.owner_user_id),0);
+  await store.setObjectAccess('luluwa-mask','Community only');
+  assert.equal((await createFileAccountStore(directory).listObjectAccess()).find(item=>item.id==='luluwa-mask').access,'Community only');
 });
 
 test('CSP origins are scoped to configured account and Google sign-in',()=>{
@@ -137,7 +144,7 @@ test('account isolation covers private, draft, withdrawn and public stories plus
 
 test('account stories expose version fingerprints on creation and append a version after edits',async t=>{
   const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
-  const audio=Buffer.from('synthetic version audio');const form=new FormData();form.append('originalLanguage','Synthetic language');form.append('text','Synthetic account story');form.append('translationLanguage','English');form.append('translation','Synthetic translation');form.append('audio',new Blob([audio],{type:'audio/webm'}),'synthetic.webm');
+  const audio=Buffer.from('synthetic version audio');const form=new FormData();for(const [key,value] of Object.entries({title:'Synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'}))form.append(key,value);form.append('originalLanguage','Synthetic language');form.append('text','Synthetic account story');form.append('translationLanguage','English');form.append('translation','Synthetic translation');form.append('audio',new Blob([audio],{type:'audio/webm'}),'synthetic.webm');
   const created=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(created.status,201);
   const story=await created.json();assert.equal(story.versionLog.length,1);assert.equal(story.versionLog[0].change,'Story created');assert.match(story.versionLog[0].fingerprint,/^[a-f0-9]{64}$/);assert.equal(store.rows.get(story.id).audio_sha256,hash(audio));
   const edited=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({text:'Synthetic account story edited'})});assert.equal(edited.status,200);
@@ -150,13 +157,61 @@ test('AI translation draft route requires an account and stores origin only afte
   assert.equal(denied.status,401);
   const draft=await fetch(`${base}/api/translation-draft`,{method:'POST',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({text:'Private synthetic story',originalLanguage:'Synthetic',targetLanguage:'English'})});
   const draftBody=await draft.json();assert.equal(draft.status,200);assert.equal(draftBody.origin,'ai_draft_unapproved');assert.equal(draftBody.translation,'Synthetic mock translation');
-  const form=new FormData();form.append('originalLanguage','Synthetic');form.append('text','Private synthetic story');form.append('translationLanguage','English');form.append('translation','Synthetic mock translation');form.append('translationOrigin','ai_approved');form.append('translationApproved','false');
+  const form=new FormData();for(const [key,value] of Object.entries({title:'Synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true'}))form.append(key,value);form.append('originalLanguage','Synthetic');form.append('text','Private synthetic story');form.append('translationLanguage','English');form.append('translation','Synthetic mock translation');form.append('translationOrigin','ai_approved');form.append('translationApproved','false');
   const blocked=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(blocked.status,400);assert.equal(store.rows.size,0);
   form.set('translationApproved','true');
   const saved=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(saved.status,201);
   const story=await saved.json();assert.equal(story.translationOrigin,'ai_approved');assert.match(story.versionLog[0].fingerprint,/^[a-f0-9]{64}$/);
   const edited=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({translation:'Storyteller-edited translation'})});
   assert.equal(edited.status,200);assert.equal((await edited.json()).translationOrigin,'storyteller');
+});
+
+test('post creation requires consent and image alt text, and first approved post waits for admin review',async t=>{
+  const {base,server,store}=await serverFor(fixtureStore(),undefined,{objectAdminId:'admin-user'});t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const sharp=(await import('sharp')).default;const png=await sharp({create:{width:12,height:8,channels:3,background:'#3f7a5c'}}).png().toBuffer();
+  const form=new FormData();for(const [key,value] of Object.entries({title:'A documented synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'CC BY 4.0',region:'Synthetic region',people:'Synthetic community',tags:'memory,learning',sources:JSON.stringify([{label:'Synthetic source',url:'https://example.org/source'}]),access:'Public',consentConfirmed:'true',imageMetadata:JSON.stringify([{altText:'A green square fixture',credit:'Synthetic fixture'}])}))form.append(key,value);
+  form.append('originalLanguage','Synthetic language');form.append('text','Synthetic post body.');form.append('images',new Blob([png],{type:'image/png'}),'untrusted-name.png');
+  const created=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('new-user'),body:form});assert.equal(created.status,201);const post=await created.json();assert.equal(post.title,'A documented synthetic post');assert.equal(post.consentConfirmed,true);assert.equal(post.images.length,1);assert.equal(post.images[0].altText,'A green square fixture');assert.match(post.images[0].sha256,/^[a-f0-9]{64}$/);assert.equal(store.rows.get(post.id).first_post,true);
+  const publish=await fetch(`${base}/api/stories/${post.id}`,{method:'PUT',headers:{...auth('new-user'),'content-type':'application/json'},body:JSON.stringify({visibility:'public',approve:true})});assert.equal(publish.status,200);const pending=await publish.json();assert.equal(pending.status,'draft');assert.equal(pending.visibility,'private');assert.equal(pending.moderationStatus,'pending_review');assert.deepEqual((await fetch(`${base}/api/stories`).then(r=>r.json())),[]);
+  const secondForm=new FormData();for(const [key,value] of form.entries())secondForm.append(key,key==='title'?'Second synthetic post':key==='text'?'Also waits for the first moderation decision.':value);const secondCreated=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('new-user'),body:secondForm});assert.equal(secondCreated.status,201);const secondPost=await secondCreated.json();assert.equal(store.rows.get(secondPost.id).first_post,true);const secondPublish=await fetch(`${base}/api/stories/${secondPost.id}`,{method:'PUT',headers:{...auth('new-user'),'content-type':'application/json'},body:JSON.stringify({visibility:'public',approve:true})});assert.equal((await secondPublish.json()).moderationStatus,'pending_review');
+  const notAdmin=await fetch(`${base}/api/admin/posts/pending`,{headers:auth('new-user')});assert.equal(notAdmin.status,403);
+  const queue=await fetch(`${base}/api/admin/posts/pending`,{headers:auth('admin-user')});assert.equal((await queue.json()).length,2);
+  const approve=await fetch(`${base}/api/admin/posts/${post.id}/approve`,{method:'POST',headers:auth('admin-user')});assert.equal(approve.status,200);assert.equal((await approve.json()).status,'shared');
+  const publicPosts=await fetch(`${base}/api/stories`).then(r=>r.json());assert.equal(publicPosts.length,1);assert.equal(publicPosts[0].title,'A documented synthetic post');
+  const approveSecond=await fetch(`${base}/api/admin/posts/${secondPost.id}/approve`,{method:'POST',headers:auth('admin-user')});assert.equal(approveSecond.status,200);assert.equal((await fetch(`${base}/api/stories`).then(r=>r.json())).length,2);
+  const image=await fetch(`${base}${post.images[0].url}`);assert.equal(image.status,200);assert.match(image.headers.get('content-type'),/image\/webp/);assert.equal(image.headers.get('x-content-type-options'),'nosniff');
+  const noConsent=new FormData();noConsent.append('originalLanguage','Synthetic language');noConsent.append('title','No consent');const denied=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('other-user'),body:noConsent});assert.equal(denied.status,400);
+  const noAlt=new FormData();for(const [key,value] of Object.entries({title:'Image without alt',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true',imageMetadata:'[{}]'}))noAlt.append(key,value);noAlt.append('originalLanguage','Synthetic language');noAlt.append('images',new Blob([png],{type:'image/png'}),'fixture.png');const altDenied=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('alt-user'),body:noAlt});assert.equal(altDenied.status,400);
+});
+
+test('admin post approval survives repeated and concurrent requests using file storage',async t=>{
+  const tempDir=path.join(process.cwd(),'_tmp',`admin-approval-${crypto.randomUUID()}`);fs.mkdirSync(tempDir,{recursive:true});
+  const store=createFileAccountStore(tempDir);const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve));fs.rmSync(tempDir,{recursive:true,force:true});});
+  const approvals=[];
+  for(let index=0;index<32;index++){
+    const row=await store.create({owner_user_id:`member-${index}`,original_language:'Synthetic',text:`Synthetic approval fixture ${index}`,translation_language:'',translation:'',translation_origin:'storyteller',status:'draft',visibility:'private',requested_visibility:'public',first_post:true,moderation_status:'pending_review',version_log:[{timestamp:new Date().toISOString(),language:'Synthetic',change:'Fixture created',fingerprint:'a'.repeat(64)}]});
+    const response=await fetch(`${base}/api/admin/posts/${row.id}/approve`,{method:'POST',headers:auth('admin-user')});
+    assert.equal(response.status,200,`Approval ${index} should succeed.`);const saved=await response.json();assert.equal(saved.status,'shared');assert.equal(saved.moderationStatus,'approved');assert.equal(saved.versionLog.at(-1).change,'Admin approved first post');approvals.push(row.id);
+  }
+  const concurrent=await store.create({owner_user_id:'concurrent-member',original_language:'Synthetic',text:'Synthetic concurrency fixture',translation_language:'',translation:'',translation_origin:'storyteller',status:'draft',visibility:'private',requested_visibility:'public',first_post:true,moderation_status:'pending_review',version_log:[{timestamp:new Date().toISOString(),language:'Synthetic',change:'Fixture created',fingerprint:'b'.repeat(64)}]});
+  const duplicateResponses=await Promise.all(Array.from({length:20},()=>fetch(`${base}/api/admin/posts/${concurrent.id}/approve`,{method:'POST',headers:auth('admin-user')})));
+  assert.ok(duplicateResponses.every(response=>response.status===200),'Concurrent retries should converge to the same approved result.');
+  assert.equal((await store.get(concurrent.id)).version_log.length,2,'Concurrent retries must append only one approval version.');
+  assert.equal((await store.listPublic()).length,33);
+  assert.equal(approvals.length,32);
+});
+
+test('admin approval logs stage and safe error code without story or identity data',async t=>{
+  const store=fixtureStore();store.get=async()=>{throw new Error('storage-unavailable',{cause:Object.assign(new Error('private fixture detail'),{code:'EIO'})});};
+  const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const original=console.error;const logs=[];console.error=value=>logs.push(String(value));
+  try{
+    const response=await fetch(`${base}/api/admin/posts/synthetic-id/approve`,{method:'POST',headers:auth('admin-user')});
+    assert.equal(response.status,503);assert.deepEqual(await response.json(),{error:'Post could not be approved.'});
+  }finally{console.error=original;}
+  assert.equal(logs.length,1);const event=JSON.parse(logs[0]);assert.deepEqual(event,{event:'admin_post_approval_failed',stage:'load_post',errorCode:'EIO'});
+  assert.ok(!logs[0].includes('admin-user')&&!logs[0].includes('private fixture detail'));
 });
 
 test('legacy claim is conditional, single-owner, token-bound and race-safe', async t=>{
@@ -198,10 +253,22 @@ test('account draft transition hides a formerly public story and audio, while ow
   assert.equal((await fetch(url)).status,200);assert.equal((await fetch(audioUrl)).status,200);
 });
 
-test('profile is per-account and only stores a display name', async t=>{
+test('profile is per-account and stores welcome fields without exposing avatar storage keys', async t=>{
   const {base,server}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
   const response=await fetch(`${base}/api/account/profile`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({displayName:'A Storyteller'})});
-  assert.equal(response.status,200);assert.deepEqual(await response.json(),{display_name:'A Storyteller'});
-  assert.equal((await fetch(`${base}/api/account/profile`,{headers:auth('user-b')})).status,200);
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{user_id:'user-a',display_name:'A Storyteller',country:'',languages:[]});
+  const other=await fetch(`${base}/api/account/profile`,{headers:auth('user-b')});assert.equal(other.status,200);assert.deepEqual(await other.json(),{display_name:'',country:'',languages:[],avatar_url:''});
   assert.equal((await fetch(`${base}/api/account/profile`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({displayName:'x'.repeat(81)})})).status,400);
+  assert.equal((await fetch(`${base}/api/account/profile`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({displayName:'Name',country:'x'.repeat(101)})})).status,400);
+});
+
+test('profile avatar upload verifies image bytes, is private, and serves nosniff WebP',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const png=await sharp({create:{width:2,height:2,channels:3,background:'#1f4d3a'}}).png().toBuffer();
+  const form=new FormData();form.append('avatar',new Blob([png],{type:'image/png'}),'anything.png');
+  const uploaded=await fetch(`${base}/api/account/profile/avatar`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(uploaded.status,200);assert.equal((await uploaded.json()).avatar_url,'/api/account/profile/avatar');
+  const image=await fetch(`${base}/api/account/profile/avatar`,{headers:auth('user-a')});assert.equal(image.status,200);assert.equal(image.headers.get('x-content-type-options'),'nosniff');assert.match(image.headers.get('content-type'),/image\/webp/);
+  assert.equal((await fetch(`${base}/api/account/profile/avatar`,{headers:auth('user-b')})).status,404);
+  const invalid=new FormData();invalid.append('avatar',new Blob([Buffer.from('not an image')],{type:'image/png'}),'fake.png');assert.equal((await fetch(`${base}/api/account/profile/avatar`,{method:'POST',headers:auth('user-a'),body:invalid})).status,400);
+  const profile=await store.profile('user-a');assert.ok(profile.avatar_key);assert.equal(await store.profile('user-b'),null);
 });

@@ -1,0 +1,13 @@
+*{box-sizing:border-box}
+html,body,#root{margin:0;min-width:320px;min-height:100%;background:var(--paper)}
+body{font-family:Inter,Arial,sans-serif;color:var(--ink)}
+button,input,textarea,select{font:inherit}
+button:disabled{cursor:not-allowed;opacity:.65}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,audio:focus-visible{outline:3px solid var(--clay);outline-offset:3px}
+h1,h2,h3,.story-text,.wordmark>span:last-child{font-family:Fraunces,Georgia,serif}
+h1{font-size:clamp(2.1rem,6vw,4rem);line-height:1.05;letter-spacing:-.035em;margin:.3em 0}
+h2{font-family:Fraunces,Georgia,serif;font-size:clamp(1.45rem,3vw,2.2rem);line-height:1.15}
+p{line-height:1.65}
+footer{text-align:center;color:var(--ink-soft);font-size:.85rem;padding:18px}
+/* Keep compact mobile navigation and progress labels comfortably readable. */
+@media(max-width:520px){.app .bottom-nav button,.app .share-progress li{font-size:12px}}

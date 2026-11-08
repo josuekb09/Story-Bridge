@@ -1,0 +1,73 @@
+import { useEffect, useRef, useState } from 'react';
+import '../styles/components/social.css';
+
+function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return (parts[0]?.[0] || '?').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
+}
+
+// Profile: a readable card first (like a social profile), an edit form on demand.
+export default function ProfilePage({ navigate, profileState, profileError, loadProfile, identity, epoch, profileName, setProfileName, profileCountry, setProfileCountry, profileLanguages, setProfileLanguages, profileAvatar, profileNotice, saveProfile, signOut, changeAvatar, avatarBusy = false, storyCount = 0, publicCount = 0, email = '' }) {
+  const [editing, setEditing] = useState(false);
+  const fileInput = useRef(null);
+  const saving = profileState === 'saving';
+  const languages = String(profileLanguages || '').split(',').map(item => item.trim()).filter(Boolean);
+
+  // New accounts without a name open straight into the form.
+  useEffect(() => { if (profileState === 'ready' && !profileName && !editing) setEditing(true); }, [profileState]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function submit(event) {
+    const saved = await saveProfile(event);
+    if (saved) setEditing(false);
+  }
+
+  return <main className="social-main">
+    <button className="back" onClick={() => navigate('workspace')}>← Back</button>
+    {profileState === 'loading' && <div className="profile-card skeleton" aria-busy="true"><div className="profile-cover"/><div className="profile-body"><div className="skeleton-line wide"/><div className="skeleton-line"/></div><p className="home-visually-hidden" role="status">Loading your profile…</p></div>}
+    {profileState === 'error' && <section className="panel" role="alert"><p>{profileError}</p><button className="secondary" onClick={() => loadProfile(identity, epoch, true)}>Try again</button></section>}
+
+    {['ready', 'saving'].includes(profileState) && <section className="profile-card" aria-labelledby="profile-name">
+      <div className="profile-cover" aria-hidden="true"/>
+      <div className="profile-body">
+        <div className="profile-avatar-wrap">
+          {profileAvatar ? <img className="profile-avatar-lg" src={profileAvatar} alt=""/> : <span className="profile-avatar-lg profile-initials" aria-hidden="true">{initials(profileName)}</span>}
+          <button type="button" className="avatar-edit" disabled={avatarBusy} onClick={() => fileInput.current?.click()} aria-label="Change profile photo">{avatarBusy ? '…' : '📷'}</button>
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={event => { changeAvatar?.(event.target.files?.[0]); event.target.value = ''; }}/>
+        </div>
+
+        {!editing && <>
+          <h1 id="profile-name" className="profile-name">{profileName || 'Your name'}</h1>
+          {profileNotice && <p className="success" role="status">{profileNotice}</p>}
+          <p className="profile-meta">{[profileCountry, email].filter(Boolean).join(' · ') || 'Add where you are from'}</p>
+          {languages.length > 0 && <ul className="profile-langs" aria-label="Languages">{languages.map(language => <li key={language}>{language}</li>)}</ul>}
+          <dl className="profile-stats">
+            <div><dt>Stories</dt><dd>{storyCount}</dd></div>
+            <div><dt>Public</dt><dd>{publicCount}</dd></div>
+            <div><dt>Languages</dt><dd>{languages.length}</dd></div>
+          </dl>
+          {profileError && <p className="field-error" role="alert">{profileError}</p>}
+          <div className="profile-actions">
+            <button className="primary" onClick={() => setEditing(true)}>Edit profile</button>
+            <button className="secondary" onClick={() => navigate('share')}>Share a story</button>
+            <button className="secondary" onClick={() => navigate('mine')}>My stories</button>
+          </div>
+          <p className="muted profile-privacy">Your name appears on a story only when you choose to show it.</p>
+          <details className="profile-account"><summary>Account</summary><div className="actions"><button type="button" className="secondary" onClick={() => signOut()}>Sign out</button><button type="button" className="secondary" onClick={() => signOut(true)}>Sign out of all devices</button></div></details>
+        </>}
+
+        {editing && <form className="form profile-form" aria-busy={saving} onSubmit={submit}>
+          <h1 id="profile-name" className="profile-name">Edit profile</h1>
+          <label>Display name<input maxLength="80" required disabled={saving} value={profileName} onChange={event => setProfileName(event.target.value)} autoComplete="name"/></label>
+          <label>Country<input maxLength="100" disabled={saving} value={profileCountry} onChange={event => setProfileCountry(event.target.value)} placeholder="e.g. DR Congo" autoComplete="country-name"/></label>
+          <label>Languages you speak<input maxLength="500" disabled={saving} value={profileLanguages} onChange={event => setProfileLanguages(event.target.value)} placeholder="e.g. Tshiluba, French, English"/><small className="muted">Separate languages with commas.</small></label>
+          {profileError && <p className="field-error" role="alert">{profileError}</p>}
+          {profileNotice && !saving && <p className="success" role="status">{profileNotice}</p>}
+          <div className="profile-actions">
+            <button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</button>
+            {profileName && <button type="button" className="secondary" disabled={saving} onClick={() => { setEditing(false); loadProfile(identity, epoch, true); }}>Cancel</button>}
+          </div>
+        </form>}
+      </div>
+    </section>}
+  </main>;
+}

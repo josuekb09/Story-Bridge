@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { createLocalJWKSet, jwtVerify } from 'jose';
+import { EMAIL_CODE_LENGTH } from '../src/lib/email-code.js';
 
 const b64url = value => Buffer.from(value).toString('base64url');
 const looksLikeKey = (value, prefix) => value.startsWith(`sb_${prefix}_`) && value.length >= 24 || value.startsWith('eyJ') && value.split('.').length === 3;
@@ -30,10 +31,10 @@ export function parseAccountConfig(env = process.env) {
       if (!loopback && !(discovery.protocol === 'https:' && discovery.host === url.host)) throw new Error('Key discovery URL must be on the Supabase project host or loopback.');
       jwksUrl = discovery.href;
     }
-    return { backend, authMode, account: true, jwksUrl, url: url.origin, publishableKey: env.SUPABASE_PUBLISHABLE_KEY, secretKey: env.SUPABASE_SECRET_KEY, bucket: env.SUPABASE_BUCKET, google: env.STORY_GOOGLE_SIGN_IN === 'true', email: env.STORY_EMAIL_CODE_SIGN_IN === 'true', jwks: env.STORY_TEST_JWKS || '' };
+    return { backend, authMode, account: true, jwksUrl, url: url.origin, publishableKey: env.SUPABASE_PUBLISHABLE_KEY, secretKey: env.SUPABASE_SECRET_KEY, bucket: env.SUPABASE_BUCKET, google: env.STORY_GOOGLE_SIGN_IN === 'true', email: env.STORY_EMAIL_CODE_SIGN_IN === 'true', emailCodeLength: EMAIL_CODE_LENGTH, jwks: env.STORY_TEST_JWKS || '' };
   }
   if (backend !== 'file' || authMode !== 'legacy') throw new Error('The selected Story Bridge backend and auth mode are incompatible.');
-  return { backend, authMode, account: false, jwksUrl: '', url: '', publishableKey: '', secretKey: '', bucket: '', google: false, email: false, jwks: '' };
+  return { backend, authMode, account: false, jwksUrl: '', url: '', publishableKey: '', secretKey: '', bucket: '', google: false, email: false, emailCodeLength: EMAIL_CODE_LENGTH, jwks: '' };
 }
 
 export function createTokenVerifier(config, { fetchImpl = fetch, clock = () => Date.now() } = {}) {
