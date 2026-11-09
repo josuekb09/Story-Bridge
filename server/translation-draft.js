@@ -17,6 +17,8 @@ export class TranslationDraftError extends Error {
 
 export const isTranslationApproved = value => value === true || value === 'true';
 
+const safeErrorCode = value => typeof value === 'string' && /^[a-zA-Z0-9_.-]{1,80}$/.test(value) ? value : 'unknown';
+
 export function createTranslationDraftService({ getApiKey = () => process.env.OPENAI_API_KEY, fetchImpl = globalThis.fetch, model = () => process.env.OPENAI_TRANSLATION_MODEL || 'gpt-6-luna' } = {}) {
   return async function draftTranslation({ text, originalLanguage, targetLanguage }) {
     const apiKey = getApiKey();
@@ -38,12 +40,21 @@ export function createTranslationDraftService({ getApiKey = () => process.env.OP
         }),
         signal: AbortSignal.timeout(30_000),
       });
-      if (!response.ok) throw new Error('provider-error');
+      if (!response.ok) {
+        let code = '';
+        try { const body = await response.json(); code = String(body?.error?.code || body?.error?.type || '').slice(0, 80); } catch { /* not JSON */ }
+        console.error(JSON.stringify({ status: response.status, code: safeErrorCode(code), model: model() }));
+        throw new Error('provider-error');
+      }
       const data = await response.json();
       const output = typeof data.output_text === 'string' ? data.output_text : (data.output || []).flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n');
-      if (typeof output !== 'string' || !output.trim() || output.length > 12_000) throw new Error('provider-error');
+      if (typeof output !== 'string' || !output.trim() || output.length > 12_000) {
+        console.error(JSON.stringify({ status: response.status, code: 'invalid_response', model: model() }));
+        throw new Error('provider-error');
+      }
       return output.trim();
-    } catch {
+    } catch (error) {
+      if (error?.message !== 'provider-error') console.error(JSON.stringify({ status: null, code: safeErrorCode(error?.cause?.code || error?.name), model: model() }));
       throw new TranslationDraftError('AI_PROVIDER_UNAVAILABLE', 502, 'AI translation is temporarily unavailable. Your story has not been saved. You can write the translation yourself or retry.');
     }
   };
