@@ -46,8 +46,8 @@
 .post-translation p{margin:0}
 .post-translation-label{font-size:.75rem;color:var(--ink-soft);margin-bottom:4px!important}
 .post-actions{display:flex;gap:4px;margin-top:10px;padding-top:4px;border-top:1px solid var(--line)}
-.post-actions button{flex:1;border:0;background:none;padding:10px 6px;border-radius:10px;color:var(--ink-soft);font-weight:700;cursor:pointer}
-.post-actions button:hover,.post-actions button[aria-pressed="true"]{background:var(--sand);color:var(--forest)}
+.post-actions button,.post-actions .post-read{flex:1;border:0;background:none;padding:10px 6px;border-radius:10px;color:var(--ink-soft);font-weight:700;cursor:pointer;text-align:center;text-decoration:none}
+.post-actions button:hover,.post-actions button[aria-pressed="true"],.post-actions .post-read:hover{background:var(--sand);color:var(--forest)}
 .feed-more{display:block;margin:18px auto}
 .feed-end{text-align:center;color:var(--ink-soft);margin:22px 0}
 .feed-empty{text-align:center;background:#fff;border:1px dashed var(--line);border-radius:18px;padding:36px 20px}

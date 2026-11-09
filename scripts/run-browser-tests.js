@@ -701,7 +701,11 @@ try {
 
   await record('Create a draft as A with hidden name, manual translation, script-like text, and synthetic audio', async () => {
     const text = "Synthetic test story.\n<script>window.__storyBridgeInjected=true</script>\nLiteral text remains text.";
-    await pageA.getByLabel('Language told in').fill('Test language');
+    const languageField=pageA.getByLabel('Language told in');
+    ensure(await pageA.locator('#story-language-options option[value="Kiswahili"]').count()===1&&await pageA.locator('#story-language-options option[value="Other"]').count()===1,'Language suggestions omitted a native-name entry or the Other option.');
+    await languageField.fill('Other');
+    await pageA.getByLabel('Enter your language').fill('Test language');
+    ensure(await pageA.getByRole('button',{name:'Continue to your story'}).isEnabled(),'Custom language entry did not enable the share flow.');
     await pageA.getByRole('button',{name:'Continue to your story'}).click();
     await pageA.getByLabel('Post title').fill('Synthetic browser story');
     await pageA.getByLabel('Your story').fill(text);
@@ -818,7 +822,8 @@ try {
     const visitorView = await direct(ownerB, `/api/stories/${storyId}`);
     ensure(visitorView.status === 200 && visitorView.body.text === approvedActionText && visitorView.body.translation === approvedActionTranslation, 'B API response did not contain the exact approved edits.');
     await pageB.reload();
-    await pageB.getByRole('heading', { name: 'Listen' }).waitFor();
+    try { await pageB.getByRole('heading', { name: 'Listen' }).waitFor(); }
+    catch { throw new Error(`Visitor reload did not render Listen; URL=${pageB.url()} body=${(await pageB.locator('body').innerText()).slice(0,240)}`); }
     const publicCard = pageB.locator('.post').filter({ hasText: approvedActionText });
     await publicCard.waitFor({ state: 'visible' });
     await pageB.getByText(approvedActionText, { exact: true }).waitFor({ state: 'visible' });
@@ -876,7 +881,7 @@ try {
     ensure((await direct(ownerA, `/api/stories/${storyId}/audio`)).status === 200, 'Owner could not read public audio.');
     const bList = await direct(ownerB, '/api/stories'); ensure(bList.body.some(s => s.id === storyId), 'Public story absent from B list.');
     await pageB.reload(); await pageB.getByRole('heading', { name: 'Listen' }).waitFor();
-    await pageB.locator('.post').filter({hasText:approvedActionText}).getByRole('button',{name:/Read/}).click(); await pageB.getByRole('heading', { name: 'Synthetic browser story' }).waitFor();
+    await pageB.locator('.post').filter({hasText:approvedActionText}).getByRole('link',{name:/Read/}).click(); await pageB.getByRole('heading', { name: 'Synthetic browser story', level:1 }).waitFor();
     ensure(!(await pageB.getByText('Synthetic Hidden Author', { exact: false }).count()), 'Hidden author name appeared in public UI.');
     ensure(await pageB.getByText(approvedActionText, { exact: true }).isVisible(), 'Original text is not visible.');
     ensure(await pageB.getByText('Written by the storyteller').isVisible(), 'Storyteller translation attribution missing.');
@@ -959,7 +964,8 @@ try {
 
   await record('Reload and isolated API restart preserve test data', async () => {
     await stop(apiServer); await stop(webServer); await startApi(); await startWeb();
-    await pageA.reload(); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
+    await pageA.reload(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    ensure(new URL(pageA.url()).pathname === '/mine', 'Reload did not restore the current My stories route.');
     ensure((await pageA.evaluate(() => localStorage.getItem('story-bridge-owner'))) === ownerA, 'A owner token did not survive page reload.');
     const mine = await direct(ownerA, '/api/mine'); const persisted = mine.body.find(s => s.id === storyId);
     ensure(persisted && persisted.status === 'withdrawn' && persisted.translation === approvedActionTranslation && persisted.text === approvedActionText, 'Test record did not persist across isolated server restart.');
@@ -1009,6 +1015,10 @@ try {
     await accountPage.route('https://story-bridge-test.supabase.co/**', supabaseMock);
     const cspViolations = [];
     accountPage.on('console', message => { if (/Content[- ]Security[- ]Policy/i.test(message.text())) cspViolations.push(message.text().slice(0,120)); });
+    const privateRouteResponse = await accountPage.goto(`${webOrigin}/mine`, { waitUntil:'domcontentloaded' });
+    ensure(privateRouteResponse.status() === 200 && new URL(accountPage.url()).pathname === '/mine', `Signed-out private deep link did not retain its address: HTTP ${privateRouteResponse.status()} ${accountPage.url()} body=${(await privateRouteResponse.text()).slice(0,180)} logs=${serverLogs.slice(-10).join(' | ')}.`);
+    await accountPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
+    pass('Signed-out visitor opening /mine sees sign-in');
     const accountResponse = await accountPage.goto(webOrigin, { waitUntil:'domcontentloaded' });
     ensure((await accountResponse.headerValue('content-security-policy')).includes("connect-src 'self' https://story-bridge-test.supabase.co"), 'The server CSP did not allow the configured Supabase origin.');
     await accountPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
@@ -1039,8 +1049,8 @@ try {
     await welcomePage.getByLabel('Display name').fill('A New Storyteller');await welcomePage.getByLabel('Country').fill('Kenya');await welcomePage.getByLabel('Languages you speak').fill('Swahili, English');
     await welcomePage.getByLabel(/I accept the/).check();
     await captureEvidence('Welcome profile captures at 375px, 768px, and 1280px',async()=>{const shots=[];for(const width of [375,768,1280]){await welcomePage.setViewportSize({width,height:900});const file=path.join(evidenceDir,`welcome-profile-${width}.png`);await welcomePage.screenshot({path:file,fullPage:true});shots.push({file,metrics:{width}})}return shots});
-    await welcomePage.getByRole('button',{name:'Continue'}).click();await welcomePage.getByRole('heading',{name:'Welcome, A New Storyteller'}).waitFor();
-    pass('Welcome flow: new account saves name, country, languages, and required consent');
+    await welcomePage.getByRole('button',{name:'Continue'}).click();await welcomePage.getByRole('heading',{name:'Discover'}).waitFor();
+    pass('Welcome flow: new account saves details and opens Discover');
     await welcomeContext.close();
 
     const profileContext = await browser.newContext({viewport:{width:375,height:900}});
@@ -1073,7 +1083,7 @@ try {
     await profilePage.route('**/api/stories', route => { profileStoriesAttempts++; if(storyRetryStage===0)return route.fulfill({status:503,contentType:'application/json',body:'{}'}); if(storyRetryStage===1)return route.fulfill({status:200,contentType:'application/json',body:'{}'}); return route.fulfill({status:200,contentType:'application/json',body:'[]'}); });
     await profilePage.route('**/api/mine', route => { profileMineAttempts++; return profileMineAttempts===1 ? route.fulfill({status:503,contentType:'application/json',body:'{}'}) : route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(collectionFixture)}); });
     await profilePage.route('https://story-bridge-test.supabase.co/**', supabaseMock);
-    await profilePage.goto(webOrigin,{waitUntil:'domcontentloaded'}); await profilePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
+    await profilePage.goto(`${webOrigin}/workspace`,{waitUntil:'domcontentloaded'}); await profilePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     await profilePage.getByRole('alert').getByText('This list could not be loaded.').waitFor();
     ensure(await profilePage.getByRole('button',{name:'Create a story'}).isVisible(),'Workspace hid the create action during a list error.');
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
@@ -1097,6 +1107,7 @@ try {
     ensure(await profilePage.getByText('Audio recording attached').count()===0,'Draft card showed incorrect audio presence.');
     await captureEvidence('Collection captures at 375px, 768px, 1280px, and 320px overflow check', async()=>{ const shots=[]; for(const width of [375,768,1280,320]) shots.push(await captureScreen(profilePage,'account-collection',width,false)); return shots; });
     await profilePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Profile'}).click();
+    ensure(new URL(profilePage.url()).pathname === '/profile', 'Profile navigation did not use its own URL.');
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).waitFor();
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
     await profilePage.getByLabel('Display name').waitFor();
@@ -1158,6 +1169,21 @@ try {
     for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
     await livePage.getByRole('button',{name:'Sign out'}).waitFor();
     ensure(await livePage.getByText('reader@example.test',{exact:true}).isVisible(), 'Signed-in email did not appear in the real account header.');
+    await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+    ensure(new URL(livePage.url()).pathname === '/discover', 'Successful sign-in did not move to the Discover URL.');
+    pass('Signed-in home opens Discover');
+    await livePage.goto(`${webOrigin}/profile`,{waitUntil:'domcontentloaded'});
+    await livePage.getByLabel('Display name').waitFor();
+    ensure(new URL(livePage.url()).pathname === '/profile', 'Signed-in profile deep link did not load at /profile.');
+    await livePage.goto(`${webOrigin}/mine`,{waitUntil:'domcontentloaded'});
+    await livePage.getByRole('heading',{name:'My stories'}).waitFor();
+    ensure(new URL(livePage.url()).pathname === '/mine', 'Signed-in My stories deep link did not load at /mine.');
+    await livePage.goto(`${webOrigin}/share`,{waitUntil:'domcontentloaded'});
+    await livePage.getByRole('heading',{name:'Share a story'}).waitFor();
+    ensure(new URL(livePage.url()).pathname === '/share', 'Signed-in Share deep link did not load at /share.');
+    await livePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
+    await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+    await livePage.getByRole('button',{name:'My workspace',exact:true}).click();
     await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     await livePage.getByText('No drafts to continue yet.').waitFor();
     ensure(await livePage.getByRole('button',{name:'Set your display name'}).isVisible(),'An account without a display name did not get the optional profile action.');
@@ -1256,7 +1282,7 @@ try {
     const ownCard = livePage.locator('.mine-card').filter({ hasText:'Synthetic language' });
     await ownCard.waitFor({state:'visible'});
     await ownCard.getByRole('button',{name:'Open'}).click();
-    await livePage.getByRole('heading',{name:'Synthetic signed-in post'}).waitFor();
+    await livePage.getByRole('heading',{name:'Synthetic signed-in post',level:1}).waitFor();
     ensure(await livePage.getByText('Edited by the signed-in browser flow.',{exact:true}).isVisible(), 'Saved signed-in edit was not returned by the real story API.');
     await livePage.getByRole('button',{name:'← Back'}).click();
     const accountCard=livePage.locator('.mine-card').filter({hasText:'Synthetic language'});
@@ -1289,6 +1315,34 @@ try {
     pass('Mutation G: delayed publish double click submits once');
     const adminApprovalResponse=livePage.waitForResponse(response=>response.url()===`${webOrigin}/api/admin/posts/${accountStoryId}/approve`&&response.request().method()==='POST');await livePage.getByRole('button',{name:'Approve first post',exact:true}).click();const adminApprovalResult=await adminApprovalResponse;ensure(adminApprovalResult.status()===200,`Admin approval returned HTTP ${adminApprovalResult.status()}.`);
     await livePage.waitForFunction(async id=>{const r=await fetch('/api/stories');const rows=await r.json();return rows.some(story=>story.id===id)},accountStoryId);
+    await livePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
+    await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+    const discoverPost=livePage.locator('.post').filter({hasText:'Synthetic signed-in post'});
+    await discoverPost.getByRole('link',{name:/Read/}).click();
+    await livePage.getByRole('heading',{name:'Synthetic signed-in post',level:1}).waitFor();
+    ensure(new URL(livePage.url()).pathname === `/stories/${accountStoryId}`, `Opening a feed story did not create its story URL: expected /stories/${accountStoryId}, got ${new URL(livePage.url()).pathname}.`);
+    await livePage.goBack();
+    await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+    ensure(new URL(livePage.url()).pathname === '/discover', 'Browser Back did not return from the story URL to Discover.');
+    await discoverPost.getByRole('link',{name:/Read/}).click();
+    await livePage.getByRole('heading',{name:'Synthetic signed-in post',level:1}).waitFor();
+    await livePage.getByRole('button',{name:'← Back'}).click();
+    await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+    ensure(new URL(livePage.url()).pathname === '/discover', 'Story back action did not return to Discover.');
+    const anonymousStoryContext=await browser.newContext();
+    await anonymousStoryContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));
+    await anonymousStoryContext.route('https://story-bridge-test.supabase.co/**',supabaseMock);
+    const anonymousStoryPage=await anonymousStoryContext.newPage();
+    const anonymousStoryResponse=anonymousStoryPage.waitForResponse(response=>response.url()===`${webOrigin}/api/stories/${accountStoryId}`,{timeout:10000});
+    await anonymousStoryPage.goto(`${webOrigin}/stories/${accountStoryId}`,{waitUntil:'domcontentloaded'});
+    const anonymousStoryDetail=await anonymousStoryResponse;
+    ensure(anonymousStoryDetail.status()===200,`Signed-out story deep link API returned HTTP ${anonymousStoryDetail.status()}.`);
+    try { await anonymousStoryPage.getByRole('heading',{name:'Synthetic signed-in post',level:1}).waitFor({timeout:5000}); }
+    catch { throw new Error(`Signed-out story URL returned HTTP ${anonymousStoryDetail.status()} (${anonymousStoryDetail.headers()['content-type']}) with response=${(await anonymousStoryDetail.text()).slice(0,300)} but did not render. URL=${anonymousStoryPage.url()} body=${(await anonymousStoryPage.locator('body').innerText()).slice(0,500)}.`); }
+    pass('Public story URL loads for a signed-out reader');
+    await anonymousStoryContext.close();
+    await livePage.goto(`${webOrigin}/mine`,{waitUntil:'domcontentloaded'});
+    await livePage.getByRole('heading',{name:'My stories'}).waitFor();
     const publicList=await livePage.evaluate(async()=>{const r=await fetch('/api/stories');return r.json();});
     if(!publicList.some(story=>story.id===accountStoryId)){const privateStatus=await livePage.evaluate(async id=>{const session=Object.entries(localStorage).map(([,value])=>{try{return JSON.parse(value)}catch{return null}}).find(value=>value?.access_token&&value?.user?.id==='browser-test-user');const auth=session?{authorization:`Bearer ${session.access_token}`}:{},detail=await fetch(`/api/stories/${id}`,{headers:auth}),mine=await fetch('/api/mine',{headers:auth}),pending=await fetch('/api/admin/posts/pending',{headers:auth}),d=detail.ok?await detail.json():null,m=mine.ok?await mine.json():[],p=pending.ok?await pending.json():[];return{detailStatus:detail.status,mineStatus:mine.status,pendingStatus:pending.status,detailState:d?{id:d.id,status:d.status,visibility:d.visibility,moderationStatus:d.moderationStatus}:null,mineIds:m.map(item=>item.id),pendingIds:p.map(item=>item.id)}},accountStoryId);throw new Error(`Explicit publish missing from public feed after successful admin response: ${JSON.stringify({publicIds:publicList.map(story=>story.id),privateStatus})}`)}
 
@@ -1371,7 +1425,8 @@ try {
       if(await livePage.getByLabel('Email address').count()===0) { await livePage.getByRole('button',{name:'Sign in'}).click(); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor(); }
       await livePage.getByLabel('Email address').fill(email); await livePage.getByRole('button',{name:'Email me a code'}).click();
       for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
-      await livePage.getByRole('button',{name:'Sign out'}).waitFor(); await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
+      await livePage.getByRole('button',{name:'Sign out'}).waitFor(); await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+      await livePage.getByRole('button',{name:'My workspace',exact:true}).click(); await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     };
     // Hold an A-owned private detail response across sign-out and B sign-in.
     await livePage.getByRole('button',{name:'My stories',exact:true}).click(); await livePage.getByRole('heading',{name:'My stories'}).waitFor();

@@ -27,6 +27,8 @@ This is a demonstration build, not a production service for sensitive stories or
 - Add a human-written or explicitly approved AI-drafted translation and record its origin. A translation check label is self-reported by the owner, not independent certification.
 - Use email one-time codes or Google OAuth in account mode. New accounts get a welcome form for display name, country, languages, optional profile photo, and required Terms and Privacy acceptance. Google requires separate provider configuration.
 - In account mode, use My workspace to resume drafts and view collection totals, and filter My stories by draft, public, private, or withdrawn status. Totals and lists are loaded from the account API.
+- New sign-ins and completed welcome flows open Discover. Discover, stories, and the signed-in profile use `/discover`, `/stories/:id`, and `/profile`; My stories and Share use `/mine` and `/share`.
+- Story language suggestions come from the shared language registry, include native names and an Other option, and still accept names typed by the storyteller.
 - Unsaved text and audio are held in the page. Leaving a changed creation or review screen asks for confirmation; successful story creation opens the saved story in review immediately, without waiting for a workspace refresh, and clears the next creation form.
 - Workspace and story lists distinguish loading, empty, and recoverable error states; malformed API list responses are treated as errors and can be retried.
 - Recording playback distinguishes no recording, loading, and errors; a failed private recording request can be retried through the authenticated owner path.

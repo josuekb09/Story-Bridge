@@ -4,6 +4,21 @@ The owner (Josué) gave both agents access to this repository. Claude edits file
 and writes them back; Codex edits in place. To avoid overwriting each other, **each file has one
 owner**. Read this file at the start of every phase.
 
+## Task board (read first, update when you start or finish)
+
+| Task | Owner | Status |
+|---|---|---|
+| Commit + push current local changes (private-page sign-in gate, review opens after saving a draft, Discover after sign-in, language suggestions, headline contrast) and confirm Render redeploy | Codex | in progress |
+| Browser tests for: review opens after saving a draft; signed-out user opening My stories sees sign-in; signed-in home is Discover | Codex | done |
+| Real URLs: `/discover`, `/stories/:id`, `/u/:handle` (or `/profile`), `/mine`, `/share`, back button works, deep links work signed in and out | Codex | done |
+| Signed-in home is Discover (`listen`), not My workspace | Claude | done (local) |
+| "Language told in": suggestions from `src/lib/languages.js` via `<datalist>`, free text still allowed | Claude | done (local) |
+| `OPENAI_API_KEY` on Render (AI translation is off in production) | Owner | to do |
+| First documented posts (four Luluwa object notes) published from the owner's account as private drafts for him to approve | Claude | next |
+| Translate the rest of the interface with `t()` keys (English + French first) | Codex | later |
+
+**Never restore a file from Git to "clean" it.** On 2026-11-09 a restore erased the private-page gate and the headline-contrast fix; Claude re-applied them. If `git status` shows changes you did not make, they are Claude's: commit them or ask.
+
 ## Ownership
 
 | Area | Owner | Notes |

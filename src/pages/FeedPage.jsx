@@ -34,7 +34,7 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
 
   async function share() {
     const title = story.title || 'A story on Story Bridge';
-    const url = window.location.origin;
+    const url = new URL(`/stories/${encodeURIComponent(story.id)}`, window.location.origin).href;
     try {
       if (navigator.share) await navigator.share({ title, text: `${title} — Story Bridge`, url });
       else { await navigator.clipboard.writeText(`${title} — ${url}`); setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -70,7 +70,7 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
     </div>}
 
     <footer className="post-actions">
-      <button type="button" onClick={() => showStory(story)}>📖 Read</button>
+      <a className="post-read" href={`/stories/${encodeURIComponent(story.id)}`} onClick={event => { event.preventDefault(); showStory(story); }}>📖 Read</a>
       {story.translation && <button type="button" aria-pressed={showingTranslation} onClick={() => setTranslationStoryId(value => value === story.id ? '' : story.id)}>🌍 {showingTranslation ? 'Original' : 'Translation'}</button>}
       <button type="button" onClick={share}>{copied ? '✓ Copied' : '↗ Share'}</button>
     </footer>

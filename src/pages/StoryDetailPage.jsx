@@ -1,10 +1,10 @@
 import AudioPlayer from '../components/AudioPlayer.jsx';
 import { translationOriginLabel } from '../lib/i18n.js';
 
-export default function StoryDetailPage({ story, navigate }) {
+export default function StoryDetailPage({ story, navigate, backPage = 'discover' }) {
   const privateAudio = !!story._own && !(story.status === 'shared' && story.visibility === 'public');
   return <main>
-    <button className="back" onClick={() => navigate(story._own ? 'mine' : 'listen')}>← Back</button>
+    <button className="back" onClick={() => navigate(backPage)}>← Back</button>
     <p className="eyebrow">{story.trustLabel || 'Told by a community member'}</p><h1>{story.title || (story.text || 'A voice carried across languages').split(/[.!?\n]/)[0].slice(0, 90)}</h1><p className="muted">{story.storytellerName || 'Anonymous'} · Original told in {story.originalLanguage}{story.region ? ` · ${story.region}` : ''}</p>
     {story.images?.length > 0 && <section className="post-gallery" aria-label="Post images">{story.images.map(image => <figure key={image.id}><img src={image.url} alt={image.altText}/><figcaption>{image.altText}<br/>{image.credit} · {image.licence}</figcaption></figure>)}</section>}
     <section className="panel"><h2>Original story</h2><AudioPlayer story={story} privateAudio={privateAudio}/><p className="story-text">{story.text || 'No written text provided.'}</p></section>

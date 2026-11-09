@@ -22,11 +22,32 @@ import { OBJECT_RECORDS, CULTURAL_GROUP_RECORD, OBJECT_IDS, objectRecordView } f
 const EMPTY_POST_META = {title:'',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'',access:'Public',consentConfirmed:false};
 
 export default function App() {
-  const pathPage = () => window.history.state?.storyBridgePage || (window.location.pathname === '/objects' ? 'objects' : window.location.pathname.startsWith('/objects/') ? `object:${decodeURIComponent(window.location.pathname.slice('/objects/'.length))}` : window.location.pathname==='/terms'?'terms':window.location.pathname==='/privacy'?'privacy':'landing');
+  const pathPage = () => {
+    const path = window.location.pathname;
+    if (path === '/') return window.history.state?.storyBridgePage || 'landing';
+    if (path === '/discover') return 'discover';
+    if (path === '/listen') return 'listen';
+    if (path === '/mine') return 'mine';
+    if (path === '/workspace') return 'workspace';
+    if (path === '/profile') return 'profile';
+    if (path === '/share') return 'share';
+    if (path === '/objects') return 'objects';
+    if (path.startsWith('/objects/')) return `object:${decodeURIComponent(path.slice('/objects/'.length))}`;
+    if (path === '/terms') return 'terms';
+    if (path === '/privacy') return 'privacy';
+    if (/^\/stories\/[^/]+$/.test(path)) return 'detail';
+    return 'landing';
+  };
+  const storyIdFromPath = () => {
+    const match = window.location.pathname.match(/^\/stories\/([^/]+)$/);
+    if (!match) return '';
+    try { return decodeURIComponent(match[1]); } catch { return ''; }
+  };
   const [page, setPage] = useState(pathPage);
   const [stories, setStories] = useState([]);
   const [mine, setMine] = useState([]);
   const [current, setCurrent] = useState(null);
+  const [detailReturnPage, setDetailReturnPage] = useState('discover');
   const [translationStoryId, setTranslationStoryId] = useState('');
   const [error, setError] = useState('');
   const [form, setForm] = useState({ originalLanguage: '', text: '', translationLanguage: '', translation: '', translationOrigin: 'storyteller', translationApproved: false, storytellerName: '', showName: false });
@@ -49,6 +70,7 @@ export default function App() {
   const [accountConfig, setAccountConfig] = useState(null);
   const [supabase, setSupabase] = useState(null);
   const [session, setSession] = useState(null);
+  const [sessionResolved, setSessionResolved] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authCode, setAuthCode] = useState('');
   const [authStep, setAuthStep] = useState('email');
@@ -112,9 +134,11 @@ export default function App() {
 
   async function approvePendingPost(postId){try{await api(`/api/admin/posts/${postId}/approve`,{method:'POST'});setPendingPosts(items=>items.filter(item=>item.id!==postId));}catch(error){setPendingPostsError(error.message)}}
 
-  function transitionTo(nextPage) {
+  function transitionTo(nextPage, targetStoryId = '') {
     if (pageRef.current !== nextPage) { pageRef.current = nextPage; viewEpoch.current += 1; }
-    const route = nextPage === 'objects' ? '/objects' : nextPage==='terms'||nextPage==='privacy'?`/${nextPage}`:nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/';
+    const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', terms:'/terms', privacy:'/privacy' };
+    const storyId = targetStoryId || current?.id || storyIdFromPath();
+    const route = nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
     // Keep the OAuth callback (?code=… / ?error=…) until Supabase has read it; it is removed after getSession().
     const oauthCallback = /[?&](code|error|error_description)=/.test(window.location.search) ? window.location.search : '';
     if (window.location.pathname !== route || window.history.state?.storyBridgePage !== nextPage) window.history[oauthCallback ? 'replaceState' : 'pushState']({ storyBridgePage: nextPage }, '', route + oauthCallback);
@@ -188,8 +212,8 @@ export default function App() {
         refresh('','stories');
         const client = createClient(config.url, config.publishableKey, { auth: { flowType: 'pkce' } });
         setSupabase(client);
-        client.auth.getSession().then(({ data,error }) => { const params=new URLSearchParams(window.location.search);const callbackError=params.get('error_description')||params.get('error');if(callbackError)setError('Google sign-in could not be completed. Try again.');if(params.has('code')||params.has('access_token')||params.has('refresh_token')||params.has('error')){history.replaceState(history.state,'',window.location.pathname+window.location.hash)}if(error)setError('Sign-in could not be completed. Try again.');setSession(data.session); });
-        const { data } = client.auth.onAuthStateChange((_event, next) => setSession(next));
+        client.auth.getSession().then(({ data,error }) => { const params=new URLSearchParams(window.location.search);const callbackError=params.get('error_description')||params.get('error');if(callbackError)setError('Google sign-in could not be completed. Try again.');if(params.has('code')||params.has('access_token')||params.has('refresh_token')||params.has('error')){history.replaceState(history.state,'',window.location.pathname+window.location.hash)}if(error)setError('Sign-in could not be completed. Try again.');setSession(data.session);setSessionResolved(true); }).catch(() => setSessionResolved(true));
+        const { data } = client.auth.onAuthStateChange((_event, next) => { setSession(next); setSessionResolved(true); });
         unsubscribe = () => data.subscription.unsubscribe();
       } else refresh();
     }).catch(() => { setAccountConfig(null); setConfigError('Story Bridge could not load its configuration. Try again.'); });
@@ -202,10 +226,10 @@ export default function App() {
     if (identityChanged) {
       currentSession.current = sessionKey;
       identityEpoch.current += 1;
-      const initialPublicPage = ['landing','objects','group-record'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : 'listen';
+      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share'].includes(pageRef.current) ? pageRef.current : 'discover';
       const keepPublicObjectRoute = initialPublicPage === 'objects' || initialPublicPage === 'group-record' || initialPublicPage.startsWith('object:');
       const needsWelcome=!!session&&!session.user?.user_metadata?.story_bridge_welcome_completed;
-      clearPrivateState(accountConfig?.account && session && !keepPublicObjectRoute ? (needsWelcome?'welcome':'workspace') : initialPublicPage);
+      clearPrivateState(accountConfig?.account && session && !keepPublicObjectRoute ? (needsWelcome?'welcome':initialPublicPage==='landing'?'discover':initialPublicPage) : initialPublicPage);
       setStories([]); setMine([]); setListOwner('');
       setListState({ stories: 'loading', mine: 'loading' });
       setListErrors({ stories: '', mine: '' });
@@ -219,6 +243,27 @@ export default function App() {
     else if (accountConfig && !accountConfig.account) refresh(sessionKey);
     else if (accountConfig?.account) { setListState({ stories: 'loading', mine: 'idle' }); refresh('', 'stories'); }
   }, [session, accountConfig]);
+  useEffect(() => {
+    if (!accountConfig || page !== 'detail') return undefined;
+    if (accountConfig.account && !sessionResolved) return undefined;
+    const id = storyIdFromPath();
+    if (!id) { setError('This story link is invalid.'); return undefined; }
+    if (current?.id === id) return undefined;
+    let live = true;
+    const requestId = ++detailRequest.current;
+    const identity = currentSession.current;
+    const epoch = identityEpoch.current;
+    setCurrent(null);
+    api(`/api/stories/${encodeURIComponent(id)}`).then(story => {
+      if (live && currentSession.current === identity && identityEpoch.current === epoch && detailRequest.current === requestId) {
+        const activeSessionKey = session?.user?.id || (accountConfig.account ? '' : 'legacy');
+        setCurrent({ ...story, _own: listOwner === activeSessionKey && mine.some(item => item.id === id) });
+      }
+    }).catch(() => {
+      if (live && currentSession.current === identity && identityEpoch.current === epoch && detailRequest.current === requestId) setError('This story could not be loaded. It may be private or no longer available.');
+    });
+    return () => { live = false; };
+  }, [page, window.location.pathname, accountConfig, session?.access_token, sessionResolved]);
   useEffect(() => { captureBusyRef.current = captureBusy; }, [captureBusy]);
   useEffect(() => {
     const beforeUnload = event => {
@@ -269,7 +314,7 @@ export default function App() {
     try{const {error:cause}=await supabase.auth.verifyOtp({email:authEmail.trim(),token:authCode.trim(),type:'email'});if(cause)throw cause;}catch(cause){setError(/rate|too many/i.test(cause.message)?'Too many attempts. Wait before trying again.':'That code is incorrect or expired. Request a new code and try again.')}finally{setAuthBusy(false)}
   }
   async function resendEmailCode(){await sendEmailCode({preventDefault(){}})}
-  async function completeWelcome(values){setWelcomeBusy(true);setWelcomeError('');try{const profile=await api('/api/account/profile',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({displayName:values.displayName,country:values.country,languages:values.languages})});if(values.photo){const body=new FormData();body.append('avatar',values.photo);await api('/api/account/profile/avatar',{method:'POST',body});}const {error:cause}=await supabase.auth.updateUser({data:{story_bridge_welcome_completed:true,terms_accepted_at:new Date().toISOString(),privacy_accepted_at:new Date().toISOString()}});if(cause)throw cause;setSavedProfileName(profile.display_name||'');setProfileName(profile.display_name||'');setProfileCountry(profile.country||'');setProfileLanguages((profile.languages||[]).join(', '));(values.photo&&showAvatar('/api/account/profile/avatar'));setShowSignIn(false);transitionTo('workspace')}catch{setWelcomeError('Your welcome details could not be saved. Try again.');}finally{setWelcomeBusy(false)}}
+  async function completeWelcome(values){setWelcomeBusy(true);setWelcomeError('');try{const profile=await api('/api/account/profile',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({displayName:values.displayName,country:values.country,languages:values.languages})});if(values.photo){const body=new FormData();body.append('avatar',values.photo);await api('/api/account/profile/avatar',{method:'POST',body});}const {error:cause}=await supabase.auth.updateUser({data:{story_bridge_welcome_completed:true,terms_accepted_at:new Date().toISOString(),privacy_accepted_at:new Date().toISOString()}});if(cause)throw cause;setSavedProfileName(profile.display_name||'');setProfileName(profile.display_name||'');setProfileCountry(profile.country||'');setProfileLanguages((profile.languages||[]).join(', '));(values.photo&&showAvatar('/api/account/profile/avatar'));setShowSignIn(false);transitionTo('discover')}catch{setWelcomeError('Your welcome details could not be saved. Try again.');}finally{setWelcomeBusy(false)}}
   async function signOut(global=false) {
     if (hasUnsavedChanges() && !window.confirm('You have unsaved changes. Sign out and discard them?')) return;
     if (!supabase) return;
@@ -509,13 +554,14 @@ export default function App() {
   }
 
   async function showStory(story, own = false) {
+    setDetailReturnPage(pageRef.current === 'detail' ? detailReturnPage : pageRef.current);
     const scope = captureScope(); const requestId = ++detailRequest.current;
     try {
       const fullStory = await api(`/api/stories/${story.id}`);
       if (!scopeIsCurrent(scope) || detailRequest.current !== requestId) return;
       setCurrent({ ...fullStory, _own: own });
       setTranslationStoryId('');
-      transitionTo('detail');
+      transitionTo('detail', story.id);
     } catch (cause) { if (scopeIsCurrent(scope) && detailRequest.current === requestId) setError(cause.message); }
   }
 
@@ -561,7 +607,8 @@ export default function App() {
 
     {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''}/>}
 
-    {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate}/>} 
+    {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage}/>}
+    {page === 'detail' && !current && <main>{error ? <section className="panel" role="alert"><p>{error}</p><button className="secondary" onClick={() => navigate(accountConfig.account ? 'discover' : 'listen')}>Back to stories</button></section> : <p role="status">Loading story…</p>}</main>}
 
     {page === 'objects' && <ObjectsPage objectSettings={objectSettings} visibleObjects={visibleObjects} museumFilter={museumFilter} setMuseumFilter={setMuseumFilter} museumChoices={museumChoices} objectTypeFilter={objectTypeFilter} setObjectTypeFilter={setObjectTypeFilter} typeChoices={typeChoices} transitionTo={transitionTo} retry={() => setObjectSettings(null)}/>} 
 
