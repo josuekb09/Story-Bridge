@@ -317,7 +317,9 @@ export default function App() {
   }
   if (!accountConfig) return <div className="app"><header aria-label="Story Bridge"><h1>Story Bridge</h1></header><main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main></div>;
   if(page==='terms'||page==='privacy')return <div className="app"><LegalPage type={page} onBack={()=>transitionTo('landing')}/></div>;
-  if (accountConfig.account && !session && showSignIn) return <SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} authCode={authCode} setAuthCode={setAuthCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={setShowSignIn} error={error} dismissError={() => setError('')}/>;
+  // Private pages need a session: show the sign-in screen instead of an empty "could not be loaded" list.
+  const privatePage = ['workspace', 'mine', 'review', 'profile', 'share'].includes(page);
+  if (accountConfig.account && !session && (showSignIn || privatePage)) return <SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} authCode={authCode} setAuthCode={setAuthCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/>;
   if (accountConfig.account&&session&&page==='welcome')return <WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/>;
   if (accountConfig.account && !session && page==='landing') return <Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onSignIn={()=>setShowSignIn(true)}/>;
   if (currentSession.current !== activeIdentity) return <div className="app"><header aria-label="Story Bridge"><h1>Story Bridge</h1></header><main><p role="status">Loading your account…</p></main></div>;
@@ -431,8 +433,11 @@ export default function App() {
       setReview({ ...story, audioSaved: savedAudio });
       setReviewBaseline({ text: story.text || '', translation: story.translation || '', visibility: story.visibility || 'private' });
       setReviewVisibility(story.visibility || 'private');
-      await refresh();
-      if (scopeIsCurrent(scope) && mutationRequest.current === requestId) transitionTo('review');
+      // Open the review straight away: the draft is saved. Waiting for refresh() first let the
+      // view scope change, so the user was sent back to step 1 and thought nothing was saved.
+      transitionTo('review');
+      setToast('Draft saved');
+      refresh().catch(() => {});
     } catch (cause) {
       if (scopeIsCurrent(scope) && mutationRequest.current === requestId) setError(cause.message);
     } finally {

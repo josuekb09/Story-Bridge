@@ -10,11 +10,11 @@ Translations may be written by the storyteller or drafted on demand by OpenAI wh
 
 [Open the Story Bridge demo](https://story-bridge.onrender.com/).
 
-As of 7 November 2026:
+As of 9 November 2026:
 
 - Email-code sign-in is enabled. Google sign-in is enabled in the local `.env` with `STORY_GOOGLE_SIGN_IN=true`; a working OAuth round trip still depends on the Google provider and redirect settings in the configured Supabase project.
 - Email-code sign-in, text draft persistence, and private audio saving and playback have been checked locally against the configured Supabase project.
-- The signed-in flow on the deployed site and the exact commit served by the deployment have not yet been verified.
+- The latest local browser check verifies a newly saved account draft opens its review screen before the account-list refresh finishes. A deployed round trip still depends on the automatic Render deploy completing.
 
 This is a demonstration build, not a production service for sensitive stories or recordings. The status above describes this demo, not every installation of the project.
 
@@ -27,7 +27,7 @@ This is a demonstration build, not a production service for sensitive stories or
 - Add a human-written or explicitly approved AI-drafted translation and record its origin. A translation check label is self-reported by the owner, not independent certification.
 - Use email one-time codes or Google OAuth in account mode. New accounts get a welcome form for display name, country, languages, optional profile photo, and required Terms and Privacy acceptance. Google requires separate provider configuration.
 - In account mode, use My workspace to resume drafts and view collection totals, and filter My stories by draft, public, private, or withdrawn status. Totals and lists are loaded from the account API.
-- Unsaved text and audio are held in the page. Leaving a changed creation or review screen asks for confirmation; successful story creation keeps the saved story in review and clears the next creation form.
+- Unsaved text and audio are held in the page. Leaving a changed creation or review screen asks for confirmation; successful story creation opens the saved story in review immediately, without waiting for a workspace refresh, and clears the next creation form.
 - Workspace and story lists distinguish loading, empty, and recoverable error states; malformed API list responses are treated as errors and can be retried.
 - Recording playback distinguishes no recording, loading, and errors; a failed private recording request can be retried through the authenticated owner path.
 - Public visitors can browse fictional community stories and open detail pages. Share uses four visible steps and requires a separate approval from the saved draft before publication.

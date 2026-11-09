@@ -1194,13 +1194,28 @@ try {
     await livePage.getByRole('button',{name:'Continue to translation'}).click();
     await livePage.getByRole('button',{name:'Continue to review'}).click();
     await livePage.getByLabel('This is mine, or I have permission from the person telling it.').check();
+    let releaseDraftRefresh;
+    let signalDraftRefreshStarted;
+    const draftRefreshStarted = new Promise(resolve => { signalDraftRefreshStarted = resolve; });
+    const heldDraftRefresh = new Promise(resolve => { releaseDraftRefresh = resolve; });
+    await livePage.route('**/api/mine', async route => {
+      if (route.request().method() === 'GET') {
+        signalDraftRefreshStarted();
+        await heldDraftRefresh;
+      }
+      await route.continue();
+    });
     const accountCreatePromise=livePage.waitForResponse(response=>response.url()===`${webOrigin}/api/stories`&&response.request().method()==='POST');
     await livePage.getByRole('button',{name:'Save draft and open review'}).click();
     const accountCreateResponse=await accountCreatePromise;
     ensure(accountCreateResponse.status()===201,'Signed-in browser draft creation failed.');
     const accountStoryId=(await accountCreateResponse.json()).id;
-    await livePage.getByRole('heading',{name:'Review your story'}).waitFor();
-    pass('Story A: account draft with synthetic text and audio reaches saved review');
+    await draftRefreshStarted;
+    const reviewOpenedBeforeRefresh = await livePage.getByRole('heading',{name:'Review your story'}).waitFor({timeout:5000}).then(()=>true).catch(()=>false);
+    releaseDraftRefresh();
+    await livePage.unroute('**/api/mine');
+    ensure(reviewOpenedBeforeRefresh,'Saving a draft waited for the workspace refresh before opening review.');
+    pass('Story A: saved draft opens review before the workspace refresh completes');
     await livePage.getByRole('button',{name:'My workspace',exact:true}).click();
     await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     await livePage.getByRole('button',{name:'Create a story',exact:true}).click();
