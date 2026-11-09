@@ -13,6 +13,7 @@ import { appendStoryVersion, makeStoryVersion, storyRecord } from './story-recor
 import { createTranslationDraftService, isTranslationApproved, translationDraftHandler } from './translation-draft.js';
 import { OBJECT_IDS, OBJECT_RECORDS } from '../src/object-records.js';
 import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
+import { sendSitemap } from './sitemap.js';
 
 export const MODE = parseAccountConfig();
 
@@ -241,6 +242,10 @@ function find(id, stories = readDb()) { return stories.find(story => story.id ==
 const access = (req, story) => MODE.backend === 'file' && isOwner(req, story) || (story.status === 'shared' && story.visibility === 'public' && story.access !== 'Community only');
 
 if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories', (_req, res) => res.json(readDb().filter(story => story.status === 'shared' && story.visibility === 'public' && story.access!=='Community only').sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt)).map(story => clean(story, false))));
+if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/sitemap.xml', (_req, res) => {
+  try { return sendSitemap(res, readDb().filter(story => story.status === 'shared' && story.visibility === 'public' && story.access !== 'Community only').map(story => story.id)); }
+  catch { return res.status(503).type('text/plain').send('Sitemap is temporarily unavailable.'); }
+});
 if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/mine', (req, res) => {
   const stories = readDb();
   if (!ownerToken(req)) return res.status(400).json({ error: 'A browser owner token is required.' });

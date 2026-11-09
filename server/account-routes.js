@@ -7,6 +7,7 @@ import { appendStoryVersion, makeStoryVersion, storyRecord } from './story-recor
 import { isTranslationApproved, translationDraftHandler } from './translation-draft.js';
 import { OBJECT_IDS } from '../src/object-records.js';
 import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
+import { sendSitemap } from './sitemap.js';
 
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 const clean = (row, owner = false) => {
@@ -87,6 +88,14 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const rows = await store.listObjectAccess?.() || [];
     return OBJECT_IDS.map(id => ({ id, access: rows.find(row => row.id === id)?.access || 'Public' }));
   };
+  app.get('/sitemap.xml', async (_req, res) => {
+    try {
+      const objectAccess = await objectAccessList();
+      const restricted = new Set(objectAccess.filter(item => item.access === 'Community only').map(item => item.id));
+      const rows = (await store.listPublic()).filter(row => row.visibility === 'public' && row.status === 'shared' && row.access !== 'Community only' && (!row.object_id || !restricted.has(row.object_id)));
+      return sendSitemap(res, rows.map(row => row.id));
+    } catch { return res.status(503).type('text/plain').send('Sitemap is temporarily unavailable.'); }
+  });
   app.get('/api/objects', optionalSession, async (req, res) => {
     try { res.json({ objects: await objectAccessList(), canManage: !!objectAdminId && req.account?.id === objectAdminId }); }
     catch { res.status(503).json({ error: 'Object access settings are unavailable.' }); }

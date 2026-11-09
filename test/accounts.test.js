@@ -12,6 +12,7 @@ import { mountAccountRoutes } from '../server/account-routes.js';
 import { createFileAccountStore } from '../server/file-account-store.js';
 import { createSupabaseStore } from '../server/supabase-store.js';
 import { contentSecurityPolicy } from '../server/csp.js';
+import { OBJECT_IDS } from '../src/object-records.js';
 
 const pair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = pair.publicKey.export({ format:'jwk' }); jwk.kid = 'local-test-key'; jwk.alg = 'RS256';
@@ -52,6 +53,18 @@ async function serverFor(store=fixtureStore(),draftTranslation=async()=> 'Synthe
 }
 const auth = user => ({authorization:`Bearer ${token(user)}`});
 const storyRow = (id,owner,status='draft',visibility='private',audio_key=null) => ({id,owner_user_id:owner,owner_hash:null,original_language:'Synthetic',text:'Synthetic story',translation_language:'',translation:'',translation_checked:false,checked_by:'',storyteller_name:'Private name',show_name:false,visibility,status,created_at:new Date().toISOString(),audio_key});
+
+test('account sitemap includes public stories and omits private or community-only stories',async t=>{
+  const store=fixtureStore();
+  store.rows.set('public-sitemap', {...storyRow('public-sitemap','reader','shared','public'),access:'Public'});
+  store.rows.set('private-sitemap', {...storyRow('private-sitemap','reader','draft','private'),access:'Public'});
+  store.rows.set('community-sitemap', {...storyRow('community-sitemap','reader','shared','public'),access:'Community only'});
+  store.listObjectAccess=async()=>[{id:OBJECT_IDS[0],access:'Community only'}];
+  const {base,server}=await serverFor(store);t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const response=await fetch(`${base}/sitemap.xml`);const xml=await response.text();
+  assert.equal(response.status,200);assert.match(response.headers.get('cache-control')||'',/max-age=3600/);
+  assert.ok(xml.includes('/stories/public-sitemap'));assert.ok(!xml.includes('/stories/private-sitemap'));assert.ok(!xml.includes('/stories/community-sitemap'));
+});
 
 test('account config fails closed and production never silently selects file storage', () => {
   assert.throws(()=>parseAccountConfig({STORY_BACKEND:'supabase',STORY_AUTH_MODE:'account',NODE_ENV:'production'}),/Supabase/);

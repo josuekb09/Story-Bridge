@@ -8,6 +8,7 @@ export default function WelcomePage({ saving, error, onComplete }) {
   const [terms,setTerms]=useState(false);
   const submit=event=>{event.preventDefault();if(terms)onComplete({displayName:name,country,languages:languages.split(',').map(item=>item.trim()).filter(Boolean),photo,skip:false});};
   return <div className="app account-app"><header aria-label="Story Bridge"><h1>Welcome to Story Bridge</h1><p>A few details help you make this space yours.</p></header><main className="account-card welcome-card"><form className="form" onSubmit={submit}>
+    <h1 className="welcome-title">Welcome to Story Bridge</h1><p className="muted">A few details help you make this space yours.</p>
     <label>Display name<input maxLength="80" autoComplete="name" value={name} onChange={event=>setName(event.target.value)} placeholder="How you would like to be known"/></label>
     <label>Country<input maxLength="100" autoComplete="country-name" value={country} onChange={event=>setCountry(event.target.value)}/></label>
     <label>Languages you speak<input maxLength="500" value={languages} onChange={event=>setLanguages(event.target.value)} placeholder="For example: English, Swahili"/><small>Separate languages with commas.</small></label>

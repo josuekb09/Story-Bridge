@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /mine
+Disallow: /share
+Disallow: /profile
+Sitemap: https://story-bridge.onrender.com/sitemap.xml

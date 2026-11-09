@@ -14,7 +14,7 @@ import SharePage from '../pages/SharePage.jsx';
 import ReviewPage from '../pages/ReviewPage.jsx';
 import WorkspacePage from '../pages/WorkspacePage.jsx';
 import MyStoriesPage from '../pages/MyStoriesPage.jsx';
-import { Wordmark } from '../Brand.jsx';
+import { AppHeader, AppMobileNav } from '../components/AppHeader.jsx';
 import { api, ownerToken, setAccountSessionToken, authorizedObjectUrl } from '../lib/api.js';
 import { editAiTranslationDraft, translationApprovalCanContinue } from '../translation-draft.js';
 import { OBJECT_RECORDS, CULTURAL_GROUP_RECORD, OBJECT_IDS, objectRecordView } from '../object-records.js';
@@ -26,6 +26,9 @@ export default function App() {
     const path = window.location.pathname;
     if (path === '/') return window.history.state?.storyBridgePage || 'landing';
     if (path === '/discover') return 'discover';
+    if (path === '/cultures') return 'cultures';
+    if (path === '/search') return 'search';
+    if (path === '/notifications') return 'notifications';
     if (path === '/listen') return 'listen';
     if (path === '/mine') return 'mine';
     if (path === '/workspace') return 'workspace';
@@ -89,6 +92,8 @@ export default function App() {
   const [configError, setConfigError] = useState('');
   const [configAttempt, setConfigAttempt] = useState(0);
   const [showSignIn, setShowSignIn] = useState(false);
+  const [profileAccountOpen, setProfileAccountOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [languageFilter, setLanguageFilter] = useState('all');
   const [regionFilter, setRegionFilter] = useState('all');
   const [audioOnly, setAudioOnly] = useState(false);
@@ -136,7 +141,7 @@ export default function App() {
 
   function transitionTo(nextPage, targetStoryId = '') {
     if (pageRef.current !== nextPage) { pageRef.current = nextPage; viewEpoch.current += 1; }
-    const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', terms:'/terms', privacy:'/privacy' };
+    const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', cultures:'/cultures', search:'/search', notifications:'/notifications', terms:'/terms', privacy:'/privacy' };
     const storyId = targetStoryId || current?.id || storyIdFromPath();
     const route = nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
     // Keep the OAuth callback (?code=… / ?error=…) until Supabase has read it; it is removed after getSession().
@@ -150,6 +155,14 @@ export default function App() {
     const onPopState = () => { const next = pathPage(); pageRef.current = next; viewEpoch.current += 1; setPage(next); };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, []);
 
   useEffect(() => { if (!toast) return undefined; const timer = setTimeout(() => setToast(''), 3500); return () => clearTimeout(timer); }, [toast]);
@@ -360,14 +373,17 @@ export default function App() {
       return false;
     }
   }
-  if (!accountConfig) return <div className="app"><header aria-label="Story Bridge"><h1>Story Bridge</h1></header><main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main></div>;
-  if(page==='terms'||page==='privacy')return <div className="app"><LegalPage type={page} onBack={()=>transitionTo('landing')}/></div>;
+  function openSettings() { setProfileAccountOpen(true); navigate('profile'); }
+  const appHeader = <AppHeader page={page} signedIn={!!session} accountEnabled={!!accountConfig?.account} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onNavigate={navigate} onSignIn={() => setShowSignIn(true)} onSignOut={signOut} onSettings={openSettings}/>;
+  const mobileNav = <AppMobileNav page={page} onNavigate={navigate}/>;
+  if (!accountConfig) return <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main>{mobileNav}</div>;
+  if(page==='terms'||page==='privacy')return <div className="app">{appHeader}<LegalPage type={page} onBack={()=>transitionTo('landing')}/>{mobileNav}</div>;
   // Private pages need a session: show the sign-in screen instead of an empty "could not be loaded" list.
   const privatePage = ['workspace', 'mine', 'review', 'profile', 'share'].includes(page);
-  if (accountConfig.account && !session && (showSignIn || privatePage)) return <SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} authCode={authCode} setAuthCode={setAuthCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/>;
-  if (accountConfig.account&&session&&page==='welcome')return <WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/>;
-  if (accountConfig.account && !session && page==='landing') return <Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onSignIn={()=>setShowSignIn(true)}/>;
-  if (currentSession.current !== activeIdentity) return <div className="app"><header aria-label="Story Bridge"><h1>Story Bridge</h1></header><main><p role="status">Loading your account…</p></main></div>;
+  if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} authCode={authCode} setAuthCode={setAuthCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/>{mobileNav}</div>;
+  if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/>{mobileNav}</div>;
+  if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onSignIn={()=>setShowSignIn(true)}/>{mobileNav}</div>;
+  if (currentSession.current !== activeIdentity) return <div className="app">{appHeader}<main><p role="status">Loading your account…</p></main>{mobileNav}</div>;
 
   function navigate(nextPage) {
     if (nextPage === page) return;
@@ -593,40 +609,27 @@ export default function App() {
     transitionTo('share');
   }
 
-  return page==='landing' ? <Landing showSignIn={!!accountConfig.account} repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>navigate('listen')} onObjects={()=>navigate('objects')} onShare={()=>navigate('share')} onSignIn={()=>setShowSignIn(true)}/> : <div className="app">
-    <header aria-label="Story Bridge">
-      <button className="brand-button" onClick={()=>transitionTo('landing')} aria-label="Story Bridge home"><Wordmark light/></button>
-      <p>Your story, in your own voice, carried across languages.</p>
-      {accountConfig.account && (session ? <div className="account-tools"><span>{session.user?.email || 'Signed in'}</span><button className="header-link" onClick={() => navigate('profile')}>Profile</button><button className="header-link" onClick={signOut}>Sign out</button></div> : <button className="header-link" onClick={()=>setShowSignIn(true)}>Sign in</button>)}
-    </header>
-    {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">Dismiss</button></div>}
+  return page === 'landing'
+    ? <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<Landing showSignIn={!!accountConfig.account} repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>navigate('listen')} onObjects={()=>navigate('objects')} onShare={()=>navigate('share')} onSignIn={()=>setShowSignIn(true)}/>{mobileNav}</div>
+    : <div className="app">
+      {appHeader}
+      {!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}
+      {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">Dismiss</button></div>}
 
-    {page === 'workspace' && accountConfig.account && <WorkspacePage savedProfileName={savedProfileName} profileState={profileState} navigate={navigate} listState={listState} listErrors={listErrors} retryList={retryList} counts={counts} setCollectionFilter={setCollectionFilter} draftStories={draftStories} startReview={startReview}/>} 
-
-    {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session}/>}
-
-    {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''}/>}
-
-    {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage}/>}
-    {page === 'detail' && !current && <main>{error ? <section className="panel" role="alert"><p>{error}</p><button className="secondary" onClick={() => navigate(accountConfig.account ? 'discover' : 'listen')}>Back to stories</button></section> : <p role="status">Loading story…</p>}</main>}
-
-    {page === 'objects' && <ObjectsPage objectSettings={objectSettings} visibleObjects={visibleObjects} museumFilter={museumFilter} setMuseumFilter={setMuseumFilter} museumChoices={museumChoices} objectTypeFilter={objectTypeFilter} setObjectTypeFilter={setObjectTypeFilter} typeChoices={typeChoices} transitionTo={transitionTo} retry={() => setObjectSettings(null)}/>} 
-
-    {page === 'group-record' && <CulturalGroupPage record={CULTURAL_GROUP_RECORD} navigate={navigate} onAddVoice={addVoiceToObject}/>} 
-
-    {page.startsWith('object:') && <ObjectRecordPage source={OBJECT_RECORDS.find(item => item.id === page.slice(7))} objectSettings={objectSettings} session={session} objectAccessSaving={objectAccessSaving} objectAccessError={objectAccessError} saveObjectAccess={saveObjectAccess} linkedStories={objectStories(page.slice(7))} showStory={showStory} addVoiceToObject={addVoiceToObject} navigate={navigate}/>} 
-
-    {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft}/>} 
-
-    {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>} 
-
-    {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} objectSettings={objectSettings} pendingPosts={pendingPosts} pendingPostsError={pendingPostsError} approvePendingPost={approvePendingPost} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId}/>} 
-
-    {toast && <div className="app-toast" role="status" aria-live="polite">✓ {toast}</div>}
-    <nav className="bottom-nav" aria-label="Main navigation">
-      <button className={page === 'objects' || page.startsWith('object:') ? 'active' : ''} onClick={() => navigate('objects')}>Objects</button>
-      {accountConfig.account ? <><button className={page === 'workspace' ? 'active' : ''} onClick={() => navigate('workspace')}>My workspace</button><button className={page === 'discover' || page === 'detail' ? 'active' : ''} onClick={() => navigate('discover')}>Discover</button><button className={page === 'mine' || page === 'review' ? 'active' : ''} onClick={() => navigate('mine')}>My stories</button><button className={page === 'profile' ? 'active' : ''} onClick={() => navigate('profile')}>Profile</button></> : <><button className={page === 'listen' || page === 'detail' ? 'active' : ''} onClick={() => navigate('listen')}>Listen</button><button className={page === 'share' ? 'active' : ''} onClick={() => navigate('share')}>Share a story</button><button className={page === 'mine' || page === 'review' ? 'active' : ''} onClick={() => navigate('mine')}>My stories</button></>}
-    </nav>
-    <footer>Stories stay under the storyteller’s control.</footer>
-  </div>;
+      {page === 'workspace' && accountConfig.account && <WorkspacePage savedProfileName={savedProfileName} profileState={profileState} navigate={navigate} listState={listState} listErrors={listErrors} retryList={retryList} counts={counts} setCollectionFilter={setCollectionFilter} draftStories={draftStories} startReview={startReview}/>}
+      {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session}/>}
+      {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''} accountOpen={profileAccountOpen} onAccountToggle={setProfileAccountOpen}/>}
+      {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage}/>}
+      {page === 'detail' && !current && <main>{error ? <section className="panel" role="alert"><p>{error}</p><button className="secondary" onClick={() => navigate(accountConfig.account ? 'discover' : 'listen')}>Back to stories</button></section> : <p role="status">Loading story…</p>}</main>}
+      {page === 'objects' && <ObjectsPage objectSettings={objectSettings} visibleObjects={visibleObjects} museumFilter={museumFilter} setMuseumFilter={setMuseumFilter} museumChoices={museumChoices} objectTypeFilter={objectTypeFilter} setObjectTypeFilter={setObjectTypeFilter} typeChoices={typeChoices} transitionTo={transitionTo} retry={() => setObjectSettings(null)}/>}
+      {page === 'group-record' && <CulturalGroupPage record={CULTURAL_GROUP_RECORD} navigate={navigate} onAddVoice={addVoiceToObject}/>}
+      {page.startsWith('object:') && <ObjectRecordPage source={OBJECT_RECORDS.find(item => item.id === page.slice(7))} objectSettings={objectSettings} session={session} objectAccessSaving={objectAccessSaving} objectAccessError={objectAccessError} saveObjectAccess={saveObjectAccess} linkedStories={objectStories(page.slice(7))} showStory={showStory} addVoiceToObject={addVoiceToObject} navigate={navigate}/>}
+      {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft}/>}
+      {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
+      {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} objectSettings={objectSettings} pendingPosts={pendingPosts} pendingPostsError={pendingPostsError} approvePendingPost={approvePendingPost} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId}/>}
+      {['cultures','search','notifications'].includes(page) && <main className="phase-placeholder"><section className="panel"><h1>{page === 'cultures' ? 'Cultures' : page === 'search' ? 'Search' : 'Notifications'}</h1><p>This page is being prepared.</p></section></main>}
+      {toast && <div className="app-toast" role="status" aria-live="polite">✓ {toast}</div>}
+      <AppMobileNav page={page} onNavigate={navigate}/>
+      <footer>Stories stay under the storyteller’s control.</footer>
+    </div>;
 }

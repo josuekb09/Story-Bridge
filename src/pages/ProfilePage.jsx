@@ -7,14 +7,14 @@ function initials(name) {
 }
 
 // Profile: a readable card first (like a social profile), an edit form on demand.
-export default function ProfilePage({ navigate, profileState, profileError, loadProfile, identity, epoch, profileName, setProfileName, profileCountry, setProfileCountry, profileLanguages, setProfileLanguages, profileAvatar, profileNotice, saveProfile, signOut, changeAvatar, avatarBusy = false, storyCount = 0, publicCount = 0, email = '' }) {
+export default function ProfilePage({ navigate, profileState, profileError, loadProfile, identity, epoch, profileName, setProfileName, profileCountry, setProfileCountry, profileLanguages, setProfileLanguages, profileAvatar, profileNotice, saveProfile, signOut, changeAvatar, avatarBusy = false, storyCount = 0, publicCount = 0, email = '', accountOpen = false, onAccountToggle }) {
   const [editing, setEditing] = useState(false);
   const fileInput = useRef(null);
   const saving = profileState === 'saving';
   const languages = String(profileLanguages || '').split(',').map(item => item.trim()).filter(Boolean);
 
-  // New accounts without a name open straight into the form.
-  useEffect(() => { if (profileState === 'ready' && !profileName && !editing) setEditing(true); }, [profileState]); // eslint-disable-line react-hooks/exhaustive-deps
+  // New accounts without a name open straight into the form unless Settings was requested.
+  useEffect(() => { if (profileState === 'ready' && !profileName && !editing && !accountOpen) setEditing(true); }, [profileState, accountOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit(event) {
     const saved = await saveProfile(event);
@@ -38,7 +38,7 @@ export default function ProfilePage({ navigate, profileState, profileError, load
         {!editing && <>
           <h1 id="profile-name" className="profile-name">{profileName || 'Your name'}</h1>
           {profileNotice && <p className="success" role="status">{profileNotice}</p>}
-          <p className="profile-meta">{[profileCountry, email].filter(Boolean).join(' · ') || 'Add where you are from'}</p>
+          <p className="profile-meta">{profileCountry || 'Add where you are from'}</p>
           {languages.length > 0 && <ul className="profile-langs" aria-label="Languages">{languages.map(language => <li key={language}>{language}</li>)}</ul>}
           <dl className="profile-stats">
             <div><dt>Stories</dt><dd>{storyCount}</dd></div>
@@ -52,7 +52,7 @@ export default function ProfilePage({ navigate, profileState, profileError, load
             <button className="secondary" onClick={() => navigate('mine')}>My stories</button>
           </div>
           <p className="muted profile-privacy">Your name appears on a story only when you choose to show it.</p>
-          <details className="profile-account"><summary>Account</summary><div className="actions"><button type="button" className="secondary" onClick={() => signOut()}>Sign out</button><button type="button" className="secondary" onClick={() => signOut(true)}>Sign out of all devices</button></div></details>
+          <details id="account-settings" className="profile-account" open={accountOpen} onToggle={event => onAccountToggle?.(event.currentTarget.open)}><summary>Account</summary>{email && <p><strong>Email address:</strong> <span>{email}</span></p>}<div className="actions"><button type="button" className="secondary" onClick={() => signOut()}>Sign out</button><button type="button" className="secondary" onClick={() => signOut(true)}>Sign out of all devices</button></div></details>
         </>}
 
         {editing && <form className="form profile-form" aria-busy={saving} onSubmit={submit}>

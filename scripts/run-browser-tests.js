@@ -83,7 +83,7 @@ const approvedActionTranslation = 'Approval-action translation is public.';
 const ensure = (condition, message) => { if (!condition) throw new Error(message); };
 const pass = name => { results.push({ name, status: 'PASS' }); process.stdout.write(`PASS ${name}\n`); };
 const record = async (name, fn, prerequisite = true) => {
-  if (focusedScenario === 'account' && !['Isolated test server and storage under .test-data', 'Production server security headers and enforced CSP', 'Launch bundled Chromium with isolated A and B contexts', 'Account screens have 375px and 1280px visual evidence'].includes(name)) {
+  if (focusedScenario === 'account' && !['Isolated test server and storage under .test-data', 'Production server security headers and enforced CSP', 'PWA and sitemap resources have their expected types and cache policy', 'Launch bundled Chromium with isolated A and B contexts', 'Account screens have 375px and 1280px visual evidence'].includes(name)) {
     results.push({ name, status: 'NOT EXECUTED', detail: 'Excluded by STORY_TEST_SCENARIOS=account.' }); process.stdout.write(`NOT EXECUTED ${name}\n`); return false;
   }
   if (!prerequisite) { results.push({ name, status: 'NOT TESTED', detail: 'Prerequisite did not pass.' }); process.stdout.write(`NOT TESTED ${name}\n`); return false; }
@@ -133,6 +133,22 @@ async function direct(token, urlPath, method = 'GET', data) {
   let json; try { json = text ? JSON.parse(text) : null; } catch {}
   return { status: response.status, body: json, text, contentType: response.headers.get('content-type') || '' };
 }
+async function clickHeaderMenu(page, label) {
+  await page.locator('.app-avatar-button').click();
+  await page.getByRole('button', { name: label, exact: true }).click();
+}
+async function confirmHeaderMenuAction(page, label, accept) {
+  await page.locator('.app-avatar-button').click();
+  return confirmAction(page, page.getByRole('button', { name: label, exact: true }), accept);
+}
+function appNavigationLocator(page, label) {
+  const desktop = page.locator('.app-header-primary').getByRole('link', { name: label, exact: true });
+  return desktop.isVisible().then(visible => visible ? desktop : page.locator('.app-mobile-nav').getByRole('button', { name: label, exact: true }));
+}
+async function clickAppNavigation(page, label) {
+  const locator = await appNavigationLocator(page, label);
+  await locator.click();
+}
 async function waitFor(url) {
   const end = Date.now() + 20000;
   while (Date.now() < end) {
@@ -179,22 +195,21 @@ async function captureScreen(page, name, width, captureLower = true) {
     const controls = [...document.querySelectorAll('button,input:not([type=checkbox]):not([type=radio]),textarea,audio')].filter(visible);
     const clipped = controls.filter(el => { const r = el.getBoundingClientRect(); return r.left < -1 || r.right > innerWidth + 1 || r.width < 24 || r.height < 20; }).map(el => `${el.tagName.toLowerCase()}${el.type?`[type=${el.type}]`:''}${el.getAttribute('aria-label')?`[aria-label=${el.getAttribute('aria-label')}]`:''}(${Math.round(el.getBoundingClientRect().left)},${Math.round(el.getBoundingClientRect().right)},${Math.round(el.getBoundingClientRect().width)}x${Math.round(el.getBoundingClientRect().height)})`);
     const tiny = [...document.querySelectorAll('body *')].filter(visible).map(el => ({ size:parseFloat(getComputedStyle(el).fontSize), selector:`${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? `.${el.className.trim().replace(/\s+/g,'.')}` : ''}`, text:(el.innerText||'').trim().slice(0,50) })).filter(item => item.size > 0 && item.size < 12);
-    const main = document.querySelector('main')?.getBoundingClientRect(); const nav = document.querySelector('.bottom-nav')?.getBoundingClientRect();
-    return { viewport: innerWidth, document: document.documentElement.scrollWidth, clippedControls: clipped, tinyText: tiny, mainX: main?.x, mainRight: main?.right, mainBottom: main?.bottom, navTop: nav?.top, navWidth: nav?.width };
+    const main = document.querySelector('main')?.getBoundingClientRect(); const navElement = document.querySelector('.app-mobile-nav'); const nav = navElement?.getBoundingClientRect();
+    return { viewport: innerWidth, document: document.documentElement.scrollWidth, clippedControls: clipped, tinyText: tiny, mainX: main?.x, mainRight: main?.right, mainBottom: main?.bottom, mainHeight: main?.height, navTop: nav?.top, navWidth: nav?.width, navHeight: nav?.height, appPaddingBottom:parseFloat(getComputedStyle(document.querySelector('.app')).paddingBottom)||0, navVisible: !!navElement && getComputedStyle(navElement).display !== 'none' };
   });
   ensure(metrics.document <= width + 1, `Horizontal overflow at ${width}px (document ${metrics.document}px; viewport ${width}px).`);
   ensure(metrics.clippedControls.length === 0, `Clipped or undersized controls at ${width}px: ${metrics.clippedControls.join(', ')}.`);
   ensure(metrics.tinyText.length === 0, `Text below 12px found at ${width}px: ${metrics.tinyText.slice(0,8).map(item=>`${item.selector} (${item.size}px) “${item.text}”`).join('; ')}.`);
   ensure(metrics.mainX >= -1 && metrics.mainRight <= width + 1, `Main content clipped at ${width}px.`);
-  ensure(metrics.navWidth <= width + 1 && metrics.mainBottom <= metrics.navTop + 1, `Main content overlaps the bottom navigation at ${width}px.`);
+  ensure(metrics.navWidth <= width + 1 && (!metrics.navVisible || metrics.appPaddingBottom >= metrics.navHeight - 1), `Bottom navigation has no scroll clearance at ${width}px.`);
   const file = path.join(evidenceDir, `${name}-${width}.png`);
   await page.screenshot({ path: file, animations: 'disabled' });
   if (!captureLower) return { file, metrics };
-  const main=page.locator('main');
-  await main.evaluate(el => { el.scrollTop=Math.max(0,el.scrollHeight-el.clientHeight-90); }); await page.waitForTimeout(50);
+  await page.evaluate(() => window.scrollTo(0,document.documentElement.scrollHeight)); await page.waitForTimeout(50);
   const bottomFile=path.join(evidenceDir, `${name}-${width}-bottom.png`);
   await page.screenshot({ path: bottomFile, animations: 'disabled' });
-  await main.evaluate(el => { el.scrollTop=0; });
+  await page.evaluate(() => window.scrollTo(0,0));
   return { file, bottomFile, metrics };
 }
 
@@ -265,6 +280,20 @@ try {
     ensure(response.headers.get('x-frame-options') === 'DENY', 'Frame protection header missing.');
     ensure(response.headers.get('referrer-policy') === 'no-referrer', 'Referrer-Policy missing.');
     ensure(!response.headers.has('strict-transport-security'), 'HSTS was enabled without the HTTPS flag.');
+  });
+
+  await record('PWA and sitemap resources have their expected types and cache policy', async () => {
+    const [html, robots, manifest, worker, sitemap] = await Promise.all([
+      fetch(`${webOrigin}/`), fetch(`${webOrigin}/robots.txt`), fetch(`${webOrigin}/manifest.webmanifest`), fetch(`${webOrigin}/sw.js`), fetch(`${webOrigin}/sitemap.xml`),
+    ]);
+    const htmlText = await html.text(); const robotType = robots.headers.get('content-type') || '';
+    const sitemapText = await sitemap.text(); const workerText = await worker.text();
+    ensure(html.ok && htmlText.includes('rel="manifest" href="/manifest.webmanifest"') && htmlText.includes('rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png"'), 'App shell is missing the manifest or Apple touch icon link.');
+    ensure(robots.ok && robotType.includes('text/plain'), `robots.txt was served as ${robotType || 'an unknown type'}.`);
+    ensure(manifest.ok && (manifest.headers.get('content-type') || '').includes('json'), 'Web app manifest was not served as JSON.');
+    ensure(worker.ok && workerText.includes("url.pathname.startsWith('/api/')"), 'Service worker is missing or does not explicitly bypass API routes.');
+    ensure(sitemap.ok && (sitemap.headers.get('content-type') || '').includes('application/xml') && (sitemap.headers.get('cache-control') || '').includes('max-age=3600'), 'Sitemap was not served as cached XML.');
+    ensure(sitemapText.includes('/discover') && sitemapText.includes('/objects/'), 'Sitemap is missing public app or object routes.');
   });
 
   await record('Synthetic audio fixture generation', async () => {
@@ -343,7 +372,7 @@ try {
   let captureSavedStoryId = '';
 
   await record('Recording statuses, elapsed timer, captured audio preview, size, MIME, and playback', async () => {
-    await pageCapture.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click();
+    await clickAppNavigation(pageCapture, 'Share');
     await pageCapture.getByRole('heading', { name: 'Share a story' }).waitFor();
     await pageCapture.getByLabel('Language told in').fill('Synthetic recording language'); await pageCapture.getByRole('button',{name:'Continue to your story'}).click();
     await pageCapture.getByRole('status').getByText('Ready to record.').waitFor();
@@ -550,7 +579,7 @@ try {
   }, capturePreviewReady);
 
   await record('Unsupported recording capability has a specific usable error', async () => {
-    await pageUnsupported.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click();
+    await clickAppNavigation(pageUnsupported, 'Share');
     await pageUnsupported.getByRole('heading', { name: 'Share a story' }).waitFor();
     await pageUnsupported.getByLabel('Language told in').fill('Synthetic recording language'); await pageUnsupported.getByRole('button',{name:'Continue to your story'}).click();
     await pageUnsupported.getByRole('button', { name: 'Record voice' }).click();
@@ -582,15 +611,15 @@ try {
   await record('Navigation warning, active-recording cleanup, save failure retention, and save retry', async () => {
     await pageCapture.getByRole('button', { name: 'Record voice' }).click();
     await pageCapture.getByRole('status').getByText('Recording.').waitFor();
-    const dismissed = await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Listen', exact: true }), false);
+    const dismissed = await confirmAction(pageCapture, await appNavigationLocator(pageCapture, 'Discover'), false);
     ensure(dismissed.includes('in progress') && dismissed.includes('stop and discard'), 'Navigation warning did not explain active recording discard.');
     ensure(await pageCapture.getByRole('heading', { name: 'Share a story' }).isVisible(), 'Canceling navigation left the story form.');
-    const accepted = await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Listen', exact: true }), true);
+    const accepted = await confirmAction(pageCapture, await appNavigationLocator(pageCapture, 'Discover'), true);
     ensure(accepted.includes('stop and discard'), 'Active-recording navigation warning was not shown.');
     await pageCapture.getByRole('heading', { name: 'Listen' }).waitFor();
     ensure(await pageCapture.evaluate(() => window.__lastMicStream?.getTracks().every(track => track.readyState === 'ended')), 'Microphone tracks remained live after navigation cleanup.');
 
-    await pageCapture.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click();
+    await clickAppNavigation(pageCapture, 'Share');
     await pageCapture.getByLabel('Language told in').fill('Synthetic recording language');
     await pageCapture.getByRole('button',{name:'Continue to your story'}).click();
     await pageCapture.getByLabel('Post title').fill('Synthetic audio post');
@@ -615,7 +644,7 @@ try {
     ensure(await pageCapture.locator('audio[aria-label="Preview of unsaved audio"]').getAttribute('src') === retainedUrl, 'Save failure removed the captured audio.');
     ensure(await pageCapture.getByRole('button', { name: 'Save draft and open review' }).isEnabled(), 'Retry save action is disabled after a failed response.');
     ensure(await pageCapture.getByText('Saved with your story.', { exact: true }).count() === 0, 'App reported success before the server confirmed save.');
-    const unsavedNavigation = await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Listen', exact: true }), false);
+    const unsavedNavigation = await confirmAction(pageCapture, await appNavigationLocator(pageCapture, 'Discover'), false);
     ensure(unsavedNavigation.includes('unsaved audio') && unsavedNavigation.includes('discard it'), 'Navigation away from a captured unsaved recording did not warn about discard.');
     ensure(await pageCapture.locator('audio[aria-label="Preview of unsaved audio"]').getAttribute('src') === retainedUrl, 'Canceling unsaved-audio navigation did not keep the preview.');
     const unloadWarning = await pageCapture.evaluate(() => {
@@ -643,22 +672,22 @@ try {
   }, captureLifecycleReady);
 
   await record('Listen, Share, and My stories render at 1280px and 375px', async () => {
-    await pageA.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click(); await pageA.getByRole('heading', { name: 'Share a story' }).waitFor();
+    await clickAppNavigation(pageA, 'Share'); await pageA.getByRole('heading', { name: 'Share a story' }).waitFor();
     await pageA.getByLabel('Language told in').fill('Synthetic display language'); await pageA.getByRole('button',{name:'Continue to your story'}).click();
     ensure(await pageA.getByRole('button', { name: 'Record voice' }).isVisible(), 'Record voice control is missing.');
     ensure((await pageA.getByLabel(/Or choose an audio file/).getAttribute('accept'))?.includes('audio/'), 'Audio file upload control is missing.');
     for (const width of [1280, 375]) {
       const shot = await captureScreen(pageA, 'share', width); results.push({ name: `Share screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
     }
-    await confirmAction(pageA,pageA.getByRole('button', { name: 'My stories', exact: true }),true); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    await confirmHeaderMenuAction(pageA,'My stories',true); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
     for (const width of [1280, 375]) {
       const shot = await captureScreen(pageA, 'my-stories-empty', width); results.push({ name: `My stories screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
     }
-    await pageA.getByRole('button', { name: 'Listen', exact: true }).click(); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
+    await clickAppNavigation(pageA, 'Discover'); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
   }, browserReady);
 
   await record('AI translation draft requires approval and editing clears it before save', async () => {
-    await pageA.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click();
+    await clickAppNavigation(pageA, 'Share');
     await pageA.getByLabel('Language told in').fill('Synthetic original language');
     await pageA.getByRole('button', { name: 'Continue to your story' }).click();
     await pageA.getByLabel('Post title').fill('Synthetic AI translation post');
@@ -684,7 +713,7 @@ try {
     await pageA.getByText('AI draft: not yet approved by you').waitFor();
     ensure(await pageA.getByRole('button', { name: 'Continue to review' }).isDisabled(), 'Editing the AI draft retained approval.');
     await pageA.getByRole('button', { name: 'Approve translation' }).click();
-    await confirmAction(pageA, pageA.getByRole('button', { name: 'Listen', exact: true }), true);
+    await confirmAction(pageA, await appNavigationLocator(pageA, 'Discover'), true);
     await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
     await pageA.unroute('**/api/translation-draft');
     ensure(mockedCalls === 1, `Expected one mocked AI request, observed ${mockedCalls}.`);
@@ -692,7 +721,7 @@ try {
   }, browserReady);
 
   await record('Empty required language input is blocked in UI and rejected by API', async () => {
-    await pageA.locator('nav.bottom-nav').getByRole('button', { name: 'Share a story', exact: true }).click();
+    await clickAppNavigation(pageA, 'Share');
     const input = pageA.getByLabel('Language told in');
     ensure(await input.evaluate(el => el.required && el.validity.valueMissing), 'Empty language is not marked required.');
     const fd = new FormData(); fd.append('originalLanguage', ''); fd.append('text', '');
@@ -750,7 +779,7 @@ try {
     ensure(audioAttempts===2,'Private audio retry did not issue a second authenticated request.');
     pass('Audio: private fetch failure is visible and retry succeeds through owner route');
     await pageA.unroute(`**/api/stories/${storyId}/audio`);
-    await pageA.getByRole('button', { name: 'My stories', exact: true }).click(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    await clickHeaderMenu(pageA,'My stories'); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
     for (const width of [1280, 375]) { const shot = await captureScreen(pageA, 'my-stories-draft', width); results.push({ name: `My stories with draft screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) }); }
     await pageA.getByRole('button', { name: 'Review', exact: true }).click(); await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
     const original = 'Synthetic test story edited by owner A.';
@@ -890,13 +919,13 @@ try {
     ensure(publicResponse.body.text === approvedActionText && publicResponse.body.translation === approvedActionTranslation && publicResponse.body.translationChecked === false, 'Public response did not contain the edited and honestly labeled version.');
     ensure(!Object.hasOwn(publicResponse.body, 'storytellerName') && !publicResponse.text.includes('Synthetic Hidden Author'), 'Hidden author included in non-owner API response.');
     const publicAudio = await direct(ownerB, `/api/stories/${storyId}/audio`); ensure(publicAudio.status === 200, 'B public audio access failed.');
-    await pageA.getByRole('button', { name: 'Listen', exact: true }).click(); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
+    await clickAppNavigation(pageA, 'Discover'); await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
     await pageA.getByText(approvedActionText, { exact: true }).waitFor({state:'visible'});
     for (const width of [1280, 375]) { const shot = await captureScreen(pageA, 'listen-public', width); results.push({ name: `Listen screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) }); }
   }, haveStory && results.find(x => x.name === 'Valid WAV upload, owner/private/public audio authorization, and playback attempt')?.status === 'PASS');
 
   await record('Withdrawal confirmation, withdrawn label, private/public re-approval wording, and public restoration', async () => {
-    await pageA.getByRole('button', { name: 'My stories', exact: true }).click(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
+    await clickHeaderMenu(pageA,'My stories'); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
     const publicStoryCard = pageA.locator('.mine-card').filter({ hasText: 'Public' });
     await publicStoryCard.getByRole('button', { name: 'Withdraw', exact: true }).click();
     await pageA.getByRole('group', { name: 'Confirm withdrawal' }).waitFor({ state: 'visible' });
@@ -929,20 +958,19 @@ try {
     for (const width of [1280, 375]) {
       const shot = await captureScreen(pageA, 'republish-review', width);
       results.push({ name: `Publish again review screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
-      const main = pageA.locator('main');
-      await main.evaluate(element => { element.scrollTop = element.scrollHeight; });
+      await pageA.evaluate(() => window.scrollTo(0,document.documentElement.scrollHeight));
       await pageA.waitForTimeout(50);
       const actionMetrics = await pageA.getByRole('button', { name: 'Publish again', exact: true }).evaluate(element => {
         const button = element.getBoundingClientRect();
         const header = document.querySelector('header').getBoundingClientRect();
-        const nav = document.querySelector('.bottom-nav').getBoundingClientRect();
-        return { top: button.top, bottom: button.bottom, headerBottom: header.bottom, navTop: nav.top, text: element.innerText };
+        const navElement = document.querySelector('.app-mobile-nav'); const nav = navElement.getBoundingClientRect(); const navVisible = getComputedStyle(navElement).display !== 'none';
+        return { top: button.top, bottom: button.bottom, headerBottom: header.bottom, navTop: nav.top, navVisible, text: element.innerText };
       });
-      ensure(actionMetrics.top >= actionMetrics.headerBottom - 1 && actionMetrics.bottom <= actionMetrics.navTop + 1, `Publish again button is clipped at ${width}px: ${JSON.stringify(actionMetrics)}.`);
+      ensure(actionMetrics.top >= actionMetrics.headerBottom - 1 && (!actionMetrics.navVisible || actionMetrics.bottom <= actionMetrics.navTop + 1), `Publish again button is clipped at ${width}px: ${JSON.stringify(actionMetrics)}.`);
       const actionEvidence = path.join(evidenceDir, `republish-action-${width}.png`);
       await pageA.screenshot({ path: actionEvidence, animations: 'disabled' });
       results.push({ name: `Publish again action screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, actionEvidence), detail: JSON.stringify(actionMetrics) });
-      await main.evaluate(element => { element.scrollTop = 0; });
+      await pageA.evaluate(() => window.scrollTo(0,0));
     }
     await pageA.getByRole('button', { name: 'Publish again', exact: true }).click();
     await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
@@ -1022,7 +1050,7 @@ try {
     const accountResponse = await accountPage.goto(webOrigin, { waitUntil:'domcontentloaded' });
     ensure((await accountResponse.headerValue('content-security-policy')).includes("connect-src 'self' https://story-bridge-test.supabase.co"), 'The server CSP did not allow the configured Supabase origin.');
     await accountPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
-    if(await accountPage.getByRole('button',{name:'Sign in'}).count()===0)await accountPage.getByRole('button',{name:'Menu'}).click();await accountPage.getByRole('button',{name:'Sign in'}).click();
+    await clickHeaderMenu(accountPage,'Sign in');
     await accountPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     ensure(await accountPage.getByRole('button',{name:'Continue with Google'}).isVisible(),'Google button was missing when enabled in the account config.');
     await captureEvidence('Account sign-in captures at 375px, 768px, and 1280px', async()=>{ const shots=[]; for(const width of [375,768,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-sign-in-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); shots.push({file,metrics:{width}}); } return shots; });
@@ -1034,7 +1062,7 @@ try {
     ensure(cspViolations.length === 0, `CSP blocked a request: ${cspViolations.join('; ')}`);
     await captureEvidence('Email code captures at 375px, 768px, and 1280px', async()=>{ const shots=[]; for(const width of [375,768,1280]) { await accountPage.setViewportSize({width,height:900}); const file=path.join(evidenceDir,`account-email-code-${width}.png`); await accountPage.screenshot({path:file,fullPage:true}); shots.push({file,metrics:{width}}); } return shots; });
     await accountPage.close(); await accountContext.close();
-    const googleDisabledContext=await browser.newContext({viewport:{width:1280,height:900}});await googleDisabledContext.route('**/api/account/config',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({account:true,url:'https://story-bridge-test.supabase.co',publishableKey:'sb_publishable_fake_local_test_key_123456',email:true,google:false})}));await googleDisabledContext.route('**/api/stories',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));await googleDisabledContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await googleDisabledContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));const googleDisabledPage=await googleDisabledContext.newPage();observePage(googleDisabledPage);await googleDisabledPage.goto(webOrigin,{waitUntil:'domcontentloaded'});await googleDisabledPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();await googleDisabledPage.getByRole('button',{name:'Sign in'}).click();await googleDisabledPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();ensure(await googleDisabledPage.getByRole('button',{name:'Continue with Google'}).count()===0,'Google sign-in was visible while disabled in the server config.');pass('Google button stays hidden when disabled by server config');await googleDisabledContext.close();
+    const googleDisabledContext=await browser.newContext({viewport:{width:1280,height:900}});await googleDisabledContext.route('**/api/account/config',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({account:true,url:'https://story-bridge-test.supabase.co',publishableKey:'sb_publishable_fake_local_test_key_123456',email:true,google:false})}));await googleDisabledContext.route('**/api/stories',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));await googleDisabledContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await googleDisabledContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));const googleDisabledPage=await googleDisabledContext.newPage();observePage(googleDisabledPage);await googleDisabledPage.goto(webOrigin,{waitUntil:'domcontentloaded'});await googleDisabledPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();await clickHeaderMenu(googleDisabledPage,'Sign in');await googleDisabledPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();ensure(await googleDisabledPage.getByRole('button',{name:'Continue with Google'}).count()===0,'Google sign-in was visible while disabled in the server config.');pass('Google button stays hidden when disabled by server config');await googleDisabledContext.close();
 
     const welcomeContext=await browser.newContext({viewport:{width:375,height:900}});
     await welcomeContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await welcomeContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
@@ -1100,7 +1128,7 @@ try {
     storyRetryStage=2;
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
     await profilePage.getByText('The first stories are waiting to be told.').waitFor();
-    await profilePage.getByRole('button',{name:'My stories'}).click();
+    await clickHeaderMenu(profilePage,'My stories');
     await profilePage.getByRole('heading',{name:'My stories'}).waitFor();
     await profilePage.getByRole('button',{name:/Drafts \(1\)/}).click();
     ensure(await profilePage.locator('.mine-card').count()===1,'Draft filter did not isolate the synthetic draft.');
@@ -1112,7 +1140,7 @@ try {
     await profilePage.getByRole('alert').getByRole('button',{name:'Try again'}).click();
     await profilePage.getByLabel('Display name').waitFor();
     await profilePage.getByLabel('Display name').fill('Unsaved local name');
-    const canceledProfile=await confirmAction(profilePage,profilePage.getByRole('button',{name:'My workspace',exact:true}),false);
+    const canceledProfile=await confirmHeaderMenuAction(profilePage,'My workspace',false);
     ensure(canceledProfile.includes('unsaved changes')&&await profilePage.getByLabel('Display name').inputValue()==='Unsaved local name','Canceling profile navigation discarded its local input.');
     await profilePage.getByRole('button',{name:'Save profile'}).click();
     await profilePage.getByRole('alert').getByText('Your profile could not be saved. Try again.').waitFor();
@@ -1122,7 +1150,7 @@ try {
     ensure(await profilePage.getByLabel('Display name').isVisible()&&await profilePage.getByRole('button',{name:'Saving…'}).isDisabled(),'Profile form disappeared or remained active while saving.');
     await profilePage.getByRole('status').getByText('Profile saved.').waitFor();
     await profilePage.getByRole('heading',{name:'Canonical server name'}).waitFor();
-    await profilePage.getByRole('button',{name:'My workspace',exact:true}).click();
+    await clickHeaderMenu(profilePage,'My workspace');
     await profilePage.getByRole('heading',{name:'Welcome, Canonical server name'}).waitFor();
     pass('Profile F: retry, navigation cancel, save failure retention, busy state, and canonical success');
     await captureEvidence('Profile captures at 375px, 768px, and 1280px', async()=>{ await profilePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Profile'}).click(); await profilePage.getByRole('heading',{name:'Canonical server name'}).waitFor(); const shots=[]; for(const width of [375,768,1280]) shots.push(await captureScreen(profilePage,'account-profile',width,false)); return shots; });
@@ -1136,7 +1164,7 @@ try {
     await configRetryPage.goto(webOrigin,{waitUntil:'domcontentloaded'}); await configRetryPage.getByRole('heading',{name:'Story Bridge is unavailable'}).waitFor();
     ensure(await configRetryPage.getByText('Story Bridge could not load its configuration. Try again.').isVisible(),'Configuration failure did not show a recoverable error.');
     ensure(await configRetryPage.getByRole('button',{name:'Listen',exact:true}).count()===0,'Configuration failure silently selected legacy mode.');
-    await configRetryPage.getByRole('button',{name:'Try again'}).click(); await configRetryPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor(); if(await configRetryPage.getByRole('button',{name:'Sign in'}).count()===0)await configRetryPage.getByRole('button',{name:'Menu'}).click();await configRetryPage.getByRole('button',{name:'Sign in'}).click(); await configRetryPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
+    await configRetryPage.getByRole('button',{name:'Try again'}).click(); await configRetryPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor(); await clickHeaderMenu(configRetryPage,'Sign in'); await configRetryPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await configRetryContext.close();
     const liveContext = await browser.newContext({ viewport:{width:1280,height:900} });
     await liveContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));
@@ -1162,15 +1190,25 @@ try {
     });
     await livePage.goto(webOrigin,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
-    await livePage.getByRole('button',{name:'Sign in'}).click();
+    await clickHeaderMenu(livePage,'Sign in');
     await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await livePage.getByLabel('Email address').fill('reader@example.test');
     await livePage.getByRole('button',{name:'Email me a code'}).click();
     for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
-    await livePage.getByRole('button',{name:'Sign out'}).waitFor();
-    ensure(await livePage.getByText('reader@example.test',{exact:true}).isVisible(), 'Signed-in email did not appear in the real account header.');
+    await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+    ensure(!(await livePage.locator('.app-header').innerText()).includes('reader@example.test'), 'Signed-in email appeared in the app header.');
+    await clickHeaderMenu(livePage,'Settings');
+    await livePage.locator('#account-settings').waitFor();
+    await livePage.locator('#account-settings').getByText('reader@example.test',{exact:true}).waitFor();
+    ensure(!(await livePage.locator('.app-header').innerText()).includes('reader@example.test'), 'Settings exposed the email in the app header.');
+    await livePage.locator('.app-header-brand').click();
     await livePage.getByRole('heading',{name:'Discover'}).waitFor();
     ensure(new URL(livePage.url()).pathname === '/discover', 'Successful sign-in did not move to the Discover URL.');
+    await livePage.setViewportSize({width:375,height:840});
+    ensure(await livePage.getByRole('navigation',{name:'Main navigation'}).isVisible(), 'The five-tab mobile navigation is not visible at 375px.');
+    ensure(await livePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Cultures'}).isVisible(), 'The mobile Cultures tab is missing.');
+    ensure(await livePage.getByRole('link',{name:'Search'}).isVisible() && await livePage.getByRole('link',{name:'Notifications'}).isVisible(), 'Mobile header is missing search or notifications.');
+    await livePage.setViewportSize({width:1280,height:900});
     pass('Signed-in home opens Discover');
     await livePage.goto(`${webOrigin}/profile`,{waitUntil:'domcontentloaded'});
     await livePage.getByLabel('Display name').waitFor();
@@ -1183,7 +1221,7 @@ try {
     ensure(new URL(livePage.url()).pathname === '/share', 'Signed-in Share deep link did not load at /share.');
     await livePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Discover'}).waitFor();
-    await livePage.getByRole('button',{name:'My workspace',exact:true}).click();
+    await clickHeaderMenu(livePage,'My workspace');
     await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     await livePage.getByText('No drafts to continue yet.').waitFor();
     ensure(await livePage.getByRole('button',{name:'Set your display name'}).isVisible(),'An account without a display name did not get the optional profile action.');
@@ -1203,11 +1241,12 @@ try {
     await livePage.waitForTimeout(100);
     ensure(await livePage.getByLabel('Your story').inputValue()==='Synthetic unsaved text for navigation guard.','Same-user token renewal cleared unsaved story text.');
     pass('Identity race E: same-user token renewal preserves unsaved creation text');
-    const canceledNavigation=await confirmAction(livePage,livePage.getByRole('button',{name:'My workspace',exact:true}),false);
+    const canceledNavigation=await confirmHeaderMenuAction(livePage,'My workspace',false);
     ensure(canceledNavigation.includes('unsaved changes')&&await livePage.getByLabel('Your story').inputValue()==='Synthetic unsaved text for navigation guard.','Canceling navigation did not preserve create-form text.');
-    await confirmAction(livePage,livePage.getByRole('button',{name:'My workspace',exact:true}),true);
+    await confirmHeaderMenuAction(livePage,'My workspace',true);
     await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     await livePage.getByRole('button',{name:'Create a story',exact:true}).click();
+    await livePage.locator('.app-avatar-button').click();
     const falseDirtyDialog=await observeNoDialog(livePage,()=>livePage.getByRole('button',{name:'My workspace',exact:true}).click());
     await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     ensure(!falseDirtyDialog,'Returning to the original create value still triggered a dirty-state confirmation.');
@@ -1242,7 +1281,7 @@ try {
     await livePage.unroute('**/api/mine');
     ensure(reviewOpenedBeforeRefresh,'Saving a draft waited for the workspace refresh before opening review.');
     pass('Story A: saved draft opens review before the workspace refresh completes');
-    await livePage.getByRole('button',{name:'My workspace',exact:true}).click();
+    await clickHeaderMenu(livePage,'My workspace');
     await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     await livePage.getByRole('button',{name:'Create a story',exact:true}).click();
     ensure(await livePage.getByLabel('Language told in').inputValue()==='','Successful creation left the language in the next create form.');
@@ -1259,15 +1298,16 @@ try {
     ensure(await livePage.getByText('Keep this synthetic text after a failed creation.',{exact:true}).isVisible(),'Failed creation cleared its text from the review step.');
     pass('Story A: failed creation retains entered text for retry');
     await livePage.unroute('**/api/stories');
-    await confirmAction(livePage,livePage.getByRole('button',{name:'My stories',exact:true}),true);
+    await confirmHeaderMenuAction(livePage,'My stories',true);
     await livePage.getByRole('heading',{name:'My stories'}).waitFor();
     await livePage.locator('.mine-card').filter({hasText:'Synthetic language'}).getByRole('button',{name:'Review',exact:true}).click();
     await livePage.getByRole('heading',{name:'Review your story'}).waitFor();
     const savedOriginalText=await livePage.getByLabel('Original text').inputValue();
     await livePage.getByLabel('Original text').fill('Temporary synthetic review edit.');
-    const canceledReviewNavigation=await confirmAction(livePage,livePage.getByRole('button',{name:'My stories',exact:true}),false);
+    const canceledReviewNavigation=await confirmHeaderMenuAction(livePage,'My stories',false);
     ensure(canceledReviewNavigation.includes('unsaved changes')&&await livePage.getByLabel('Original text').inputValue()==='Temporary synthetic review edit.','Canceling review navigation did not preserve the edit.');
     await livePage.getByLabel('Original text').fill(savedOriginalText);
+    await livePage.locator('.app-avatar-button').click();
     const falseReviewDirtyDialog=await observeNoDialog(livePage,()=>livePage.getByRole('button',{name:'My stories',exact:true}).click());
     await livePage.getByRole('heading',{name:'My stories'}).waitFor();
     ensure(!falseReviewDirtyDialog,'Reverting a review to its saved value still triggered a confirmation.');
@@ -1277,7 +1317,7 @@ try {
     const originalEditResponse=livePage.waitForResponse(response=>response.url()===`${webOrigin}/api/stories/${accountStoryId}`&&response.request().method()==='PUT');
     await livePage.getByRole('button',{name:'Save original edit'}).click();
     ensure((await originalEditResponse).status()===200,'Signed-in original text edit did not save successfully.');
-    await livePage.getByRole('button',{name:'My stories',exact:true}).click();
+    await clickHeaderMenu(livePage,'My stories');
     await livePage.getByRole('heading',{name:'My stories'}).waitFor();
     const ownCard = livePage.locator('.mine-card').filter({ hasText:'Synthetic language' });
     await ownCard.waitFor({state:'visible'});
@@ -1422,20 +1462,20 @@ try {
     ensure(withdrawn===404,'Withdrawn story remained available without an owner session.');
 
     const loginAs=async email=>{
-      if(await livePage.getByLabel('Email address').count()===0) { await livePage.getByRole('button',{name:'Sign in'}).click(); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor(); }
+      if(await livePage.getByLabel('Email address').count()===0) { await clickHeaderMenu(livePage,'Sign in'); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor(); }
       await livePage.getByLabel('Email address').fill(email); await livePage.getByRole('button',{name:'Email me a code'}).click();
       for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
-      await livePage.getByRole('button',{name:'Sign out'}).waitFor(); await livePage.getByRole('heading',{name:'Discover'}).waitFor();
-      await livePage.getByRole('button',{name:'My workspace',exact:true}).click(); await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
+      await livePage.getByRole('heading',{name:'Discover'}).waitFor();
+      await clickHeaderMenu(livePage,'My workspace'); await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
     };
     // Hold an A-owned private detail response across sign-out and B sign-in.
-    await livePage.getByRole('button',{name:'My stories',exact:true}).click(); await livePage.getByRole('heading',{name:'My stories'}).waitFor();
+    await clickHeaderMenu(livePage,'My stories'); await livePage.getByRole('heading',{name:'My stories'}).waitFor();
     const withdrawnCard=livePage.locator('.mine-card').filter({hasText:'Synthetic language'});
     let releaseDetail; const detailHeld=new Promise(resolve=>{releaseDetail=resolve;}); let detailReached;
     const detailRequested=new Promise(resolve=>{detailReached=resolve;});
     await livePage.route(storyPattern,async route=>{if(route.request().method()==='GET'){detailReached();await detailHeld;return route.continue();}return route.continue();});
     await withdrawnCard.getByRole('button',{name:'Open'}).click(); await detailRequested;
-    await livePage.getByRole('button',{name:'Sign out'}).click(); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
+    await clickHeaderMenu(livePage,'Sign out'); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await loginAs('second@example.test'); releaseDetail(); await delay(350);
     ensure(!(await livePage.locator('body').innerText()).includes('Edited by the signed-in browser flow.'),'A delayed A detail response appeared after B signed in.');
     pass('Identity race C: delayed private A detail cannot render for B');
@@ -1448,14 +1488,14 @@ try {
       if(route.request().method()==='GET'&&holdNextProfile){holdNextProfile=false;profileReached();await profileHeld;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:'Stale second user'})});}
       return route.continue();
     });
-    await livePage.reload(); await livePage.getByRole('button',{name:'Sign out'}).waitFor(); await profileRequested;
-    await livePage.getByRole('button',{name:'Sign out'}).click(); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
+    await livePage.reload(); await livePage.getByRole('button',{name:'Open profile menu'}).waitFor(); await profileRequested;
+    await clickHeaderMenu(livePage,'Sign out'); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await loginAs('reader@example.test'); releaseProfile(); await delay(350);
     ensure((await livePage.locator('body').innerText()).includes('Welcome, Canonical server name')===false,'A stale profile response restored the other user’s saved profile name.');
     ensure(!(await livePage.locator('body').innerText()).includes('Stale second user'),'A delayed profile response from the previous identity was rendered.');
     pass('Identity race D1: delayed profile response cannot restore prior identity data');
     await livePage.unroute('**/api/account/profile');
-    await livePage.getByRole('button',{name:'My stories',exact:true}).click(); await livePage.getByRole('heading',{name:'My stories'}).waitFor();
+    await clickHeaderMenu(livePage,'My stories'); await livePage.getByRole('heading',{name:'My stories'}).waitFor();
     const mutationCard=livePage.locator('.mine-card').filter({hasText:'Synthetic language'});
     await mutationCard.getByRole('button',{name:'Review',exact:true}).click(); await livePage.getByRole('heading',{name:'Review your story'}).waitFor();
     await livePage.getByLabel('Original text').fill('Late mutation from the previous identity.');
@@ -1463,7 +1503,8 @@ try {
     const mutationRequested=new Promise(resolve=>{mutationReached=resolve;});
     await livePage.route(storyPattern,async route=>{if(route.request().method()==='PUT'){mutationReached();await mutationHeld;return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic delayed mutation failure.'})});}return route.continue();});
     await livePage.getByRole('button',{name:'Save original edit'}).click(); await mutationRequested;
-    await confirmAction(livePage,livePage.getByRole('button',{name:'Sign out'}),true); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
+    await livePage.getByRole('button',{name:'Open profile menu'}).click();
+    await confirmAction(livePage,livePage.getByRole('button',{name:'Sign out',exact:true}),true); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     await loginAs('second@example.test'); releaseMutation(); await delay(350);
     ensure(!(await livePage.locator('body').innerText()).includes('Late mutation from the previous identity.'),'A delayed mutation response changed the next identity’s screen.');
     ensure(!(await livePage.locator('body').innerText()).includes('Synthetic delayed mutation failure.')&&await livePage.getByRole('heading',{name:'Your storytelling space'}).isVisible(),'A delayed mutation error appeared in the next identity’s session or navigated it away.');

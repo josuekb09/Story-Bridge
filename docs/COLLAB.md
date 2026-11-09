@@ -8,14 +8,15 @@ owner**. Read this file at the start of every phase.
 
 | Task | Owner | Status |
 |---|---|---|
-| Commit + push current local changes and confirm Render redeploy | Codex | done (15ef9a0 pushed; Render home, `/mine`, and `/stories/render-check` returned HTTP 200 on 2026-11-09) |
-| Browser tests for: review opens after saving a draft; signed-out user opening My stories sees sign-in; signed-in home is Discover | Codex | done (verified 2026-11-09; full browser suite passed) |
-| Real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`; browser Back and signed-in/signed-out deep links | Codex | done (verified 2026-11-09; full browser suite passed) |
-| Signed-in home is Discover (`listen`), not My workspace | Claude | done (local) |
-| "Language told in": suggestions from `src/lib/languages.js` via `<datalist>`, free text still allowed | Claude | done (local) |
-| `OPENAI_API_KEY` on Render (AI translation is off in production) | Owner | to do |
-| First documented posts (four Luluwa object notes) published from the owner's account as private drafts for him to approve | Claude | next |
-| Translate the rest of the interface with `t()` keys (English + French first) | Codex | later |
+| Phase A–K items up to 2026-11-09 (routes, deep links, Discover home, language suggestions, README) | Codex + Claude | done, live |
+| **Phase L — social network** (`docs/PHASE_L_SOCIAL.md`): L0 header/privacy/PWA/sitemap → L1 social backend (migration 0007, stop for review) → L2 social UI → L3 culture hubs → L4 read in your language → L5 translate app screens → L6 performance → L7 tests/docs | Codex | in progress — L0 complete locally; stopped before L1 |
+| Icons (`public/assets/icons/*.svg`), PWA icons + `public/manifest.webmanifest`, `public/robots.txt` | Claude | done (local, commit with L0) |
+| Review + apply migrations 0007 (social) and the translations table | Claude | waiting for Codex |
+| `src/data/cultures.json` + `docs/cultures/<slug>.md` (sourced) | Claude | in progress |
+| First documented posts (four Luluwa object notes) as private drafts in the owner's account | Claude | after admin id is set |
+| Machine-draft locale files for every new `t()` key (18 languages) | Claude | after L5 key list |
+| `STORY_BRIDGE_OBJECT_ADMIN_ID=897ea4e9-b42a-4401-ac70-d64c289ac2c3` on Render | Owner | to do |
+| OpenAI: check the organisation's credit, key permissions and model access; send the `ai-translation-provider-error` log line | Owner | to do |
 
 **Never restore a file from Git to "clean" it.** On 2026-11-09 a restore erased the private-page gate and the headline-contrast fix; Claude re-applied them. If `git status` shows changes you did not make, they are Claude's: commit them or ask.
 
