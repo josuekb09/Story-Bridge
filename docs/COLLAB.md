@@ -8,7 +8,7 @@ owner**. Read this file at the start of every phase.
 
 | Task | Owner | Status |
 |---|---|---|
-| Commit + push current local changes (private-page sign-in gate, review opens after saving a draft, Discover after sign-in, language suggestions, headline contrast) and confirm Render redeploy | Codex | done |
+| Commit + push current local changes and confirm Render redeploy | Codex | done (15ef9a0 pushed; Render home, `/mine`, and `/stories/render-check` returned HTTP 200 on 2026-11-09) |
 | Browser tests for: review opens after saving a draft; signed-out user opening My stories sees sign-in; signed-in home is Discover | Codex | done (verified 2026-11-09; full browser suite passed) |
 | Real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`; browser Back and signed-in/signed-out deep links | Codex | done (verified 2026-11-09; full browser suite passed) |
 | Signed-in home is Discover (`listen`), not My workspace | Claude | done (local) |
