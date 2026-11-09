@@ -8,7 +8,7 @@ owner**. Read this file at the start of every phase.
 
 | Task | Owner | Status |
 |---|---|---|
-| Commit + push current local changes (private-page sign-in gate, review opens after saving a draft, Discover after sign-in, language suggestions, headline contrast) and confirm Render redeploy | Codex | in progress |
+| Commit + push current local changes (private-page sign-in gate, review opens after saving a draft, Discover after sign-in, language suggestions, headline contrast) and confirm Render redeploy | Codex | done |
 | Browser tests for: review opens after saving a draft; signed-out user opening My stories sees sign-in; signed-in home is Discover | Codex | done |
 | Real URLs: `/discover`, `/stories/:id`, `/u/:handle` (or `/profile`), `/mine`, `/share`, back button works, deep links work signed in and out | Codex | done |
 | Signed-in home is Discover (`listen`), not My workspace | Claude | done (local) |
