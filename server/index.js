@@ -384,7 +384,11 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.get('/api/stories
 if (process.env.NODE_ENV === 'production' || process.env.STORY_SERVE_STATIC === '1') {
   const buildDir = path.resolve(process.env.STORY_BRIDGE_BUILD_DIR || path.join(ROOT, 'dist'));
   app.use(express.static(buildDir));
-  app.get('*path', (_req, res) => res.sendFile(path.join(buildDir, 'index.html')));
+  // Serve the SPA shell for deep links after static assets have had a chance to match.
+  // Reading the shell explicitly avoids sendFile's path resolution treating deep URLs
+  // as missing files on the Windows test host.
+  const appShell = fs.readFileSync(path.join(buildDir, 'index.html'));
+  app.get(/.*/, (_req, res) => res.type('html').send(appShell));
 }
 
 export function safeErrorHandler(error, req, res, _next) {

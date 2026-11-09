@@ -9,8 +9,8 @@ owner**. Read this file at the start of every phase.
 | Task | Owner | Status |
 |---|---|---|
 | Commit + push current local changes (private-page sign-in gate, review opens after saving a draft, Discover after sign-in, language suggestions, headline contrast) and confirm Render redeploy | Codex | done |
-| Browser tests for: review opens after saving a draft; signed-out user opening My stories sees sign-in; signed-in home is Discover | Codex | done |
-| Real URLs: `/discover`, `/stories/:id`, `/u/:handle` (or `/profile`), `/mine`, `/share`, back button works, deep links work signed in and out | Codex | done |
+| Browser tests for: review opens after saving a draft; signed-out user opening My stories sees sign-in; signed-in home is Discover | Codex | done (verified 2026-11-09; full browser suite passed) |
+| Real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`; browser Back and signed-in/signed-out deep links | Codex | done (verified 2026-11-09; full browser suite passed) |
 | Signed-in home is Discover (`listen`), not My workspace | Claude | done (local) |
 | "Language told in": suggestions from `src/lib/languages.js` via `<datalist>`, free text still allowed | Claude | done (local) |
 | `OPENAI_API_KEY` on Render (AI translation is off in production) | Owner | to do |
