@@ -20,7 +20,7 @@ Built for the Andela × OpenAI capstone *Telling African Stories*, and to be pre
 - **Read the site in 20 languages**: English and French written by hand; Kiswahili, Hausa, Yorùbá, Igbo, Amharic, Afaan Oromoo, Somali, isiZulu, isiXhosa, Afrikaans, chiShona, Lingála, Ikinyarwanda, Malagasy, Wolof, Portuguese, Arabic (right-to-left) and Spanish as machine drafts, clearly labelled until a speaker checks them. Stories can be written in 36 languages (31 African), or any other language typed by hand.
 - **Sign in** with Google or a 6-digit email code. New accounts get a short welcome step.
 
-The app shell and static interface files can be installed as a PWA. Its service worker caches the shell and static resources; story and account data still require a network connection.
+The app shell and static interface files can be installed as a PWA. Its service worker fetches pages network-first and falls back to the cached shell offline; it caches static resources but never `/api/` responses. Story and account data still require a network connection.
 
 ### Honesty rules built into the product
 
@@ -28,7 +28,7 @@ The app shell and static interface files can be installed as a PWA. Its service 
 - No invented cultural facts: object pages show sourced facts, our readings are marked as such, and unknowns say *Not recorded*.
 - Every image carries its author, licence and source.
 
-## Current status (9 November 2026)
+## Current status (10 November 2026)
 
 | Area | Status |
 |---|---|
@@ -37,7 +37,7 @@ The app shell and static interface files can be installed as a PWA. Its service 
 | Database migrations `202611070001` … `202611080006` | Applied to the production Supabase project |
 | AI translation | Key configured on the host; the live provider call is still being verified (errors are now logged as status/code/model only) |
 | Interface translation | Landing page in 20 languages; other screens are English for now |
-| Phase L0 (local) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are implemented locally; not yet deployed |
+| Phase L0 (local) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are implemented; unit, build, browser and dist-secret checks pass; Render deployment and live verification are pending |
 
 This is a demonstration build, not a production service for sensitive stories or recordings.
 

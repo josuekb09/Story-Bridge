@@ -109,3 +109,5 @@
   .app .bottom-nav{flex-wrap:nowrap;overflow-wrap:normal;gap:2px;padding-inline:4px}
   .app .bottom-nav button{flex:1 1 0;min-width:0;padding:8px 2px;font-size:.74rem;line-height:1.15;overflow-wrap:normal;word-break:keep-all;hyphens:none;white-space:normal}
 }
+/* Mobile tab labels stay on one line (e.g. "Notifications" at 360–390 px). */
+.app-mobile-nav button span{white-space:nowrap;overflow-wrap:normal;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-size:12px;letter-spacing:-.01em}

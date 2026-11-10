@@ -17,6 +17,7 @@ owner**. Read this file at the start of every phase.
 | Machine-draft locale files for every new `t()` key (18 languages) | Claude | after L5 key list |
 | `STORY_BRIDGE_OBJECT_ADMIN_ID=897ea4e9-b42a-4401-ac70-d64c289ac2c3` on Render | Owner | to do |
 | OpenAI: check the organisation's credit, key permissions and model access; send the `ai-translation-provider-error` log line | Owner | to do |
+| L0 review by Claude (2026-11-10): header OK (no email, menu, language, icons, mobile tabs, no overflow). Fixed: `public/sw.js` is now **network-first for pages** (cache v2) — cache-first served the previous version after each deploy and could load deleted asset hashes; `social.css` keeps mobile tab labels on one line ("Notifications"). | Claude | done (local, commit with L0) |
 
 **Never restore a file from Git to "clean" it.** On 2026-11-09 a restore erased the private-page gate and the headline-contrast fix; Claude re-applied them. If `git status` shows changes you did not make, they are Claude's: commit them or ask.
 

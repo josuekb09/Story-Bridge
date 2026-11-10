@@ -1,4 +1,4 @@
-const CACHE_NAME = 'story-bridge-shell-v1';
+const CACHE_NAME = 'story-bridge-shell-v2';
 const STATIC_FILES = [
   '/',
   '/robots.txt',
@@ -42,19 +42,19 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
-    const cachePromise = caches.open(CACHE_NAME);
-    const refresh = cachePromise.then(cache => fetch(request).then(response => {
-      if (response.ok) cache.put('/', response.clone());
-      return response;
-    })).catch(() => null);
-    event.waitUntil(refresh.then(() => undefined));
+    // Network first: after a deploy every visitor gets the new page (and its new asset
+    // hashes) straight away. The cached shell is only used when the network is down.
     event.respondWith((async () => {
-      const cache = await cachePromise;
-      const cachedShell = await cache.match('/');
-      if (cachedShell) return cachedShell;
-      const response = await refresh;
-      if (response) return response;
-      return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Offline — Story Bridge</title><main><h1>You’re offline</h1><p>Connect to the internet and try again.</p></main></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const response = await fetch(request, { signal: AbortSignal.timeout(6000) });
+        if (response.ok) cache.put('/', response.clone());
+        return response;
+      } catch {
+        const cachedShell = await cache.match('/');
+        if (cachedShell) return cachedShell;
+        return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Offline — Story Bridge</title><main style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem"><h1>You’re offline</h1><p>Connect to the internet and try again. Stories you write are never lost by this page.</p></main></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      }
     })());
     return;
   }

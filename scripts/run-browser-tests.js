@@ -1196,11 +1196,17 @@ try {
     await livePage.getByRole('button',{name:'Email me a code'}).click();
     for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
     await livePage.getByRole('heading',{name:'Discover'}).waitFor();
-    ensure(!(await livePage.locator('.app-header').innerText()).includes('reader@example.test'), 'Signed-in email appeared in the app header.');
-    await clickHeaderMenu(livePage,'Settings');
-    await livePage.locator('#account-settings').waitFor();
-    await livePage.locator('#account-settings').getByText('reader@example.test',{exact:true}).waitFor();
-    ensure(!(await livePage.locator('.app-header').innerText()).includes('reader@example.test'), 'Settings exposed the email in the app header.');
+    await record('Signed-in email never appears in the app header', async () => {
+      const assertEmailIsOutsideHeader = async () => {
+        const headerMarkup = await livePage.locator('.app-header').evaluate(header => header.outerHTML);
+        ensure(!headerMarkup.includes('reader@example.test'), 'Signed-in email appeared in the app header markup.');
+      };
+      await assertEmailIsOutsideHeader();
+      await clickHeaderMenu(livePage,'Settings');
+      await livePage.locator('#account-settings').waitFor();
+      await livePage.locator('#account-settings').getByText('reader@example.test',{exact:true}).waitFor();
+      await assertEmailIsOutsideHeader();
+    });
     await livePage.locator('.app-header-brand').click();
     await livePage.getByRole('heading',{name:'Discover'}).waitFor();
     ensure(new URL(livePage.url()).pathname === '/discover', 'Successful sign-in did not move to the Discover URL.');
