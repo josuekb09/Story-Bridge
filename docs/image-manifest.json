@@ -73,18 +73,8 @@
       ],
       "minWidth": 800,
       "hero": false,
-      "image": {
-        "id": "za-zulu-beadwork",
-        "src": "/assets/photos/africa/web/za-zulu-beadwork-1280.webp",
-        "srcset": "/assets/photos/africa/web/za-zulu-beadwork-640.webp 640w, /assets/photos/africa/web/za-zulu-beadwork-1280.webp 1280w, /assets/photos/africa/web/za-zulu-beadwork-1920.webp 1920w",
-        "width": 1280,
-        "height": 969,
-        "title": "A Zulu and his wives, South Africa LCCN2017657661.jpg",
-        "author": "Photoglob Co., publisher; Wilson, G. W. (George Washington), 1823-1…",
-        "licence": "Public domain",
-        "licenceUrl": "",
-        "sourceUrl": "https://commons.wikimedia.org/wiki/File:A_Zulu_and_his_wives,_South_Africa_LCCN2017657661.jpg"
-      }
+      "image": null,
+      "reviewNote": "Rejected 2026-11-10: the automatic pick was a colonial-era photograph of identifiable people. Replace with a beadwork object photo and pin it."
     },
     {
       "id": "cd-luluwa-figure",
