@@ -15,7 +15,13 @@ const clean = (row, owner = false) => {
   if (row.show_name || owner) out.storytellerName = row.storyteller_name;
   return out;
 };
-const cleanPost = async (row, owner = false, store) => ({...clean(row,owner),images:(await store.listPostMedia?.(row.id)||[]).filter(media=>media.kind==='image').map(media=>({id:media.id,kind:media.kind,altText:media.alt_text,credit:media.credit,licence:media.licence,width:media.width,height:media.height,sha256:media.sha256,url:`/api/posts/${row.id}/media/${encodeURIComponent(media.storage_key)}`}))});
+const cleanPost = async (row, owner = false, store, includePublicAuthorAvatar = false) => ({
+  ...clean(row,owner),
+  ...(includePublicAuthorAvatar && row.show_name && row.owner_user_id
+    ? { authorAvatarUrl:`/api/stories/${encodeURIComponent(row.id)}/author-avatar` }
+    : {}),
+  images:(await store.listPostMedia?.(row.id)||[]).filter(media=>media.kind==='image').map(media=>({id:media.id,kind:media.kind,altText:media.alt_text,credit:media.credit,licence:media.licence,width:media.width,height:media.height,sha256:media.sha256,url:`/api/posts/${row.id}/media/${encodeURIComponent(media.storage_key)}`})),
+});
 
 export function mountAccountRoutes(app, config, { store = createSupabaseStore(config), verify = createTokenVerifier(config), rateLimit = (_req, _res, next) => next(), draftTranslation = async () => { throw new Error('translation-service-unavailable'); }, objectAdminId = process.env.STORY_BRIDGE_OBJECT_ADMIN_ID || '' } = {}) {
   const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^audio\/[a-z0-9.+-]+$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid audio'), { code: 'INVALID_AUDIO' })) });
@@ -153,7 +159,8 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const access = await objectAccessList();
     const restricted = new Set(access.filter(item=>item.access==='Community only').map(item=>item.id));
     const rows = (await store.listPublic()).filter(row => (!!req.account||row.access!=='Community only')&&(!row.object_id || !restricted.has(row.object_id) || !!req.account)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));
-    res.json(await Promise.all(rows.map(row => cleanPost(row,false,store))));
+    res.json(await Promise.all(rows.map(row => cleanPost(row,false,store,
+      row.moderation_status!=='pending_review' && row.access!=='Community only' && (!row.object_id || !restricted.has(row.object_id))))));
   } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
   app.get('/api/mine', session, async (req, res) => { try { res.json(await Promise.all((await store.listMine(req.account.id)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).map(row => cleanPost(row,true,store)))); } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
   app.post('/api/stories', session, rateLimit, limitPostBody, parsePostUpload, async (req, res) => {
@@ -193,6 +200,17 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       catch { return res.status(503).json({error:'Story access is unavailable.'}); }
     }
     res.json(await cleanPost(req.story, req.isStoryOwner,store));
+  });
+  app.get('/api/stories/:id/author-avatar', async (req, res) => {
+    try {
+      const row=await store.get(req.params.id);
+      if(!row || row.status!=='shared' || row.visibility!=='public' || row.moderation_status==='pending_review' || !row.show_name || !row.owner_user_id || row.access==='Community only')return res.sendStatus(404);
+      if(row.object_id && (await objectAccessList()).some(item=>item.id===row.object_id&&item.access==='Community only'))return res.sendStatus(404);
+      const profile=await store.profile(row.owner_user_id);
+      if(!profile?.avatar_key)return res.sendStatus(404);
+      const image=await store.getProfileAvatar(profile.avatar_key);
+      res.set('X-Content-Type-Options','nosniff').set('Cache-Control','public, max-age=300').type(image.mime||'image/webp').send(image.buffer);
+    } catch { res.sendStatus(404); }
   });
   // Permanent delete: the owner removes the story, its audio and its images. Nothing is kept.
   app.delete('/api/stories/:id', session, rateLimit, ownerOnly, async (req, res) => {

@@ -28,11 +28,13 @@ function timeAgo(value) {
 function PostCard({ story, showStory, translationStoryId, setTranslationStoryId }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [authorAvatarUnavailable, setAuthorAvatarUnavailable] = useState(false);
   const author = story.storytellerName || 'Community member';
   const text = story.text || '';
   const long = text.length > 280;
   const showingTranslation = translationStoryId === story.id;
   const images = story.images || [];
+  const authorAvatar = story.authorAvatarUrl && !authorAvatarUnavailable;
 
   async function share() {
     const title = story.title || 'A story on Story Bridge';
@@ -45,7 +47,9 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
 
   return <article className="post" aria-labelledby={`post-title-${story.id}`}>
     <header className="post-head">
-      <span className="post-avatar" aria-hidden="true">{initials(author)}</span>
+      {authorAvatar
+        ? <img className="post-avatar post-avatar-image" src={story.authorAvatarUrl} alt="" loading="lazy" decoding="async" onError={() => setAuthorAvatarUnavailable(true)}/>
+        : <span className="post-avatar" aria-hidden="true">{initials(author)}</span>}
       <div className="post-who">
         <b>{author}</b>
         <span>{[story.region, timeAgo(story.createdAt)].filter(Boolean).join(' · ')}</span>

@@ -15,7 +15,7 @@ Built for the Andela × OpenAI capstone *Telling African Stories*, and to be pre
 - **Translate with AI** (optional): *Draft with AI* asks OpenAI for a first translation. It is marked unapproved until the storyteller approves it, and editing it clears the approval. An empty `OPENAI_TRANSLATION_MODEL` uses `gpt-6-luna`; an optional fallback model is tried once if the provider reports the primary model is missing or access is denied.
 - **Read in my language** — on-device translation in Chrome, Google Translate fallback; AI drafts via OpenAI when configured.
 - **Stay in control**: every story starts as a private draft. The storyteller approves sharing, can withdraw it, or **delete it permanently** (text, audio, photos and translations).
-- **Profiles**: photo, name, country, languages and counts, with an *Edit profile* form. Fields stay private unless shown on a story.
+- **Profiles**: photo, name, country, languages and counts, with an *Edit profile* form. A profile photo appears on a named public story card; private and anonymous stories do not expose it.
 - **Navigate consistently**: the same app header provides Discover, Cultures, Collections, Share, search, language choice and the account menu. The mobile bar links to My stories with a bookmark icon. The header never displays an email address; the address is inside Profile → Account.
 - **Explore cultures and search**: browse showcase cultures by region, open a culture page with credited photos and matching public stories, or search public posts and cultures together. Culture entries contain no invented background facts.
 - **Review first posts**: an admin account with access to the pending-post API can publish a first public post or keep it private. The review queue is hidden from other accounts.

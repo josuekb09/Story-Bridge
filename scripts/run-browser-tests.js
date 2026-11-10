@@ -1097,7 +1097,8 @@ try {
     await profileContext.addInitScript(() => localStorage.setItem('sb-story-bridge-test-auth-token',JSON.stringify({access_token:'synthetic-local-session',refresh_token:'synthetic-refresh',token_type:'bearer',expires_at:4102444800,user:{id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',email:'reader@example.test',app_metadata:{provider:'email'},user_metadata:{story_bridge_welcome_completed:true},created_at:'2026-01-01T00:00:00Z'}})));
     const profilePage=await profileContext.newPage();
     observePage(profilePage);
-    let profileLoadAttempts=0, profileSaveAttempts=0;
+    let profileLoadAttempts=0, profileSaveAttempts=0, avatarStoryEnabled=false;
+    const storyAvatarSvg='<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" fill="#1f4d3a"/><circle cx="32" cy="24" r="13" fill="#f0c35b"/><path d="M8 64c2-17 12-25 24-25s22 8 24 25" fill="#d66b48"/></svg>';
     await profilePage.route('**/api/account/profile', async route => {
       if(route.request().method()==='PUT') {
         profileSaveAttempts++;
@@ -1108,8 +1109,9 @@ try {
       profileLoadAttempts++;
       return profileLoadAttempts===1
         ? route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic profile load failure.'})})
-      : route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:profileSaveAttempts > 1 ? 'Canonical server name' : ''}),delay:40});
+      : route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:profileSaveAttempts > 1 ? 'Canonical server name' : '',avatar_url:'/api/account/profile/avatar'}),delay:40});
     });
+    await profilePage.route('**/api/account/profile/avatar*',route=>route.fulfill({status:200,contentType:'image/svg+xml',body:storyAvatarSvg}));
     await profilePage.route('**/api/account/claim', route => route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'No unclaimed stories matched this browser token.'})}));
     let profileStoriesAttempts=0, profileMineAttempts=0, storyRetryStage=0;
     const collectionFixture=[
@@ -1118,7 +1120,8 @@ try {
       {id:'fixture-private',status:'shared',visibility:'private',originalLanguage:'Swahili',text:'Private fixture',audio:false,createdAt:'2026-11-03T00:00:00Z'},
       {id:'fixture-withdrawn',status:'withdrawn',visibility:'public',originalLanguage:'Zulu',text:'Withdrawn fixture',audio:true,createdAt:'2026-11-04T00:00:00Z'},
     ];
-    await profilePage.route('**/api/stories', route => { profileStoriesAttempts++; if(storyRetryStage===0)return route.fulfill({status:503,contentType:'application/json',body:'{}'}); if(storyRetryStage===1)return route.fulfill({status:200,contentType:'application/json',body:'{}'}); return route.fulfill({status:200,contentType:'application/json',body:'[]'}); });
+    await profilePage.route('**/api/stories', route => { profileStoriesAttempts++; if(avatarStoryEnabled)return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify([{id:'avatar-public-story',status:'shared',visibility:'public',showName:true,storytellerName:'Synthetic Public Author',title:'Synthetic public story',text:'A safe fixture for card rendering.',originalLanguage:'English',createdAt:'2026-11-10T00:00:00Z',authorAvatarUrl:'/api/stories/avatar-public-story/author-avatar'},{id:'no-avatar-story',status:'shared',visibility:'public',showName:true,storytellerName:'No Photo Author',title:'Story without a profile photo',text:'A second safe fixture.',originalLanguage:'English',createdAt:'2026-11-09T00:00:00Z'}])}); if(storyRetryStage===0)return route.fulfill({status:503,contentType:'application/json',body:'{}'}); if(storyRetryStage===1)return route.fulfill({status:200,contentType:'application/json',body:'{}'}); return route.fulfill({status:200,contentType:'application/json',body:'[]'}); });
+    await profilePage.route('**/api/stories/avatar-public-story/author-avatar',route=>route.fulfill({status:200,contentType:'image/svg+xml',body:storyAvatarSvg}));
     await profilePage.route('**/api/mine', route => { profileMineAttempts++; return profileMineAttempts===1 ? route.fulfill({status:503,contentType:'application/json',body:'{}'}) : route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(collectionFixture)}); });
     await profilePage.route('https://story-bridge-test.supabase.co/**', supabaseMock);
     await profilePage.goto(`${webOrigin}/workspace`,{waitUntil:'domcontentloaded'}); await profilePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
@@ -1164,6 +1167,19 @@ try {
     await profilePage.getByRole('heading',{name:'Welcome, Canonical server name'}).waitFor();
     pass('Profile F: retry, navigation cancel, save failure retention, busy state, and canonical success');
     await captureEvidence('Profile captures at 375px, 768px, and 1280px', async()=>{ await profilePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Profile'}).click(); await profilePage.getByRole('heading',{name:'Canonical server name'}).waitFor(); const shots=[]; for(const width of [375,768,1280]) shots.push(await captureScreen(profilePage,'account-profile',width,false)); return shots; });
+    avatarStoryEnabled=true;
+    await profilePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
+    await profilePage.getByRole('heading',{name:'Discover'}).waitFor();
+    await profilePage.locator('.post-avatar-image').waitFor();
+    ensure(await profilePage.locator('.post-avatar-image').first().evaluate(image=>image.complete&&image.naturalWidth>0),'Discover did not render the public author photo.');
+    ensure(await profilePage.locator('.post-avatar:not(img)').count()>0,'Discover did not retain initials for the author with no photo.');
+    const discoverAvatarFile=path.join(evidenceDir,'discover-author-avatar.png');await profilePage.screenshot({path:discoverAvatarFile,fullPage:true});
+    await clickHeaderMenu(profilePage,'My stories');await profilePage.getByRole('heading',{name:'My stories'}).waitFor();
+    await profilePage.locator('.mine-author-avatar').first().waitFor();
+    ensure(await profilePage.locator('.mine-author-avatar').first().evaluate(image=>image.tagName==='IMG'&&image.complete&&image.naturalWidth>0),'My stories did not render the signed-in profile photo.');
+    const mineAvatarFile=path.join(evidenceDir,'my-stories-author-avatar.png');await profilePage.screenshot({path:mineAvatarFile,fullPage:true});
+    results.push({name:'Discover and My stories show profile photos with initials fallback',status:'PASS',evidence:[path.relative(root,discoverAvatarFile),path.relative(root,mineAvatarFile)]});
+    pass('Discover and My stories show the expected author avatar');
     await profileContext.close();
     const configRetryContext=await browser.newContext({viewport:{width:375,height:900}});
     await configRetryContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));

@@ -306,3 +306,28 @@ test('profile avatar upload verifies image bytes, is private, and serves nosniff
   const invalid=new FormData();invalid.append('avatar',new Blob([Buffer.from('not an image')],{type:'image/png'}),'fake.png');assert.equal((await fetch(`${base}/api/account/profile/avatar`,{method:'POST',headers:auth('user-a'),body:invalid})).status,400);
   const profile=await store.profile('user-a');assert.ok(profile.avatar_key);assert.equal(await store.profile('user-b'),null);
 });
+
+test('public named story cards can load only their public author avatar',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const image=Buffer.from('synthetic webp avatar');
+  await store.putProfileAvatar('avatar-key',image);
+  await store.saveProfile('user-a',{avatar_key:'avatar-key'});
+  store.rows.set('named-public',{...storyRow('named-public','user-a','shared','public'),show_name:true,access:'Public'});
+  store.rows.set('anonymous-public',{...storyRow('anonymous-public','user-a','shared','public'),show_name:false,access:'Public'});
+  store.rows.set('community-public',{...storyRow('community-public','user-a','shared','public'),show_name:true,access:'Community only'});
+  store.rows.set('restricted-object',{...storyRow('restricted-object','user-a','shared','public'),show_name:true,access:'Public',object_id:OBJECT_IDS[0]});
+  store.rows.set('private-story',{...storyRow('private-story','user-a','draft','private'),show_name:true,access:'Public'});
+  store.listObjectAccess=async()=>[{id:OBJECT_IDS[0],access:'Community only'}];
+
+  const publicStories=await fetch(`${base}/api/stories`).then(response=>response.json());
+  const named=publicStories.find(story=>story.id==='named-public');
+  assert.equal(named.authorAvatarUrl,'/api/stories/named-public/author-avatar');
+  assert.equal(named.owner_user_id,undefined);
+  assert.equal(publicStories.find(story=>story.id==='anonymous-public').authorAvatarUrl,undefined);
+  assert.equal(publicStories.some(story=>['community-public','restricted-object','private-story'].includes(story.id)),false);
+
+  const photo=await fetch(`${base}${named.authorAvatarUrl}`);
+  assert.equal(photo.status,200);assert.match(photo.headers.get('content-type'),/image\/webp/);assert.equal(photo.headers.get('x-content-type-options'),'nosniff');
+  assert.deepEqual(Buffer.from(await photo.arrayBuffer()),image);
+  for(const id of ['anonymous-public','community-public','restricted-object','private-story']) assert.equal((await fetch(`${base}/api/stories/${id}/author-avatar`)).status,404,id);
+});
