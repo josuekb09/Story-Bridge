@@ -234,6 +234,7 @@ export default function App() {
 
   useEffect(() => {
     ownerToken();
+    if (pageRef.current === 'cultures' || pageRef.current === 'search') refresh('', 'stories');
     let unsubscribe = () => {};
     setConfigError('');
     fetch('/api/account/config').then(response => { if (!response.ok) throw Error('Configuration unavailable'); return response.json(); }).then(async config => {
@@ -428,7 +429,7 @@ export default function App() {
     if (page === 'profile' && nextPage !== 'profile' && profileState === 'loading') { profileRequest.current += 1; setProfileState('idle'); }
     transitionTo(nextPage);
     setError('');
-    if (nextPage === 'listen' || nextPage === 'discover' || nextPage === 'mine' || nextPage === 'workspace') refresh();
+    if (nextPage === 'listen' || nextPage === 'discover' || nextPage === 'mine' || nextPage === 'workspace' || nextPage === 'cultures' || nextPage === 'search') refresh();
     if (nextPage === 'profile' && profileState === 'idle') loadProfile(currentSession.current, identityEpoch.current, true);
   }
 
