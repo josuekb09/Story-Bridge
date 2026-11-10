@@ -56,7 +56,7 @@ export default function SearchPage({ stories = [], showStory = () => {} }) {
     </section>}
 
     {results.stories.length > 0 && <section aria-labelledby="search-stories" className="culture-section">
-      <h2 id="search-stories">Posts</h2>
+      <h2 id="search-stories">Stories</h2>
       <ul className="culture-stories">{results.stories.map(story => <li key={story.id}><button type="button" onClick={() => showStory(story)}>
         <span className="culture-story-lang">{story.originalLanguage}</span>
         <span className="culture-story-title">{story.title || String(story.text || '').slice(0, 90)}</span>
