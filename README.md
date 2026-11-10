@@ -12,7 +12,7 @@ Built for the Andela × OpenAI capstone *Telling African Stories*, and to be pre
 
 - **Discover** a feed of public stories: author, region, time, original language, "See more", photos, audio, the storyteller's translation, and sharing.
 - **Share** a post in four steps — language → tell → translate → review. A post can hold text, a voice recording or audio file, up to six photos, and documentation: post type and section, region, people, tags, sources, a trust label (*Told by a community member*, *Research note*, *Museum record*) and a licence.
-- **Translate with AI** (optional): *Draft with AI* asks OpenAI for a first translation. It is marked unapproved until the storyteller approves it, and editing it clears the approval.
+- **Translate with AI** (optional): *Draft with AI* asks OpenAI for a first translation. It is marked unapproved until the storyteller approves it, and editing it clears the approval. An empty `OPENAI_TRANSLATION_MODEL` uses `gpt-6-luna`; an optional fallback model is tried once if the provider reports the primary model is missing or access is denied.
 - **Stay in control**: every story starts as a private draft. The storyteller approves sharing, can withdraw it, or **delete it permanently** (text, audio, photos and translations).
 - **Profiles**: photo, name, country, languages and counts, with an *Edit profile* form. Fields stay private unless shown on a story.
 - **Navigate consistently**: the same app header provides Discover, Cultures, Collections, Share, search, language choice and the account menu. The mobile bar links to My stories with a bookmark icon. The header never displays an email address; the address is inside Profile → Account.
@@ -106,6 +106,7 @@ STORY_EMAIL_CODE_SIGN_IN=true
 STORY_GOOGLE_SIGN_IN=false
 OPENAI_API_KEY=             # optional, server-only, never prefix with VITE_
 OPENAI_TRANSLATION_MODEL=   # optional, defaults to gpt-6-luna
+OPENAI_TRANSLATION_FALLBACK_MODEL= # optional, server-only; retry once on missing model/access denial
 STORY_BRIDGE_OBJECT_ADMIN_ID= # Supabase user id allowed to approve first posts
 ```
 

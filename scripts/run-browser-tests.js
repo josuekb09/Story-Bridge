@@ -705,9 +705,15 @@ try {
       ensure(body.text === 'Synthetic original story for the translation draft.' && body.targetLanguage === 'Synthetic target language', 'AI draft request omitted or changed storyteller input.');
       ensure(!JSON.stringify(body).includes('OPENAI_API_KEY'), 'Browser request included a server credential name.');
       mockedCalls++;
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ translation: 'Synthetic mocked AI translation.', origin: 'ai_draft_unapproved' }) });
+      if (mockedCalls === 1) await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'AI translation is temporarily unavailable. Your story has not been saved. You can write the translation yourself or retry.' }) });
+      else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ translation: 'Synthetic mocked AI translation.', origin: 'ai_draft_unapproved' }) });
     });
     await pageA.getByRole('button', { name: 'Draft with AI' }).click();
+    const retryDraftButton = pageA.getByRole('button', { name: 'Draft with AI' });
+    await pageA.getByRole('alert').getByText(/AI translation is temporarily unavailable/).waitFor();
+    ensure(await retryDraftButton.isEnabled(), 'A failed AI draft left its button disabled or stuck in loading state.');
+    ensure(!(await pageA.locator('[role="alert"]').innerText()).includes('502'), 'The AI draft error exposed a provider status code.');
+    await retryDraftButton.click();
     await pageA.getByText('AI draft: not yet approved by you').waitFor();
     ensure(await pageA.getByRole('button', { name: 'Continue to review' }).isDisabled(), 'Unapproved AI translation could continue to review.');
     await pageA.getByRole('button', { name: 'Approve translation' }).click();
@@ -720,7 +726,7 @@ try {
     await confirmAction(pageA, await appNavigationLocator(pageA, 'Discover'), true);
     await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
     await pageA.unroute('**/api/translation-draft');
-    ensure(mockedCalls === 1, `Expected one mocked AI request, observed ${mockedCalls}.`);
+    ensure(mockedCalls === 2, `Expected one failed and one successful mocked AI request, observed ${mockedCalls}.`);
     ensure((await direct(ownerA, '/api/mine')).body.length === before, 'Requesting and approving an AI draft saved the story before the explicit save action.');
   }, browserReady);
 

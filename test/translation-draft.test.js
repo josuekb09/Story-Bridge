@@ -9,7 +9,7 @@ const fakeCredential = ['not', 'a', 'real', 'credential'].join('-');
 
 test('translation service sends the story to a mocked provider and returns only its draft', async () => {
   let request;
-  const service = createTranslationDraftService({ getApiKey: () => fakeCredential, fetchImpl: async (url, options) => {
+  const service = createTranslationDraftService({ getApiKey: () => fakeCredential, model: () => '', fallbackModel: () => '', fetchImpl: async (url, options) => {
     request = { url, options, body: JSON.parse(options.body) };
     return Response.json({ output_text: 'A mock translation.' });
   } });
@@ -17,8 +17,43 @@ test('translation service sends the story to a mocked provider and returns only 
   assert.equal(translation, 'A mock translation.');
   assert.equal(request.url, 'https://api.openai.com/v1/responses');
   assert.equal(request.options.headers.authorization, `Bearer ${fakeCredential}`);
+  assert.equal(request.body.model, 'gpt-6-luna');
   assert.match(request.body.input[1].content[0].text, /Synthetic community story/);
   assert.doesNotMatch(JSON.stringify({ translation }), new RegExp(fakeCredential));
+});
+
+test('translation retries once with the configured fallback after model or access denial', async () => {
+  for (const failure of [
+    { status: 404, code: 'model_not_found' },
+    { status: 403, code: 'access_denied' },
+  ]) {
+    const models = [];
+    const service = createTranslationDraftService({
+      getApiKey: () => fakeCredential,
+      model: () => 'primary-model',
+      fallbackModel: () => 'fallback-model',
+      fetchImpl: async (_url, options) => {
+        const requested = JSON.parse(options.body).model;
+        models.push(requested);
+        if (requested === 'primary-model') return Response.json({ error: { code: failure.code } }, { status: failure.status });
+        return Response.json({ output_text: 'Fallback translation.' });
+      },
+    });
+    assert.equal(await service(input), 'Fallback translation.');
+    assert.deepEqual(models, ['primary-model', 'fallback-model']);
+  }
+});
+
+test('translation does not retry a fallback for unrelated provider errors', async () => {
+  let calls = 0;
+  const service = createTranslationDraftService({
+    getApiKey: () => fakeCredential,
+    model: () => 'primary-model',
+    fallbackModel: () => 'fallback-model',
+    fetchImpl: async () => { calls++; return Response.json({ error: { code: 'rate_limit_exceeded' } }, { status: 429 }); },
+  });
+  await assert.rejects(service(input), error => error instanceof TranslationDraftError && /temporarily unavailable/.test(error.publicMessage) && !/rate_limit_exceeded/.test(error.publicMessage));
+  assert.equal(calls, 1);
 });
 
 test('missing API key gives a clear optional-feature error without calling provider', async () => {
