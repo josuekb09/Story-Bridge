@@ -68,7 +68,7 @@ scripts/                  image fetching, tests, secret check
 docs/                     collaboration board, phase plan, object documentation, credits
 ```
 
-Pages have real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`, `/objects`, `/objects/:id`, `/cultures`, `/cultures/:id`, `/search` and `/admin`. Direct links and reloads work, signed in or not; private pages show the sign-in screen when no one is signed in. Admin review appears only after the signed-in user's pending-post request returns 200. The retired `/notifications` path redirects to My stories because notifications are not implemented.
+Pages have real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`, `/objects`, `/objects/:id`, `/cultures`, `/cultures/:id`, `/search` and `/admin`. Direct links and reloads work, signed in or not; private pages show the sign-in screen when no one is signed in. Admin review appears only after the signed-in user's pending-post request returns 200. Notifications are not implemented, so no `/notifications` route is registered.
 
 ## Run locally
 
