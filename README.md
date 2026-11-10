@@ -127,6 +127,8 @@ Missing or invalid account configuration stops server startup; it never silently
 
 `npm run images:fetch` downloads the landing-page photos from Wikimedia Commons. It accepts only public domain, CC0, CC BY and CC BY-SA files without personality-rights restrictions, skips files that describe people, re-encodes to WebP without metadata, and writes `src/data/africa-images.json` and `docs/image-manifest.json` with author, licence and source for each image. Review the manifest before publishing.
 
+The Zulu culture card uses a locally bundled, metadata-free CC0 photo of a beaded necklace, credited to Daderot; it shows the object without a person.
+
 ## Deploy
 
 Set the account-mode variables in the host's private environment settings (on Render: *Environment*), then:

@@ -73,8 +73,19 @@
       ],
       "minWidth": 800,
       "hero": false,
-      "image": null,
-      "reviewNote": "Rejected 2026-11-10: the automatic pick was a colonial-era photograph of identifiable people. Replace with a beadwork object photo and pin it."
+      "image": {
+        "id": "za-zulu-beadwork",
+        "src": "/assets/photos/africa/web/za-zulu-beadwork-necklace-1280.webp",
+        "srcset": "/assets/photos/africa/web/za-zulu-beadwork-necklace-640.webp 640w, /assets/photos/africa/web/za-zulu-beadwork-necklace-1280.webp 1280w, /assets/photos/africa/web/za-zulu-beadwork-necklace-1920.webp 1920w",
+        "width": 1280,
+        "height": 1707,
+        "title": "Beaded necklace, Zulu - African objects in the American Museum of Natural History - DSC05977.JPG",
+        "author": "Daderot",
+        "licence": "CC0",
+        "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Beaded_necklace,_Zulu_-_African_objects_in_the_American_Museum_of_Natural_History_-_DSC05977.JPG"
+      },
+      "reviewNote": "Accepted 2026-11-10: object-only Zulu beaded necklace photo from the American Museum of Natural History exhibit; CC0; no people shown."
     },
     {
       "id": "cd-luluwa-figure",

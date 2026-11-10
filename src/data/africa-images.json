@@ -143,6 +143,18 @@
     "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
     "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ndebele_Architecture.jpg"
   },
+  "za-zulu-beadwork": {
+    "id": "za-zulu-beadwork",
+    "src": "/assets/photos/africa/web/za-zulu-beadwork-necklace-1280.webp",
+    "srcset": "/assets/photos/africa/web/za-zulu-beadwork-necklace-640.webp 640w, /assets/photos/africa/web/za-zulu-beadwork-necklace-1280.webp 1280w, /assets/photos/africa/web/za-zulu-beadwork-necklace-1920.webp 1920w",
+    "width": 1280,
+    "height": 1707,
+    "title": "Beaded necklace, Zulu - African objects in the American Museum of Natural History - DSC05977.JPG",
+    "author": "Daderot",
+    "licence": "CC0",
+    "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Beaded_necklace,_Zulu_-_African_objects_in_the_American_Museum_of_Natural_History_-_DSC05977.JPG"
+  },
   "ke-nairobi": {
     "id": "ke-nairobi",
     "src": "/assets/photos/africa/web/ke-nairobi-1280.webp",
