@@ -9,7 +9,7 @@ owner**. Read this file at the start of every phase.
 | Task | Owner | Status |
 |---|---|---|
 | Phase A–K items up to 2026-11-09 (routes, deep links, Discover home, language suggestions, README) | Codex + Claude | done, live |
-| **Submission polish** (culture directory/search, admin review, story detail, translation fallback, code splitting and browser QA) | Codex | cultures/search done; admin review in progress |
+| **Submission polish** (culture directory/search, admin review, story detail, translation fallback, code splitting and browser QA) | Codex | cultures/search, admin review and story detail done |
 | Icons (`public/assets/icons/*.svg`), PWA icons + `public/manifest.webmanifest`, `public/robots.txt` | Claude | done (local, commit with L0) |
 | Review/apply any social schema or translation migration | Claude | deferred outside the submission scope; not requested here |
 | `src/data/cultures.json` + `docs/cultures/<slug>.md` (sourced) | Claude | in progress |
