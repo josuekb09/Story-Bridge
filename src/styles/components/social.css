@@ -59,7 +59,9 @@
 .side-card .secondary{margin:6px 0}
 .side-cultures{list-style:none;margin:0;padding:0;display:grid;gap:10px}
 .side-cultures li{display:flex;align-items:center;gap:10px}
+.side-cultures button{display:flex;align-items:center;gap:10px;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
 .side-cultures img{width:46px;height:46px;border-radius:12px;object-fit:cover;background:var(--sand)}
+.side-culture-fallback{display:grid;place-items:center;width:46px;height:46px;border-radius:12px;background:var(--sand);font-weight:700}
 .side-cultures span{display:flex;flex-direction:column}
 .side-cultures small{color:var(--ink-soft)}
 .side-join{background:var(--forest-deep);color:var(--sand);border-color:var(--forest-deep)}

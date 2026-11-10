@@ -97,7 +97,7 @@ function LanguageMarquee({ reduced }) {
   </div>;
 }
 
-function Cultures({ t, onShare }) {
+function Cultures({ t, onShare, onCulture }) {
   const [region, setRegion] = useState('all');
   const items = SHOWCASE.filter(item => region === 'all' || item.region === region);
   return <section className="home-section home-reveal" aria-labelledby="home-cultures-title" id="cultures">
@@ -120,7 +120,7 @@ function Cultures({ t, onShare }) {
           <h3>{item.culture}</h3>
           <p>{item.subject}</p>
           {image && <Credit image={image} t={t}/>}
-          <button type="button" className="home-link" onClick={onShare}>{t('cultures.cta')} →</button>
+          <button type="button" className="home-link" onClick={() => onCulture ? onCulture(item.id) : onShare()}>{t('cultures.cta')} →</button>
         </div>
       </li>; })}
     </ul>
@@ -152,7 +152,7 @@ function Live({ t, reduced, onListen }) {
   </section>;
 }
 
-export default function Landing({ onListen, onShare, onObjects, onSignIn, showSignIn = true, repoUrl }) {
+export default function Landing({ onListen, onShare, onObjects, onCulture, onSignIn, showSignIn = true, repoUrl }) {
   const { lang, t, setLanguage, status } = useUiLanguage();
   const reduced = usePrefersReducedMotion();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -208,7 +208,7 @@ export default function Landing({ onListen, onShare, onObjects, onSignIn, showSi
         </ol>
       </section>
 
-      <Cultures t={t} onShare={onShare}/>
+    <Cultures t={t} onShare={onShare} onCulture={onCulture}/>
       <Live t={t} reduced={reduced} onListen={onListen}/>
 
       <section className="home-section home-collection home-reveal" aria-labelledby="home-collection-title">

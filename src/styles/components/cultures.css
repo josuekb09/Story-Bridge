@@ -1,0 +1,56 @@
+/* Cultures directory, culture page and search. Owner: Claude (see docs/COLLAB.md). */
+.cultures-main{width:min(100%,1080px)}
+.cultures-head h1{font-size:clamp(1.9rem,4.5vw,2.8rem);margin:.15em 0 .3em}
+.culture-meta{margin:0;font-size:.76rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--clay)}
+.cultures-chips{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 22px}
+.cultures-chips button{border:1px solid var(--line);background:#fff;color:var(--forest);padding:9px 16px;min-height:44px;border-radius:999px;font-weight:600;cursor:pointer}
+.cultures-chips button[aria-pressed="true"]{background:var(--forest);border-color:var(--forest);color:#fff}
+.culture-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px}
+.culture-grid-small{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.culture-card a{display:flex;flex-direction:column;height:100%;border-radius:18px;overflow:hidden;background:#fff;border:1px solid var(--line);color:inherit;text-decoration:none;transition:transform .2s ease,box-shadow .2s ease}
+.culture-card a:hover{transform:translateY(-3px);box-shadow:0 16px 36px rgba(29,43,36,.13)}
+.culture-card a:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.culture-card-media{aspect-ratio:4/3;background:var(--sand);overflow:hidden}
+.culture-card-media img{width:100%;height:100%;object-fit:cover;display:block}
+.culture-card-media.is-empty,.culture-hero.is-empty{display:grid;place-items:center;background:var(--forest)}
+.culture-card-media.is-empty[data-region="West Africa"]{background:var(--clay)}
+.culture-card-media.is-empty[data-region="East Africa"]{background:var(--moss)}
+.culture-card-media.is-empty span{font-family:Fraunces,Georgia,serif;font-size:3.6rem;color:var(--gold)}
+.culture-card-body{padding:14px 16px 18px}
+.culture-card-body h2{font-size:1.25rem;margin:4px 0 2px;color:var(--forest-deep)}
+.culture-card-body p:last-child{margin:0;color:var(--ink-soft)}
+.cultures-foot{margin-top:24px}
+
+.culture-detail .back{margin-bottom:12px}
+.culture-hero{position:relative;border-radius:22px;overflow:hidden;min-height:320px;display:flex;align-items:flex-end;color:#fff;background:var(--forest-deep)}
+.culture-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.culture-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,28,22,0) 30%,rgba(16,28,22,.85) 100%)}
+.culture-hero-text{position:relative;z-index:1;padding:24px}
+.culture-hero-text .culture-meta{color:var(--gold)}
+.culture-hero-text h1{color:#fff;font-size:clamp(2rem,5vw,3.2rem);margin:.1em 0 .1em}
+.culture-hero-text p:last-child{margin:0;opacity:.92}
+.culture-credit{font-size:.8rem;color:var(--ink-soft);margin:8px 2px 0}
+.culture-credit a{color:inherit}
+.culture-section{margin-top:28px}
+.culture-section h2{font-size:1.3rem;display:flex;align-items:center;gap:8px}
+.culture-count{font-size:.8rem;background:var(--sand);color:var(--forest);padding:2px 9px;border-radius:999px}
+.culture-undocumented{background:#fff;border:1px dashed var(--line);border-radius:16px;padding:16px;margin:0 0 14px}
+.culture-stories{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.culture-stories button{width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-height:44px;cursor:pointer;color:inherit}
+.culture-stories button:hover{border-color:var(--moss)}
+.culture-story-lang{background:var(--sand);color:var(--forest);font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:999px}
+.culture-story-title{font-weight:700;flex:1;min-width:0}
+.culture-stories small{color:var(--ink-soft)}
+
+.search-main h1{margin:.2em 0 .4em}
+.search-form input{width:100%;font-size:1.1rem;padding:14px 18px;border-radius:999px;border:1px solid var(--line);background:#fff;min-height:48px}
+.search-form input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.search-hints{margin-top:14px}
+.search-cultures{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.search-cultures a{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:14px;background:#fff;color:inherit;text-decoration:none;min-height:44px}
+.search-cultures img,.search-culture-letter{width:56px;height:56px;border-radius:12px;object-fit:cover;flex:none}
+.search-culture-letter{display:grid;place-items:center;background:var(--forest);color:var(--gold);font-family:Fraunces,Georgia,serif;font-size:1.6rem}
+.search-cultures span{display:flex;flex-direction:column}
+.search-cultures small{color:var(--ink-soft)}
+[dir="rtl"] .culture-stories button{text-align:right}
+@media (prefers-reduced-motion:reduce){.culture-card a{transition:none}}

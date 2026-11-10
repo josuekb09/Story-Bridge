@@ -9,7 +9,7 @@ owner**. Read this file at the start of every phase.
 | Task | Owner | Status |
 |---|---|---|
 | Phase A–K items up to 2026-11-09 (routes, deep links, Discover home, language suggestions, README) | Codex + Claude | done, live |
-| **Phase L — social network** (`docs/PHASE_L_SOCIAL.md`): L0 header/privacy/PWA/sitemap → L1 social backend (migration 0007, stop for review) → L2 social UI → L3 culture hubs → L4 read in your language → L5 translate app screens → L6 performance → L7 tests/docs | Codex | in progress — L0 complete locally; stopped before L1 |
+| **Submission polish** (culture directory/search, admin review, story detail, translation fallback, code splitting and browser QA) | Codex | in progress |
 | Icons (`public/assets/icons/*.svg`), PWA icons + `public/manifest.webmanifest`, `public/robots.txt` | Claude | done (local, commit with L0) |
 | Review + apply migrations 0007 (social) and the translations table | Claude | waiting for Codex |
 | `src/data/cultures.json` + `docs/cultures/<slug>.md` (sourced) | Claude | in progress |
@@ -17,7 +17,7 @@ owner**. Read this file at the start of every phase.
 | Machine-draft locale files for every new `t()` key (18 languages) | Claude | after L5 key list |
 | `STORY_BRIDGE_OBJECT_ADMIN_ID=897ea4e9-b42a-4401-ac70-d64c289ac2c3` on Render | Owner | to do |
 | OpenAI: check the organisation's credit, key permissions and model access; send the `ai-translation-provider-error` log line | Owner | to do |
-| L0 review by Claude (2026-11-10): header OK (no email, menu, language, icons, mobile tabs, no overflow). Fixed: `public/sw.js` is now **network-first for pages** (cache v2) — cache-first served the previous version after each deploy and could load deleted asset hashes; `social.css` keeps mobile tab labels on one line ("Notifications"). | Claude | done (local, commit with L0) |
+| L0 review by Claude (2026-11-10): header OK (no email, menu, language, icons, mobile tabs, no overflow). Fixed: `public/sw.js` is now **network-first for pages** (cache v2) — cache-first served the previous version after each deploy and could load deleted asset hashes; `social.css` keeps mobile tab labels on one line ("My stories"). | Claude | done (local, commit with L0) |
 
 **Never restore a file from Git to "clean" it.** On 2026-11-09 a restore erased the private-page gate and the headline-contrast fix; Claude re-applied them. If `git status` shows changes you did not make, they are Claude's: commit them or ask.
 
@@ -45,9 +45,9 @@ owner**. Read this file at the start of every phase.
 
 ## Landing page contract
 
-`StoryBridgeController` renders `<Landing onListen onShare onObjects onSignIn showSignIn repoUrl/>`.
+`StoryBridgeController` renders `<Landing onListen onShare onObjects onCulture onSignIn showSignIn repoUrl/>`.
 Claude keeps these props working. New optional props (for example `onCultures`) will be listed here
-before Claude depends on them.
+before Claude depends on them. `onCulture(id)` opens `/cultures/:id` from a landing-page culture card.
 
 The landing page reads public numbers from `GET /api/stories` (count, distinct `originalLanguage`,
 three latest). If Codex adds a lighter endpoint (for example `GET /api/stats`), list it here.
@@ -89,6 +89,18 @@ the chosen files in `src/data/showcase.js`.
   - Feed (`FeedPage.jsx`): social post cards (author, region, relative time, language, See more, images, audio, translation, share), composer prompt, filter chips, "Show more", explore rail. Styles in `src/styles/components/social.css`.
   - Global toast (`app-toast`) for saved/deleted.
   - `.gitignore`: `data/` → `/data/` (it was ignoring `src/data/`, which would break the build on Render).
+
+- **Final polish, Bloc 2 — built by Claude (2026-11-10), new files only, owned by Claude:**
+  `src/pages/CulturesPage.jsx` (default export; handles both `/cultures` and `/cultures/:id` by itself, reading `window.location`),
+  `src/pages/SearchPage.jsx` (default export; `/search?q=`), `src/styles/components/cultures.css`.
+  Props for both: `{ stories, showStory, navigate }` (`stories` = the public stories list the controller already loads).
+  **Codex, please only wire them (do not edit these files):**
+  1. `pathPage()`: map any path starting with `/cultures` to `'cultures'` (keep `/cultures` in `routes`).
+  2. Replace the placeholder for `cultures` and `search` with `<CulturesPage …/>` and `<SearchPage …/>`.
+  3. Remove the Notifications tab/bell from `AppHeader`/`AppMobileNav` and the `notifications` route (no backend yet).
+  4. Add `/cultures` and `/search` to `server/sitemap.js` if not there. Run tests + build, push.
+  **Wired by Codex:** direct culture URLs, directory/detail and search render through the controller; Home and Discover culture links open detail pages; sitemap includes both public routes. Notifications link/tab and route are removed, and the legacy URL redirects to My stories.
+
 
 ### Codex → Claude
 - (none yet)

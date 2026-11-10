@@ -89,9 +89,12 @@ const record = async (name, fn, prerequisite = true) => {
   if (!prerequisite) { results.push({ name, status: 'NOT TESTED', detail: 'Prerequisite did not pass.' }); process.stdout.write(`NOT TESTED ${name}\n`); return false; }
   try { const detail = await fn(); const status=detail?.status || 'PASS'; results.push({ name, status, detail: detail?.detail || '' }); process.stdout.write(`${status} ${name}${detail?.detail ? ` — ${detail.detail}` : ''}\n`); return status === 'PASS'; }
   catch (error) {
-    const detail = String(error?.message || error).replace(/[0-9a-f]{64,}/gi, '[redacted token-like value]');
-    results.push({ name, status: 'FAIL', detail }); process.stderr.write(`FAIL ${name} — ${detail}\n`);
     const page = accountFlowPage && !accountFlowPage.isClosed() ? accountFlowPage : pageCapture && !pageCapture.isClosed() ? pageCapture : pageA || pageB;
+    let pageState = '';
+    if (page && !page.isClosed()) { try { pageState = `\nPage: ${page.url()} ${JSON.stringify((await page.locator('body').innerText()).slice(0, 500))}`; } catch {} }
+    const appDiagnostics = [...consoleErrors, ...pageErrors, ...resourceErrors].slice(-12).join(' | ');
+    const detail = `${String(error?.message || error)}${pageState}${appDiagnostics ? `\nApp diagnostics: ${appDiagnostics}` : ''}`.replace(/[0-9a-f]{64,}/gi, '[redacted token-like value]');
+    results.push({ name, status: 'FAIL', detail }); process.stderr.write(`FAIL ${name} — ${detail}\n`);
     if (page && !page.isClosed()) { try { const p = path.join(evidenceDir, `failure-${results.length}.png`); await page.screenshot({ path: p, fullPage: true }); results.at(-1).evidence = path.relative(root, p); } catch {} }
     return false;
   }
@@ -101,7 +104,8 @@ async function captureEvidence(name, capture) {
     const result = await capture();
     results.push({ name, status: 'PASS', evidence: Array.isArray(result) ? result.map(item => path.relative(root, item.file)) : path.relative(root, result.file), detail: Array.isArray(result) ? JSON.stringify(result.map(item => item.metrics)) : JSON.stringify(result.metrics) });
   } catch (error) {
-    const detail = String(error?.message || error).replace(/[0-9a-f]{64,}/gi, '[redacted token-like value]');
+    const appDiagnostics = [...consoleErrors, ...pageErrors].slice(-12).join(' | ');
+    const detail = `${String(error?.message || error)}${appDiagnostics ? `\nApp diagnostics: ${appDiagnostics}` : ''}`.replace(/[0-9a-f]{64,}/gi, '[redacted token-like value]');
     results.push({ name, status: 'FAIL', detail }); process.stderr.write(`FAIL ${name} — ${detail}\n`);
   }
 }
@@ -135,11 +139,11 @@ async function direct(token, urlPath, method = 'GET', data) {
 }
 async function clickHeaderMenu(page, label) {
   await page.locator('.app-avatar-button').click();
-  await page.getByRole('button', { name: label, exact: true }).click();
+  await page.locator('.app-avatar-dropdown').getByRole('button', { name: label, exact: true }).click();
 }
 async function confirmHeaderMenuAction(page, label, accept) {
   await page.locator('.app-avatar-button').click();
-  return confirmAction(page, page.getByRole('button', { name: label, exact: true }), accept);
+  return confirmAction(page, page.locator('.app-avatar-dropdown').getByRole('button', { name: label, exact: true }), accept);
 }
 function appNavigationLocator(page, label) {
   const desktop = page.locator('.app-header-primary').getByRole('link', { name: label, exact: true });
@@ -1213,7 +1217,9 @@ try {
     await livePage.setViewportSize({width:375,height:840});
     ensure(await livePage.getByRole('navigation',{name:'Main navigation'}).isVisible(), 'The five-tab mobile navigation is not visible at 375px.');
     ensure(await livePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'Cultures'}).isVisible(), 'The mobile Cultures tab is missing.');
-    ensure(await livePage.getByRole('link',{name:'Search'}).isVisible() && await livePage.getByRole('link',{name:'Notifications'}).isVisible(), 'Mobile header is missing search or notifications.');
+    ensure(await livePage.getByRole('link',{name:'Search'}).isVisible(), 'Mobile header is missing search.');
+    ensure(await livePage.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:'My stories'}).isVisible(), 'The mobile My stories bookmark tab is missing.');
+    ensure(await livePage.getByRole('link',{name:'Notifications'}).count() === 0, 'The retired Notifications link is still visible.');
     await livePage.setViewportSize({width:1280,height:900});
     pass('Signed-in home opens Discover');
     await livePage.goto(`${webOrigin}/profile`,{waitUntil:'domcontentloaded'});
@@ -1225,6 +1231,20 @@ try {
     await livePage.goto(`${webOrigin}/share`,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Share a story'}).waitFor();
     ensure(new URL(livePage.url()).pathname === '/share', 'Signed-in Share deep link did not load at /share.');
+    await record('Culture directory, detail and grouped client search work', async () => {
+      await livePage.goto(`${webOrigin}/cultures`,{waitUntil:'domcontentloaded'});
+      await livePage.getByRole('heading',{name:'Every country holds many cultures'}).waitFor();
+      await livePage.getByRole('button',{name:'Southern Africa',exact:true}).click();
+      await livePage.getByRole('link').filter({hasText:'Zulu'}).first().click();
+      await livePage.getByRole('heading',{name:'Zulu',exact:true}).waitFor();
+      await livePage.getByText('Not yet documented — add what you know.',{exact:false}).waitFor();
+      ensure(new URL(livePage.url()).pathname === '/cultures/za-zulu-beadwork', 'Culture card did not open its culture URL.');
+      await livePage.goto(`${webOrigin}/search`,{waitUntil:'domcontentloaded'});
+      await livePage.getByRole('searchbox').fill('Zulu');
+      await livePage.getByRole('heading',{name:'Cultures',exact:true}).waitFor();
+      await livePage.getByRole('link').filter({hasText:'Zulu'}).first().waitFor();
+      ensure(new URL(livePage.url()).pathname === '/search' && new URL(livePage.url()).searchParams.get('q') === 'Zulu', 'Search query was not reflected in the URL.');
+    });
     await livePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Discover'}).waitFor();
     await clickHeaderMenu(livePage,'My workspace');

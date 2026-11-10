@@ -7,6 +7,8 @@ export function createSitemapXml(storyIds = []) {
   const paths = [
     '/',
     '/discover',
+    '/cultures',
+    '/search',
     '/objects',
     ...OBJECT_RECORDS.map(record => `/objects/${encodeURIComponent(record.id)}`),
     ...storyIds.map(id => `/stories/${encodeURIComponent(id)}`),

@@ -57,7 +57,6 @@ export function AppHeader({ page, signedIn, accountEnabled, profileName, profile
     </nav>
     <div className="app-header-tools">
       <a className={`app-header-icon-link${activePage === 'search' ? ' is-active' : ''}`} href="/search" aria-label="Search" onClick={event => go(event, 'search')}><AppIcon name="search"/></a>
-      <a className={`app-header-icon-link${activePage === 'notifications' ? ' is-active' : ''}`} href="/notifications" aria-label="Notifications" onClick={event => go(event, 'notifications')}><AppIcon name="bell"/></a>
       <LanguagePicker lang={lang} setLanguage={setLanguage}/>
       <div className="app-avatar-menu" ref={menuRef}>
         <button className="app-avatar-button" type="button" aria-label={signedIn ? 'Open profile menu' : 'Open account menu'} aria-haspopup="true" aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}>{avatar}</button>
@@ -82,7 +81,7 @@ export function AppMobileNav({ page, onNavigate }) {
     { key: 'discover', label: 'Discover', icon: 'discover' },
     { key: 'cultures', label: 'Cultures', icon: 'cultures' },
     { key: 'share', label: 'Share', icon: 'share', featured: true },
-    { key: 'notifications', label: 'Notifications', icon: 'bell' },
+    { key: 'mine', label: 'My stories', icon: 'bookmark' },
     { key: 'profile', label: 'Profile', icon: 'profile' },
   ];
   const activePage = page === 'listen' || page === 'detail' ? 'discover' : page;

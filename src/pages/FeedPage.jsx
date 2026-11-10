@@ -77,11 +77,11 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
   </article>;
 }
 
-export default function FeedPage({ accountConfig, visibleStories, languageFilter, setLanguageFilter, regionFilter, setRegionFilter, audioOnly, setAudioOnly, listState, listErrors, retryList, filteredStories, navigate, translationStoryId, setTranslationStoryId, showStory, transitionTo, signedIn = false }) {
+export default function FeedPage({ accountConfig, visibleStories, languageFilter, setLanguageFilter, regionFilter, setRegionFilter, audioOnly, setAudioOnly, listState, listErrors, retryList, filteredStories, navigate, translationStoryId, setTranslationStoryId, showStory, transitionTo, signedIn = false, onCulture = () => {} }) {
   const [shown, setShown] = useState(PAGE_SIZE);
   const languages = useMemo(() => [...new Set(visibleStories.map(story => story.originalLanguage).filter(Boolean))], [visibleStories]);
   const regions = useMemo(() => [...new Set(visibleStories.map(story => story.region).filter(Boolean))], [visibleStories]);
-  const cultures = SHOWCASE.filter(item => AFRICA_IMAGES[item.id] || item.local).slice(0, 6);
+  const cultures = SHOWCASE.slice(0, 6);
   const share = () => navigate('share');
 
   return <main className="social-main feed-layout">
@@ -120,7 +120,7 @@ export default function FeedPage({ accountConfig, visibleStories, languageFilter
     <aside className="feed-side" aria-label="Explore">
       <section className="side-card">
         <h2>Explore cultures</h2>
-        <ul className="side-cultures">{cultures.map(item => { const image = AFRICA_IMAGES[item.id] || item.local; return <li key={item.id}><img src={image.src} alt="" loading="lazy"/><span><b>{item.culture}</b><small>{item.country}</small></span></li>; })}</ul>
+        <ul className="side-cultures">{cultures.map(item => { const image = AFRICA_IMAGES[item.id] || item.local; return <li key={item.id}><button type="button" onClick={() => onCulture(item.id)}>{image ? <img src={image.src} width={46} height={46} alt="" loading="lazy" decoding="async"/> : <span className="side-culture-fallback" aria-hidden="true">{item.culture.slice(0, 1)}</span>}<span><b>{item.culture}</b><small>{item.country}</small></span></button></li>; })}</ul>
       </section>
       <section className="side-card">
         <h2>Collections</h2>
