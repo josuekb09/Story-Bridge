@@ -37,7 +37,7 @@ The app shell and static interface files can be installed as a PWA. Its service 
 | Database migrations `202611070001` … `202611080006` | Applied to the production Supabase project |
 | AI translation | Key configured on the host; the live provider call is still being verified (errors are now logged as status/code/model only) |
 | Interface translation | Landing page in 20 languages; other screens are English for now |
-| Phase L0 (local) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are implemented; unit, build, browser and dist-secret checks pass; Render deployment and live verification are pending |
+| Phase L0 (live) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are deployed. Render serves the pushed build; the live header and static resource types were checked. Signed-in email privacy is covered by the browser suite with synthetic authentication |
 
 This is a demonstration build, not a production service for sensitive stories or recordings.
 
