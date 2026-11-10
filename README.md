@@ -43,6 +43,7 @@ The app shell and static interface files can be installed as a PWA. Its service 
 | Phase L0 (live) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are deployed. Render serves the pushed build; the live header and static resource types were checked. Signed-in email privacy is covered by the browser suite with synthetic authentication |
 | Culture directory and search | Live in the app build; public showcase data only, with no social schema or API changes |
 | First-post admin review | Available only to accounts authorized by the pending-post endpoint; publish and keep-private actions are confirmed |
+| Responsive and loading review | Lazy-loaded page routes; initial JavaScript is about 158 kB gzip. Twenty screens were captured at 375, 768 and 1280 px with no horizontal overflow, clipped text, undersized controls or browser console issues in the synthetic review. |
 | Phase L1 | Not started for submission; no social migration is included or applied |
 
 This is a demonstration build, not a production service for sensitive stories or recordings.

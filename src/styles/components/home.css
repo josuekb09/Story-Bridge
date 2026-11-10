@@ -53,8 +53,11 @@
 .home-hero-caption a{color:#fff}
 .home-hero-controls{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px}
 .home-dots{display:flex;gap:6px}
-.home-dots button{width:9px;height:9px;padding:0;border-radius:999px;border:0;background:rgba(255,255,255,.45);cursor:pointer;transition:width .3s,background .3s}
-.home-dots button.is-active{width:28px;background:var(--gold)}
+.home-dots button{display:grid;place-items:center;flex:none;width:44px;height:44px;min-height:44px;padding:0;border-radius:999px;border:0;background:transparent;cursor:pointer}
+.home-dots button::before{content:"";width:9px;height:9px;border-radius:999px;background:rgba(255,255,255,.75);transition:width .3s,background .3s}
+.home-dots button.is-active::before{width:28px;background:var(--gold)}
+.home .home-btn-small{min-height:44px}
+.home-icon-btn{flex:0 0 44px;width:44px;height:44px;min-height:44px}
 .home-credit{display:block;font-size:.75rem;opacity:.85}
 .home-credit a{color:inherit}
 

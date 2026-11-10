@@ -1,26 +1,27 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import Landing from '../pages/LandingPage.jsx';
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import FeedPage from '../pages/FeedPage.jsx';
-import SignInPage from '../pages/SignInPage.jsx';
-import WelcomePage from '../pages/WelcomePage.jsx';
-import LegalPage from '../pages/LegalPage.jsx';
-import ProfilePage from '../pages/ProfilePage.jsx';
-import StoryDetailPage from '../pages/StoryDetailPage.jsx';
-import ObjectsPage from '../pages/ObjectsPage.jsx';
-import CulturalGroupPage from '../pages/CulturalGroupPage.jsx';
-import ObjectRecordPage from '../pages/ObjectRecordPage.jsx';
-import SharePage from '../pages/SharePage.jsx';
-import ReviewPage from '../pages/ReviewPage.jsx';
-import WorkspacePage from '../pages/WorkspacePage.jsx';
-import MyStoriesPage from '../pages/MyStoriesPage.jsx';
-import CulturesPage from '../pages/CulturesPage.jsx';
-import SearchPage from '../pages/SearchPage.jsx';
-import AdminPostsPage from '../pages/AdminPostsPage.jsx';
 import { AppHeader, AppMobileNav } from '../components/AppHeader.jsx';
 import { api, ownerToken, setAccountSessionToken, authorizedObjectUrl } from '../lib/api.js';
 import { editAiTranslationDraft, translationApprovalCanContinue } from '../translation-draft.js';
 import { OBJECT_RECORDS, CULTURAL_GROUP_RECORD, OBJECT_IDS, objectRecordView } from '../object-records.js';
+
+const Landing = lazy(() => import('../pages/LandingPage.jsx'));
+const SignInPage = lazy(() => import('../pages/SignInPage.jsx'));
+const WelcomePage = lazy(() => import('../pages/WelcomePage.jsx'));
+const LegalPage = lazy(() => import('../pages/LegalPage.jsx'));
+const ProfilePage = lazy(() => import('../pages/ProfilePage.jsx'));
+const StoryDetailPage = lazy(() => import('../pages/StoryDetailPage.jsx'));
+const ObjectsPage = lazy(() => import('../pages/ObjectsPage.jsx'));
+const CulturalGroupPage = lazy(() => import('../pages/CulturalGroupPage.jsx'));
+const ObjectRecordPage = lazy(() => import('../pages/ObjectRecordPage.jsx'));
+const SharePage = lazy(() => import('../pages/SharePage.jsx'));
+const ReviewPage = lazy(() => import('../pages/ReviewPage.jsx'));
+const WorkspacePage = lazy(() => import('../pages/WorkspacePage.jsx'));
+const MyStoriesPage = lazy(() => import('../pages/MyStoriesPage.jsx'));
+const CulturesPage = lazy(() => import('../pages/CulturesPage.jsx'));
+const SearchPage = lazy(() => import('../pages/SearchPage.jsx'));
+const AdminPostsPage = lazy(() => import('../pages/AdminPostsPage.jsx'));
+const pageLoading = <main className="page-loading" aria-busy="true"><p role="status">Loading page…</p></main>;
 
 const EMPTY_POST_META = {title:'',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'',access:'Public',consentConfirmed:false};
 
@@ -236,11 +237,12 @@ export default function App() {
     ownerToken();
     let unsubscribe = () => {};
     setConfigError('');
-    fetch('/api/account/config').then(response => { if (!response.ok) throw Error('Configuration unavailable'); return response.json(); }).then(config => {
+    fetch('/api/account/config').then(response => { if (!response.ok) throw Error('Configuration unavailable'); return response.json(); }).then(async config => {
       if (!config || typeof config.account !== 'boolean') throw Error('Invalid configuration');
       setAccountConfig(config);
       if (config.account) {
         refresh('','stories');
+        const { createClient } = await import('@supabase/supabase-js');
         const client = createClient(config.url, config.publishableKey, { auth: { flowType: 'pkce' } });
         setSupabase(client);
         client.auth.getSession().then(({ data,error }) => { const params=new URLSearchParams(window.location.search);const callbackError=params.get('error_description')||params.get('error');if(callbackError)setError('Google sign-in could not be completed. Try again.');if(params.has('code')||params.has('access_token')||params.has('refresh_token')||params.has('error')){history.replaceState(history.state,'',window.location.pathname+window.location.hash)}if(error)setError('Sign-in could not be completed. Try again.');setSession(data.session);setSessionResolved(true); }).catch(() => setSessionResolved(true));
@@ -392,15 +394,21 @@ export default function App() {
     }
   }
   function openSettings() { setProfileAccountOpen(true); navigate('profile'); }
+  const objectTitle = page.startsWith('object:') ? OBJECT_RECORDS.find(record => record.id === page.slice(7))?.title : '';
+  const documentTitle = showSignIn && !session ? 'Sign in — Story Bridge' : page === 'detail' && current?.status === 'shared' && current?.visibility === 'public'
+    ? `${current.title || 'Story'} — Story Bridge`
+    : page.startsWith('object:') ? `${objectTitle || 'Objects'} — Story Bridge`
+      : ({ landing: 'Story Bridge — Your story, in your own voice', discover: 'Discover — Story Bridge', listen: 'Discover — Story Bridge', cultures: 'Cultures — Story Bridge', search: 'Search — Story Bridge', admin: 'Admin — Story Bridge', share: 'Share a story — Story Bridge', mine: 'My stories — Story Bridge', workspace: 'My workspace — Story Bridge', profile: 'Profile — Story Bridge', review: 'Review — Story Bridge', detail: 'Story — Story Bridge', objects: 'Objects — Story Bridge', 'group-record': 'Luluwa — Story Bridge', terms: 'Terms — Story Bridge', privacy: 'Privacy — Story Bridge', welcome: 'Welcome — Story Bridge' }[page] || 'Story Bridge');
+  useEffect(() => { document.title = documentTitle; }, [documentTitle]);
   const appHeader = <AppHeader page={page} signedIn={!!session} accountEnabled={!!accountConfig?.account} adminEnabled={adminAccess==='available'} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onNavigate={navigate} onSignIn={() => setShowSignIn(true)} onSignOut={signOut} onSettings={openSettings}/>;
   const mobileNav = <AppMobileNav page={page} onNavigate={navigate}/>;
   if (!accountConfig) return <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main>{mobileNav}</div>;
-  if(page==='terms'||page==='privacy')return <div className="app">{appHeader}<LegalPage type={page} onBack={()=>transitionTo('landing')}/>{mobileNav}</div>;
+  if(page==='terms'||page==='privacy')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><LegalPage type={page} onBack={()=>transitionTo('landing')}/></Suspense>{mobileNav}</div>;
   // Private pages need a session: show the sign-in screen instead of an empty "could not be loaded" list.
   const privatePage = ['workspace', 'mine', 'review', 'profile', 'share','admin'].includes(page);
-  if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} authCode={authCode} setAuthCode={setAuthCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/>{mobileNav}</div>;
-  if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/>{mobileNav}</div>;
-   if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/>{mobileNav}</div>;
+  if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<Suspense fallback={pageLoading}><SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} setAuthCode={setAuthCode} authCode={authCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/></Suspense>{mobileNav}</div>;
+  if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/></Suspense>{mobileNav}</div>;
+   if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Suspense fallback={pageLoading}><Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{mobileNav}</div>;
   if (currentSession.current !== activeIdentity) return <div className="app">{appHeader}<main><p role="status">Loading your account…</p></main>{mobileNav}</div>;
 
   function navigate(nextPage) {
@@ -637,12 +645,13 @@ export default function App() {
   }
 
   return page === 'landing'
-    ? <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<Landing showSignIn={!!accountConfig.account} repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>navigate('listen')} onObjects={()=>navigate('objects')} onShare={()=>navigate('share')} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/>{mobileNav}</div>
+    ? <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<Suspense fallback={pageLoading}><Landing showSignIn={!!accountConfig.account} repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>navigate('listen')} onObjects={()=>navigate('objects')} onShare={()=>navigate('share')} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{mobileNav}</div>
     : <div className="app">
       {appHeader}
       {!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}
       {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">Dismiss</button></div>}
 
+      <Suspense fallback={pageLoading}>
       {page === 'workspace' && accountConfig.account && <WorkspacePage savedProfileName={savedProfileName} profileState={profileState} navigate={navigate} listState={listState} listErrors={listErrors} retryList={retryList} counts={counts} setCollectionFilter={setCollectionFilter} draftStories={draftStories} startReview={startReview}/>}
       {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session} onCulture={openCulture}/>}
       {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''} accountOpen={profileAccountOpen} onAccountToggle={setProfileAccountOpen}/>}
@@ -659,6 +668,7 @@ export default function App() {
       {page === 'admin' && adminAccess==='available' && <AdminPostsPage posts={pendingPosts} error={pendingPostsError} busyId={adminBusyId} onAction={moderatePendingPost} onRetry={()=>setAdminRetry(value=>value+1)}/>}
       {page === 'admin' && adminAccess==='checking' && <main><p className="panel" role="status">Checking admin access…</p></main>}
       {page === 'admin' && adminAccess==='unavailable' && <main><section className="panel"><h1>Admin review is unavailable</h1><p>This account does not have access to pending posts.</p><button className="secondary" onClick={()=>navigate('discover')}>Back to Discover</button></section></main>}
+      </Suspense>
       {toast && <div className="app-toast" role="status" aria-live="polite">✓ {toast}</div>}
       <AppMobileNav page={page} onNavigate={navigate}/>
       <footer>Stories stay under the storyteller’s control.</footer>

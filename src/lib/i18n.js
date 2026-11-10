@@ -13,7 +13,7 @@ export function browserLanguage() {
 
 // Interface translation. English is bundled; other locales load on demand so a
 // visitor on mobile data only downloads the language they chose.
-const loaders = import.meta.glob('../locales/*.json', { import: 'default' });
+const loaders = import.meta.glob(['../locales/*.json', '!../locales/en.json'], { import: 'default' });
 const cache = { en };
 const STORAGE_KEY = 'story-bridge-ui-language';
 const listeners = new Set();

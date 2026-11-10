@@ -41,7 +41,7 @@ function StoryImage({ image, protectedFile }) {
     authorizedObjectUrl(image.url).then(url => { objectUrl = url; if (live) setSrc(url); else URL.revokeObjectURL(url); }).catch(() => {});
     return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [image.url, protectedFile]);
-  return src ? <img src={src} alt={image.altText || ''} width={image.width || undefined} height={image.height || undefined} sizes="(max-width: 720px) 100vw, 860px" loading="lazy" decoding="async"/> : <div className="story-photo-loading" role="status">Loading photo…</div>;
+  return src ? <img src={src} alt={image.altText || ''} width={image.width || 640} height={image.height || 480} sizes="(max-width: 720px) 100vw, 860px" loading="lazy" decoding="async"/> : <div className="story-photo-loading" role="status">Loading photo…</div>;
 }
 
 export default function StoryDetailPage({ story, navigate, backPage = 'discover' }) {

@@ -1,0 +1,485 @@
+{
+  "screens": [
+    {
+      "screen": "landing",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Story Bridge — Your story, in your own voice",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "landing",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Story Bridge — Your story, in your own voice",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "landing",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Story Bridge — Your story, in your own voice",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "discover",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Discover — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "discover",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Discover — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "discover",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Discover — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "cultures-directory",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Cultures — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "cultures-directory",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Cultures — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "cultures-directory",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Cultures — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "culture-detail",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Cape Town — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "culture-detail",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Cape Town — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "culture-detail",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Cape Town — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "search",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Search — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "search",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Search — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "search",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Search — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "objects",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Objects — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "objects",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Objects — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "objects",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Objects — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "object-record-detail",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Luluwa mask — Museu Afro Brasil — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "object-record-detail",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Luluwa mask — Museu Afro Brasil — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "object-record-detail",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Luluwa mask — Museu Afro Brasil — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "object-share-context",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "object-share-context",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "object-share-context",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "story-detail",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "story-detail",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "At the market, two neighbours who had stopped speaking shared a bench during the rain — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "story-detail",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "At the market, two neighbours who had stopped speaking shared a bench during the rain — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-1-language",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-1-language",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-1-language",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-2-tell",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-2-tell",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-2-tell",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-3-translate",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-3-translate",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-3-translate",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-4-review",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-4-review",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "share-4-review",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Share a story — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "review-before-publish",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Review — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "review-before-publish",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Review — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "review-before-publish",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Review — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "my-stories",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "My stories — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "my-stories",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "My stories — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "my-stories",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "My stories — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "sign-in",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Sign in — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "sign-in",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Sign in — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "sign-in",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Sign in — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "profile",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Profile — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "profile",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Profile — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "profile",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Profile — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "workspace",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "My workspace — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "workspace",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "My workspace — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "workspace",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "My workspace — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "my-stories-account",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "My stories — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "my-stories-account",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "My stories — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "my-stories-account",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "My stories — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "admin-review",
+      "width": 375,
+      "documentWidth": 375,
+      "title": "Admin — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "admin-review",
+      "width": 768,
+      "documentWidth": 768,
+      "title": "Admin — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    },
+    {
+      "screen": "admin-review",
+      "width": 1280,
+      "documentWidth": 1280,
+      "title": "Admin — Story Bridge",
+      "undersized": [],
+      "clipped": []
+    }
+  ],
+  "consoleIssues": []
+}

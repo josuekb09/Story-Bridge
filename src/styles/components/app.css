@@ -117,12 +117,12 @@
 .app-icon{display:block;width:22px;height:22px;flex:0 0 22px}
 .app-header-tools{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:0 0 auto}
 .app-header-icon-link{width:44px;height:44px;padding:10px}
-.app-language-picker select{min-height:40px;max-width:138px;padding:7px 25px 7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font:500 .85rem Inter,Arial,sans-serif}
+.app-language-picker select{min-height:44px;max-width:138px;padding:7px 25px 7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font:500 .85rem Inter,Arial,sans-serif}
 .app-avatar-menu{position:relative;display:flex;align-items:center}
 .app-avatar-button{display:grid;place-items:center;width:44px;height:44px;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:50%;background:var(--sand);color:var(--forest);font-weight:700}
 .app-avatar-button img{width:100%;height:100%;object-fit:cover}
 .app-avatar-dropdown{position:absolute;top:calc(100% + 8px);right:0;z-index:40;display:grid;gap:3px;min-width:190px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--paper);box-shadow:0 10px 28px rgba(25,35,28,.16)}
-.app-avatar-dropdown>button{min-height:42px;padding:9px 12px;border:0;border-radius:7px;background:transparent;color:var(--ink);text-align:left;font:500 .95rem Inter,Arial,sans-serif}
+.app-avatar-dropdown>button{min-height:44px;padding:9px 12px;border:0;border-radius:7px;background:transparent;color:var(--ink);text-align:left;font:500 .95rem Inter,Arial,sans-serif}
 .app-avatar-dropdown>button:hover,.app-avatar-dropdown>button:focus-visible{background:var(--sand)}
 .app-avatar-mobile-language{display:none;padding:5px 10px 8px;border-top:1px solid var(--line)}
 .app-mobile-nav{display:none}
@@ -136,7 +136,7 @@
 @media(max-width:899px){
   .app>header.app-header{gap:10px}
   .app-header-primary{gap:4px;flex:0 0 auto}
-  .app-header-primary a{gap:0;width:42px;padding:8px}
+  .app-header-primary a{gap:0;width:44px;padding:8px}
   .app-header-primary a span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .app-header-tools>.app-language-picker{display:none}
   .app-avatar-mobile-language{display:block}
@@ -152,7 +152,7 @@
   .app-header-brand .bridge-mark{width:36px;height:28px}
   .app-header-primary,.app-header-tools>.app-language-picker{display:none}
   .app-header-tools{gap:3px}
-  .app-header-icon-link,.app-avatar-button{width:42px;height:42px;min-height:42px}
+  .app-header-icon-link,.app-avatar-button{width:44px;height:44px;min-height:44px}
   .app-avatar-dropdown{top:calc(100% + 6px);min-width:205px}
   .app-avatar-mobile-language{display:block}
   .app-avatar-mobile-language .app-language-picker select{width:100%;max-width:none}

@@ -2,6 +2,9 @@
 html,body,#root{margin:0;min-width:320px;min-height:100%;background:var(--paper)}
 body{font-family:Inter,Arial,sans-serif;color:var(--ink)}
 button,input,textarea,select{font:inherit}
+button{min-height:44px}
+input:not([type=checkbox]):not([type=radio]),select{min-height:44px}
+summary{display:flex;align-items:center;min-height:44px;cursor:pointer}
 button:disabled{cursor:not-allowed;opacity:.65}
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,audio:focus-visible{outline:3px solid var(--clay);outline-offset:3px}
 h1,h2,h3,.story-text,.wordmark>span:last-child{font-family:Fraunces,Georgia,serif}

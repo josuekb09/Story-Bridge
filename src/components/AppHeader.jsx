@@ -47,7 +47,7 @@ export function AppHeader({ page, signedIn, accountEnabled, adminEnabled = false
 
   const activePage = page === 'listen' || page === 'detail' ? 'discover' : page;
   const avatar = profileAvatar
-    ? <img src={profileAvatar} alt="" />
+    ? <img src={profileAvatar} alt="" width="44" height="44" />
     : signedIn ? <span aria-hidden="true">{initials(profileName)}</span> : <AppIcon name="profile"/>;
 
   return <header className="app-header" aria-label="Story Bridge">

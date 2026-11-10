@@ -30,7 +30,7 @@ export default function ProfilePage({ navigate, profileState, profileError, load
       <div className="profile-cover" aria-hidden="true"/>
       <div className="profile-body">
         <div className="profile-avatar-wrap">
-          {profileAvatar ? <img className="profile-avatar-lg" src={profileAvatar} alt=""/> : <span className="profile-avatar-lg profile-initials" aria-hidden="true">{initials(profileName)}</span>}
+          {profileAvatar ? <img className="profile-avatar-lg" src={profileAvatar} alt="" width="128" height="128"/> : <span className="profile-avatar-lg profile-initials" aria-hidden="true">{initials(profileName)}</span>}
           <button type="button" className="avatar-edit" disabled={avatarBusy} onClick={() => fileInput.current?.click()} aria-label="Change profile photo">{avatarBusy ? '…' : '📷'}</button>
           <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={event => { changeAvatar?.(event.target.files?.[0]); event.target.value = ''; }}/>
         </div>

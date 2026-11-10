@@ -65,7 +65,7 @@ function Hero({ t, onListen, onShare, reduced }) {
   return <section className="home-hero" aria-labelledby="home-hero-title" onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)} onFocus={() => setHovering(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHovering(false); }}>
     <div className="home-hero-media" aria-hidden="true">
       {slides.length === 0 && <div className="home-hero-fallback"/>}
-      {slides.map((slide, slideIndex) => <img key={slide.item.id} className={slideIndex === index ? 'is-active' : ''} src={slide.image.src} srcSet={slide.image.srcset || undefined} sizes="100vw" width={slide.image.width} height={slide.image.height} alt="" loading={slideIndex === 0 ? 'eager' : 'lazy'} fetchpriority={slideIndex === 0 ? 'high' : undefined} decoding="async"/>)}
+      {slides.map((slide, slideIndex) => <img key={slide.item.id} className={slideIndex === index ? 'is-active' : ''} src={slide.image.src} srcSet={slide.image.srcset || undefined} sizes="100vw" width={slide.image.width} height={slide.image.height} alt="" loading={slideIndex === 0 ? 'eager' : 'lazy'} fetchPriority={slideIndex === 0 ? 'high' : undefined} decoding="async"/>)}
     </div>
     <div className="home-hero-shade" aria-hidden="true"/>
     <div className="home-hero-inner">
@@ -216,7 +216,7 @@ export default function Landing({ onListen, onShare, onObjects, onCulture, onSig
           <div><p className="home-eyebrow">{t('collections.eyebrow')}</p><h2 id="home-collection-title">{t('collections.title')}</h2><p className="home-lede">{t('collections.lede')}</p></div>
           <button type="button" className="home-btn home-btn-outline" onClick={onObjects}>{t('collections.browse')}</button>
         </div>
-        <ul className="home-objects">{OBJECT_RECORDS.map(record => <li key={record.id}><button type="button" onClick={onObjects}><img src={record.image} alt="" loading="lazy" decoding="async"/><span>{record.title}</span></button></li>)}</ul>
+        <ul className="home-objects">{OBJECT_RECORDS.map(record => <li key={record.id}><button type="button" onClick={onObjects}><img src={record.image} alt={record.imageCaption} width={record.imageWidth} height={record.imageHeight} loading="lazy" decoding="async"/><span>{record.title}</span></button></li>)}</ul>
       </section>
 
       <section className="home-section home-languages home-reveal" aria-labelledby="home-languages-title">

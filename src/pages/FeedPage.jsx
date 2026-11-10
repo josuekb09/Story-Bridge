@@ -58,8 +58,8 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
     {long && <button type="button" className="post-more" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>{expanded ? 'See less' : 'See more'}</button>}
     {!text && !story.audio && !images.length && <p className="post-text muted">No written text.</p>}
 
-    {images.length > 0 && <div className={`post-images count-${Math.min(images.length, 4)}`}>
-      {images.slice(0, 4).map(image => <figure key={image.id}><img src={image.url} alt={image.altText} loading="lazy" decoding="async" width={image.width || undefined} height={image.height || undefined}/></figure>)}
+      {images.length > 0 && <div className={`post-images count-${Math.min(images.length, 4)}`}>
+      {images.slice(0, 4).map(image => <figure key={image.id}><img src={image.url} alt={image.altText || ''} loading="lazy" decoding="async" width={image.width || 640} height={image.height || 480}/></figure>)}
     </div>}
 
     {story.audio && <div className="post-audio"><AudioPlayer story={story}/></div>}

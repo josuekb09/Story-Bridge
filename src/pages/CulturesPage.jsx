@@ -62,7 +62,7 @@ function CultureDetail({ item, stories, showStory, navigate, back }) {
   return <article className="culture-detail" aria-labelledby="culture-title">
     <button type="button" className="back" onClick={back}>← All cultures</button>
     <header className={`culture-hero${image ? '' : ' is-empty'}`}>
-      {image && <img src={image.src} srcSet={image.srcset || undefined} sizes="100vw" width={image.width} height={image.height} alt={`${item.subject}, ${item.country}`} decoding="async" fetchpriority="high"/>}
+      {image && <img src={image.src} srcSet={image.srcset || undefined} sizes="100vw" width={image.width} height={image.height} alt={`${item.subject}, ${item.country}`} decoding="async" fetchPriority="high"/>}
       <div className="culture-hero-text">
         <p className="culture-meta">{item.country} · {item.region}</p>
         <h1 id="culture-title">{item.culture}</h1>
