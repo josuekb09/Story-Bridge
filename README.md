@@ -17,6 +17,7 @@ Built for the Andela × OpenAI capstone *Telling African Stories*, and to be pre
 - **Profiles**: photo, name, country, languages and counts, with an *Edit profile* form. Fields stay private unless shown on a story.
 - **Navigate consistently**: the same app header provides Discover, Cultures, Collections, Share, search, language choice and the account menu. The mobile bar links to My stories with a bookmark icon. The header never displays an email address; the address is inside Profile → Account.
 - **Explore cultures and search**: browse showcase cultures by region, open a culture page with credited photos and matching public stories, or search public posts and cultures together. Culture entries contain no invented background facts.
+- **Review first posts**: an admin account with access to the pending-post API can publish a first public post or keep it private. The review queue is hidden from other accounts.
 - **Objects**: four museum reference records for Luluwa (Lulua) objects from DR Congo, each with *What we know*, *What we do not know*, sources, and community questions. Museum records are kept separate from community stories.
 - **Read the site in 20 languages**: English and French written by hand; Kiswahili, Hausa, Yorùbá, Igbo, Amharic, Afaan Oromoo, Somali, isiZulu, isiXhosa, Afrikaans, chiShona, Lingála, Ikinyarwanda, Malagasy, Wolof, Portuguese, Arabic (right-to-left) and Spanish as machine drafts, clearly labelled until a speaker checks them. Stories can be written in 36 languages (31 African), or any other language typed by hand.
 - **Sign in** with Google or a 6-digit email code. New accounts get a short welcome step.
@@ -40,6 +41,7 @@ The app shell and static interface files can be installed as a PWA. Its service 
 | Interface translation | Landing page in 20 languages; other screens are English for now |
 | Phase L0 (live) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are deployed. Render serves the pushed build; the live header and static resource types were checked. Signed-in email privacy is covered by the browser suite with synthetic authentication |
 | Culture directory and search | Live in the app build; public showcase data only, with no social schema or API changes |
+| First-post admin review | Available only to accounts authorized by the pending-post endpoint; publish and keep-private actions are confirmed |
 | Phase L1 | Not started for submission; no social migration is included or applied |
 
 This is a demonstration build, not a production service for sensitive stories or recordings.
@@ -64,7 +66,7 @@ scripts/                  image fetching, tests, secret check
 docs/                     collaboration board, phase plan, object documentation, credits
 ```
 
-Pages have real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`, `/objects`, `/objects/:id`, `/cultures`, `/cultures/:id` and `/search`. Direct links and reloads work, signed in or not; private pages show the sign-in screen when no one is signed in. The retired `/notifications` path redirects to My stories because notifications are not implemented.
+Pages have real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`, `/objects`, `/objects/:id`, `/cultures`, `/cultures/:id`, `/search` and `/admin`. Direct links and reloads work, signed in or not; private pages show the sign-in screen when no one is signed in. Admin review appears only after the signed-in user's pending-post request returns 200. The retired `/notifications` path redirects to My stories because notifications are not implemented.
 
 ## Run locally
 

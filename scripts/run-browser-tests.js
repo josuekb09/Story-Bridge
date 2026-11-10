@@ -1192,6 +1192,14 @@ try {
       }
       return route.fulfill({ status:404, contentType:'application/json', headers:cors, body:JSON.stringify({ message:'Unexpected provider request in local test.' }) });
     });
+    const adminFixtures = [
+      { id:'admin-review-own-post', title:'Synthetic own post for review', originalLanguage:'Synthetic language', region:'Southern Africa', text:'A synthetic excerpt with safe text for the admin review test.', createdAt:'2026-11-10T12:00:00.000Z', images:[{id:'admin-photo',url:'/api/posts/admin-review-own-post/media/photo.webp',altText:'Synthetic review fixture photo',credit:'Synthetic test credit',licence:'CC0',width:160,height:120}] },
+      { id:'admin-review-private-post', title:'Synthetic post to keep private', originalLanguage:'Synthetic language', text:'Second review fixture.', createdAt:'2026-11-10T12:05:00.000Z', images:[] },
+    ];
+    await livePage.route('**/api/admin/posts/pending',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(adminFixtures)}));
+    await livePage.route('**/api/admin/posts/*/approve',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:'shared'})}));
+    await livePage.route('**/api/admin/posts/*/keep-private',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({status:'draft'})}));
+    await livePage.route('**/api/posts/admin-review-own-post/media/photo.webp',route=>route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64')}));
     await livePage.goto(webOrigin,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
     await clickHeaderMenu(livePage,'Sign in');
@@ -1245,6 +1253,32 @@ try {
       await livePage.getByRole('link').filter({hasText:'Zulu'}).first().waitFor();
       ensure(new URL(livePage.url()).pathname === '/search' && new URL(livePage.url()).searchParams.get('q') === 'Zulu', 'Search query was not reflected in the URL.');
     });
+    await record('Admin review requires a successful queue response and confirms both actions', async () => {
+      await clickHeaderMenu(livePage,'Admin');
+      await livePage.getByRole('heading',{name:'Admin review'}).waitFor();
+      const cards=livePage.locator('.admin-post');
+      ensure(await cards.count()===2,'The pending admin queue did not render both fixture posts.');
+      const ownPost=cards.filter({hasText:'Synthetic own post for review'});
+      await ownPost.getByText('A synthetic excerpt with safe text for the admin review test.').waitFor();
+      await ownPost.locator('time[datetime="2026-11-10T12:00:00.000Z"]').waitFor();
+      await ownPost.getByRole('img',{name:'Synthetic review fixture photo'}).waitFor();
+      await ownPost.getByText('Synthetic test credit').waitFor();
+      await ownPost.getByRole('button',{name:'Approve and publish'}).click();
+      const approveConfirmation=ownPost.getByRole('alertdialog',{name:'Confirm moderation action'});
+      await approveConfirmation.getByRole('button',{name:'Confirm publish'}).click();
+      await livePage.getByRole('status').getByText('Published').waitFor();
+      ensure(await cards.count()===1,'Approved post did not leave the pending queue.');
+      const privatePost=cards.filter({hasText:'Synthetic post to keep private'});
+      await privatePost.getByRole('button',{name:'Keep private'}).click();
+      const privateConfirmation=privatePost.getByRole('alertdialog',{name:'Confirm moderation action'});
+      await privateConfirmation.getByRole('button',{name:'Confirm keep private'}).click();
+      await livePage.getByRole('status').getByText('Kept private').waitFor();
+      ensure(await cards.count()===0 && await livePage.getByText('No posts are waiting for review.').isVisible(),'Kept-private post did not leave the queue.');
+    });
+    await livePage.unroute('**/api/admin/posts/pending');
+    await livePage.unroute('**/api/admin/posts/*/approve');
+    await livePage.unroute('**/api/admin/posts/*/keep-private');
+    await livePage.unroute('**/api/posts/admin-review-own-post/media/photo.webp');
     await livePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Discover'}).waitFor();
     await clickHeaderMenu(livePage,'My workspace');
@@ -1379,7 +1413,12 @@ try {
     await livePage.unroute(storyPattern);
     ensure(publishRequests===1,`Double click submitted ${publishRequests} publish requests.`);
     pass('Mutation G: delayed publish double click submits once');
-    const adminApprovalResponse=livePage.waitForResponse(response=>response.url()===`${webOrigin}/api/admin/posts/${accountStoryId}/approve`&&response.request().method()==='POST');await livePage.getByRole('button',{name:'Approve first post',exact:true}).click();const adminApprovalResult=await adminApprovalResponse;ensure(adminApprovalResult.status()===200,`Admin approval returned HTTP ${adminApprovalResult.status()}.`);
+    await clickHeaderMenu(livePage,'Admin');await livePage.getByRole('heading',{name:'Admin review'}).waitFor();
+    const ownPendingPost=livePage.locator('.admin-post').filter({hasText:'Synthetic signed-in post'});await ownPendingPost.waitFor();
+    const adminApprovalResponse=livePage.waitForResponse(response=>response.url()===`${webOrigin}/api/admin/posts/${accountStoryId}/approve`&&response.request().method()==='POST');
+    await ownPendingPost.getByRole('button',{name:'Approve and publish'}).click();await ownPendingPost.getByRole('alertdialog').getByRole('button',{name:'Confirm publish'}).click();
+    const adminApprovalResult=await adminApprovalResponse;ensure(adminApprovalResult.status()===200,`Admin approval returned HTTP ${adminApprovalResult.status()}.`);
+    await livePage.getByRole('status').getByText('Published').waitFor();
     await livePage.waitForFunction(async id=>{const r=await fetch('/api/stories');const rows=await r.json();return rows.some(story=>story.id===id)},accountStoryId);
     await livePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Discover'}).waitFor();
@@ -1502,7 +1541,12 @@ try {
     await livePage.route(storyPattern,async route=>{if(route.request().method()==='GET'){detailReached();await detailHeld;return route.continue();}return route.continue();});
     await withdrawnCard.getByRole('button',{name:'Open'}).click(); await detailRequested;
     await clickHeaderMenu(livePage,'Sign out'); await livePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
-    await loginAs('second@example.test'); releaseDetail(); await delay(350);
+    const nonAdminQueue=livePage.waitForResponse(response=>response.url().endsWith('/api/admin/posts/pending')&&response.status()===403);
+    await loginAs('second@example.test'); await nonAdminQueue; releaseDetail(); await delay(350);
+    await livePage.locator('.app-avatar-button').click();
+    await livePage.waitForFunction(()=>{const menu=document.querySelector('.app-avatar-dropdown');return !!menu&&!Array.from(menu.querySelectorAll('button')).some(button=>button.textContent.trim()==='Admin');});
+    ensure(await livePage.locator('.app-avatar-dropdown').getByRole('button',{name:'Admin',exact:true}).count()===0,'Admin menu item appeared for a signed-in account whose pending endpoint returned 403.');
+    await livePage.keyboard.press('Escape');
     ensure(!(await livePage.locator('body').innerText()).includes('Edited by the signed-in browser flow.'),'A delayed A detail response appeared after B signed in.');
     pass('Identity race C: delayed private A detail cannot render for B');
     await livePage.unroute(storyPattern);

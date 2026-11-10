@@ -25,7 +25,7 @@ function LanguagePicker({ lang, setLanguage, compact = false }) {
   </label>;
 }
 
-export function AppHeader({ page, signedIn, accountEnabled, profileName, profileAvatar, onNavigate, onSignIn, onSignOut, onSettings }) {
+export function AppHeader({ page, signedIn, accountEnabled, adminEnabled = false, profileName, profileAvatar, onNavigate, onSignIn, onSignOut, onSettings }) {
   const { lang, setLanguage } = useUiLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -63,6 +63,7 @@ export function AppHeader({ page, signedIn, accountEnabled, profileName, profile
         {menuOpen && <div className="app-avatar-dropdown">
           {signedIn && <button type="button" onClick={event => go(event, 'profile')}>Profile</button>}
           {(signedIn || !accountEnabled) && <button type="button" onClick={event => go(event, 'mine')}>My stories</button>}
+          {signedIn && adminEnabled && <button type="button" onClick={event => go(event, 'admin')}>Admin</button>}
           {signedIn && <>
             <button type="button" onClick={() => { setMenuOpen(false); onNavigate('workspace'); }}>My workspace</button>
             <button type="button" onClick={() => { setMenuOpen(false); onSettings(); }}>Settings</button>

@@ -108,7 +108,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   });
   app.get('/api/admin/posts/pending', session, async (req,res)=>{
     if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
-    try{res.json((await store.listPending()).map(row=>clean(row,true)))}catch{res.status(503).json({error:'Pending posts are unavailable.'})}
+    try{res.json(await Promise.all((await store.listPending()).map(row=>cleanPost(row,true,store))))}catch{res.status(503).json({error:'Pending posts are unavailable.'})}
   });
   app.post('/api/admin/posts/:id/approve', session, rateLimit, async (req,res)=>{
     if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
@@ -131,6 +131,22 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       const errorCode=typeof rawCode==='string'&&/^[A-Za-z0-9_-]{1,32}$/.test(rawCode)?rawCode:'unknown';
       console.error(JSON.stringify({event:'admin_post_approval_failed',stage,errorCode}));
       return res.status(503).json({error:'Post could not be approved.'});
+    }
+  });
+  app.post('/api/admin/posts/:id/keep-private', session, rateLimit, async (req,res)=>{
+    if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
+    try {
+      const row=await store.get(req.params.id);
+      if(!row||row.moderation_status!=='pending_review')return res.sendStatus(404);
+      const next={...row,status:'draft',visibility:'private',requested_visibility:'private',moderation_status:'approved'};
+      next.version_log=appendStoryVersion(next,'Admin kept first post private');
+      const changes={status:next.status,visibility:next.visibility,requested_visibility:next.requested_visibility,moderation_status:next.moderation_status,version_log:next.version_log};
+      const saved=typeof store.approvePending==='function'
+        ? await store.approvePending(row.id,changes)
+        : await store.update(row.id,row.owner_user_id,changes);
+      return saved?res.json(clean(saved,true)):res.sendStatus(409);
+    } catch {
+      return res.status(503).json({error:'Post could not be kept private.'});
     }
   });
   app.get('/api/stories', optionalSession, async (req, res) => { try {
@@ -169,7 +185,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       res.status(201).json(await cleanPost(row,true,store));
     } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); }
   });
-  app.get('/api/posts/:id/media/:key',optionalSession,async(req,res)=>{try{const row=await store.get(req.params.id);if(!row)return res.sendStatus(404);const isOwner=!!req.account&&row.owner_user_id===req.account.id;if(!isOwner&&!(row.status==='shared'&&row.visibility==='public'&&row.moderation_status!=='pending_review'))return res.sendStatus(404);const access=await objectAccessList();if(!req.account&&row.access==='Community only')return res.sendStatus(404);if(!req.account&&row.object_id&&access.some(item=>item.id===row.object_id&&item.access==='Community only'))return res.sendStatus(404);const item=(await store.listPostMedia(row.id)).find(media=>media.storage_key===req.params.key);if(!item)return res.sendStatus(404);const image=await store.getPostImage(item.storage_key);res.set('X-Content-Type-Options','nosniff').set('Cache-Control','public, max-age=300').type(image.mime).send(image.buffer)}catch{return res.status(503).json({error:'Post media is unavailable.'})}});
+  app.get('/api/posts/:id/media/:key',optionalSession,async(req,res)=>{try{const row=await store.get(req.params.id);if(!row)return res.sendStatus(404);const isOwner=!!req.account&&row.owner_user_id===req.account.id;const isAdmin=!!req.account&&!!objectAdminId&&req.account.id===objectAdminId;const isPublic=row.status==='shared'&&row.visibility==='public'&&row.moderation_status!=='pending_review';if(!isOwner&&!isAdmin&&!isPublic)return res.sendStatus(404);const access=await objectAccessList();if(!req.account&&row.access==='Community only')return res.sendStatus(404);if(!req.account&&row.object_id&&access.some(item=>item.id===row.object_id&&item.access==='Community only'))return res.sendStatus(404);const item=(await store.listPostMedia(row.id)).find(media=>media.storage_key===req.params.key);if(!item)return res.sendStatus(404);const image=await store.getPostImage(item.storage_key);res.set('X-Content-Type-Options','nosniff').set('Cache-Control',isPublic?'public, max-age=300':'private, no-store').type(image.mime).send(image.buffer)}catch{return res.status(503).json({error:'Post media is unavailable.'})}});
   app.get('/api/stories/:id', optionalSession, ownerOnly, async (req, res) => {
     if(req.story.access==='Community only'&&!req.account)return res.sendStatus(404);
     if (req.story.object_id && !req.account) {

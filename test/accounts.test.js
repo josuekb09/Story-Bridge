@@ -215,6 +215,27 @@ test('admin post approval survives repeated and concurrent requests using file s
   assert.equal(approvals.length,32);
 });
 
+test('admin queue includes private post photos and Keep private clears review without publishing',async t=>{
+  const store=fixtureStore();
+  const row={...storyRow('admin-own-pending','admin-user'),title:'Synthetic own pending post',first_post:true,requested_visibility:'public',moderation_status:'pending_review',version_log:[{timestamp:new Date().toISOString(),language:'Synthetic',change:'Created',fingerprint:'c'.repeat(64)}]};
+  store.rows.set(row.id,row);
+  const key='synthetic-admin-image';
+  await store.putPostImage(key,Buffer.from('fixture image bytes'));
+  await store.createPostMedia([{id:'admin-image-id',post_id:row.id,kind:'image',storage_key:key,alt_text:'Synthetic test photo',credit:'Synthetic credit',licence:'CC0',width:3,height:2,sha256:'d'.repeat(64)}]);
+  const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});t.after(()=>new Promise(resolve=>server.close(resolve)));
+  assert.equal((await fetch(`${base}/api/admin/posts/pending`,{headers:auth('other-user')})).status,403);
+  const queueResponse=await fetch(`${base}/api/admin/posts/pending`,{headers:auth('admin-user')});assert.equal(queueResponse.status,200);
+  const queue=await queueResponse.json();assert.equal(queue.length,1);assert.equal(queue[0].images[0].altText,'Synthetic test photo');
+  const privateImage=await fetch(`${base}${queue[0].images[0].url}`);assert.equal(privateImage.status,404);
+  const adminImage=await fetch(`${base}${queue[0].images[0].url}`,{headers:auth('admin-user')});assert.equal(adminImage.status,200);assert.equal(adminImage.headers.get('cache-control'),'private, no-store');
+  assert.equal((await fetch(`${base}/api/admin/posts/${row.id}/keep-private`,{method:'POST',headers:auth('other-user')})).status,403);
+  const response=await fetch(`${base}/api/admin/posts/${row.id}/keep-private`,{method:'POST',headers:auth('admin-user')});assert.equal(response.status,200);
+  const kept=await response.json();assert.equal(kept.status,'draft');assert.equal(kept.visibility,'private');assert.equal(kept.moderationStatus,'approved');assert.equal(kept.versionLog.at(-1).change,'Admin kept first post private');
+  assert.equal((await fetch(`${base}/api/admin/posts/pending`,{headers:auth('admin-user')}).then(r=>r.json())).length,0);
+  const resubmitted=await fetch(`${base}/api/stories/${row.id}`,{method:'PUT',headers:{...auth('admin-user'),'content-type':'application/json'},body:JSON.stringify({visibility:'public',approve:true})});
+  assert.equal((await resubmitted.json()).moderationStatus,'pending_review','A first post must still request admin review before becoming public.');
+});
+
 test('admin approval logs stage and safe error code without story or identity data',async t=>{
   const store=fixtureStore();store.get=async()=>{throw new Error('storage-unavailable',{cause:Object.assign(new Error('private fixture detail'),{code:'EIO'})});};
   const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});t.after(()=>new Promise(resolve=>server.close(resolve)));

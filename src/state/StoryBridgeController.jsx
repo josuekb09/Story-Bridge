@@ -16,6 +16,7 @@ import WorkspacePage from '../pages/WorkspacePage.jsx';
 import MyStoriesPage from '../pages/MyStoriesPage.jsx';
 import CulturesPage from '../pages/CulturesPage.jsx';
 import SearchPage from '../pages/SearchPage.jsx';
+import AdminPostsPage from '../pages/AdminPostsPage.jsx';
 import { AppHeader, AppMobileNav } from '../components/AppHeader.jsx';
 import { api, ownerToken, setAccountSessionToken, authorizedObjectUrl } from '../lib/api.js';
 import { editAiTranslationDraft, translationApprovalCanContinue } from '../translation-draft.js';
@@ -31,6 +32,7 @@ export default function App() {
     if (path === '/notifications') { window.history.replaceState({ storyBridgePage: 'mine' }, '', '/mine'); return 'mine'; }
     if (path === '/cultures' || path.startsWith('/cultures/')) return 'cultures';
     if (path === '/search') return 'search';
+    if (path === '/admin') return 'admin';
     if (path === '/listen') return 'listen';
     if (path === '/mine') return 'mine';
     if (path === '/workspace') return 'workspace';
@@ -111,6 +113,9 @@ export default function App() {
   const [objectTypeFilter,setObjectTypeFilter]=useState('all');
   const [pendingPosts,setPendingPosts]=useState([]);
   const [pendingPostsError,setPendingPostsError]=useState('');
+  const [adminAccess,setAdminAccess]=useState('unavailable');
+  const [adminBusyId,setAdminBusyId]=useState('');
+  const [adminRetry,setAdminRetry]=useState(0);
   const [reviewBaseline, setReviewBaseline] = useState(null);
   const generation = useRef(0);
   const listRequest = useRef({ stories: 0, mine: 0 });
@@ -137,13 +142,24 @@ export default function App() {
     return()=>{live=false};
   }, [accountConfig, session?.user?.id, session?.access_token, page]);
 
-  useEffect(()=>{if(!objectSettings?.canManage||page!=='mine')return;let live=true;api('/api/admin/posts/pending').then(rows=>{if(live)setPendingPosts(rows)}).catch(error=>{if(live)setPendingPostsError(error.message)});return()=>{live=false}},[objectSettings?.canManage,page]);
+  useEffect(()=>{
+    let live=true;
+    if(!accountConfig?.account||!session?.access_token){setAdminAccess('unavailable');setPendingPosts([]);setPendingPostsError('');return()=>{live=false};}
+    setAdminAccess('checking');setPendingPostsError('');setAccountSessionToken(session.access_token);
+    api('/api/admin/posts/pending').then(rows=>{if(!Array.isArray(rows))throw new Error('Invalid admin response');if(live){setPendingPosts(rows);setAdminAccess('available');}}).catch(()=>{if(live){setPendingPosts([]);setAdminAccess('unavailable');}});
+    return()=>{live=false};
+  },[accountConfig?.account,session?.user?.id,session?.access_token,adminRetry,page==='admin']);
 
-  async function approvePendingPost(postId){try{await api(`/api/admin/posts/${postId}/approve`,{method:'POST'});setPendingPosts(items=>items.filter(item=>item.id!==postId));}catch(error){setPendingPostsError(error.message)}}
+  async function moderatePendingPost(postId,action){
+    setPendingPostsError('');setAdminBusyId(postId);
+    try{await api(`/api/admin/posts/${encodeURIComponent(postId)}/${action}`,{method:'POST'});setPendingPosts(items=>items.filter(item=>item.id!==postId));setToast(action==='approve'?'Published':'Kept private');}
+    catch(error){setPendingPostsError(error.message||'The post could not be updated.');}
+    finally{setAdminBusyId('');}
+  }
 
   function transitionTo(nextPage, targetStoryId = '') {
     if (pageRef.current !== nextPage) { pageRef.current = nextPage; viewEpoch.current += 1; }
-    const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', cultures:'/cultures', search:'/search', terms:'/terms', privacy:'/privacy' };
+    const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', cultures:'/cultures', search:'/search', admin:'/admin', terms:'/terms', privacy:'/privacy' };
     const storyId = targetStoryId || current?.id || storyIdFromPath();
     const route = nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
     // Keep the OAuth callback (?code=… / ?error=…) until Supabase has read it; it is removed after getSession().
@@ -241,7 +257,7 @@ export default function App() {
     if (identityChanged) {
       currentSession.current = sessionKey;
       identityEpoch.current += 1;
-      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share'].includes(pageRef.current) ? pageRef.current : 'discover';
+      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share','admin'].includes(pageRef.current) ? pageRef.current : 'discover';
       const keepPublicObjectRoute = initialPublicPage === 'objects' || initialPublicPage === 'group-record' || initialPublicPage.startsWith('object:');
       const needsWelcome=!!session&&!session.user?.user_metadata?.story_bridge_welcome_completed;
       clearPrivateState(accountConfig?.account && session && !keepPublicObjectRoute ? (needsWelcome?'welcome':initialPublicPage==='landing'?'discover':initialPublicPage) : initialPublicPage);
@@ -376,12 +392,12 @@ export default function App() {
     }
   }
   function openSettings() { setProfileAccountOpen(true); navigate('profile'); }
-  const appHeader = <AppHeader page={page} signedIn={!!session} accountEnabled={!!accountConfig?.account} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onNavigate={navigate} onSignIn={() => setShowSignIn(true)} onSignOut={signOut} onSettings={openSettings}/>;
+  const appHeader = <AppHeader page={page} signedIn={!!session} accountEnabled={!!accountConfig?.account} adminEnabled={adminAccess==='available'} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onNavigate={navigate} onSignIn={() => setShowSignIn(true)} onSignOut={signOut} onSettings={openSettings}/>;
   const mobileNav = <AppMobileNav page={page} onNavigate={navigate}/>;
   if (!accountConfig) return <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main>{mobileNav}</div>;
   if(page==='terms'||page==='privacy')return <div className="app">{appHeader}<LegalPage type={page} onBack={()=>transitionTo('landing')}/>{mobileNav}</div>;
   // Private pages need a session: show the sign-in screen instead of an empty "could not be loaded" list.
-  const privatePage = ['workspace', 'mine', 'review', 'profile', 'share'].includes(page);
+  const privatePage = ['workspace', 'mine', 'review', 'profile', 'share','admin'].includes(page);
   if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} authCode={authCode} setAuthCode={setAuthCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/>{mobileNav}</div>;
   if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/>{mobileNav}</div>;
    if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/>{mobileNav}</div>;
@@ -637,9 +653,12 @@ export default function App() {
       {page.startsWith('object:') && <ObjectRecordPage source={OBJECT_RECORDS.find(item => item.id === page.slice(7))} objectSettings={objectSettings} session={session} objectAccessSaving={objectAccessSaving} objectAccessError={objectAccessError} saveObjectAccess={saveObjectAccess} linkedStories={objectStories(page.slice(7))} showStory={showStory} addVoiceToObject={addVoiceToObject} navigate={navigate}/>}
       {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft}/>}
       {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
-      {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} objectSettings={objectSettings} pendingPosts={pendingPosts} pendingPostsError={pendingPostsError} approvePendingPost={approvePendingPost} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId}/>}
+      {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId}/>}
       {page === 'cultures' && <CulturesPage stories={visibleStories} showStory={showStory} navigate={navigate}/>}
       {page === 'search' && <SearchPage stories={visibleStories} showStory={showStory}/>}
+      {page === 'admin' && adminAccess==='available' && <AdminPostsPage posts={pendingPosts} error={pendingPostsError} busyId={adminBusyId} onAction={moderatePendingPost} onRetry={()=>setAdminRetry(value=>value+1)}/>}
+      {page === 'admin' && adminAccess==='checking' && <main><p className="panel" role="status">Checking admin access…</p></main>}
+      {page === 'admin' && adminAccess==='unavailable' && <main><section className="panel"><h1>Admin review is unavailable</h1><p>This account does not have access to pending posts.</p><button className="secondary" onClick={()=>navigate('discover')}>Back to Discover</button></section></main>}
       {toast && <div className="app-toast" role="status" aria-live="polite">✓ {toast}</div>}
       <AppMobileNav page={page} onNavigate={navigate}/>
       <footer>Stories stay under the storyteller’s control.</footer>
