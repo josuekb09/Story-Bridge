@@ -30,8 +30,7 @@ export default function App() {
     const path = window.location.pathname;
     if (path === '/') return window.history.state?.storyBridgePage || 'landing';
     if (path === '/discover') return 'discover';
-    if (path === '/notifications') { window.history.replaceState({ storyBridgePage: 'mine' }, '', '/mine'); return 'mine'; }
-    if (path === '/cultures' || path.startsWith('/cultures/')) return 'cultures';
+    if (path.startsWith('/cultures')) return 'cultures';
     if (path === '/search') return 'search';
     if (path === '/admin') return 'admin';
     if (path === '/listen') return 'listen';
@@ -619,6 +618,7 @@ export default function App() {
   const activeSessionKey = session?.user?.id || (accountConfig.account ? '' : 'legacy');
   const visibleMine = listOwner === activeSessionKey ? mine : [];
   const visibleStories = listOwner === activeSessionKey ? stories : [];
+  const publicStories = visibleStories;
   const category = story => story.status === 'withdrawn' ? 'withdrawn' : story.status === 'shared' && story.visibility === 'public' ? 'public' : story.status === 'shared' ? 'private' : 'draft';
   const sortedMine = [...visibleMine].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   const counts = { drafts: visibleMine.filter(item => category(item) === 'draft').length, public: visibleMine.filter(item => category(item) === 'public').length, private: visibleMine.filter(item => category(item) === 'private').length, withdrawn: visibleMine.filter(item => category(item) === 'withdrawn').length };
@@ -663,8 +663,8 @@ export default function App() {
       {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft}/>}
       {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
       {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId}/>}
-      {page === 'cultures' && <CulturesPage stories={visibleStories} showStory={showStory} navigate={navigate}/>}
-      {page === 'search' && <SearchPage stories={visibleStories} showStory={showStory}/>}
+      {page === 'cultures' && <CulturesPage stories={publicStories} showStory={showStory} navigate={navigate}/>}
+      {page === 'search' && <SearchPage stories={publicStories} showStory={showStory}/>}
       {page === 'admin' && adminAccess==='available' && <AdminPostsPage posts={pendingPosts} error={pendingPostsError} busyId={adminBusyId} onAction={moderatePendingPost} onRetry={()=>setAdminRetry(value=>value+1)}/>}
       {page === 'admin' && adminAccess==='checking' && <main><p className="panel" role="status">Checking admin access…</p></main>}
       {page === 'admin' && adminAccess==='unavailable' && <main><section className="panel"><h1>Admin review is unavailable</h1><p>This account does not have access to pending posts.</p><button className="secondary" onClick={()=>navigate('discover')}>Back to Discover</button></section></main>}
