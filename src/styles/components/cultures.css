@@ -54,3 +54,9 @@
 .search-cultures small{color:var(--ink-soft)}
 [dir="rtl"] .culture-stories button{text-align:right}
 @media (prefers-reduced-motion:reduce){.culture-card a{transition:none}}
+
+/* Read in my language (reader-side machine translation) */
+.read-in-language{margin-top:8px}
+.read-in-language-output{background:var(--sand);border-radius:12px;padding:10px 14px;margin-top:6px}
+.read-in-language-output p{margin:0 0 6px;white-space:pre-wrap}
+.read-in-language a{color:var(--forest);font-weight:600}

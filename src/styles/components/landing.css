@@ -72,7 +72,7 @@ textarea{resize:vertical;line-height:1.6}
 .section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .text-button,.text-link{background:transparent;border:0;color:var(--forest);text-decoration:underline;padding:8px}
 .success{margin:0;color:var(--forest)}
-.field-error{margin:0;color:var(--forest-deep)}
+.field-error{margin:0;color:var(--forest-deep);white-space:pre-line}
 .account-app footer{margin-top:45px}
 .mine-card{cursor:default}
 .upload input{display:block;margin-top:8px}

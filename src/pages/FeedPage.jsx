@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import AudioPlayer from '../components/AudioPlayer.jsx';
+import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
 import { translationOriginLabel } from '../lib/i18n.js';
 import { CULTURAL_GROUP_RECORD } from '../object-records.js';
 import { SHOWCASE } from '../data/showcase.js';
 import AFRICA_IMAGES from '../data/africa-images.json';
 import '../styles/components/social.css';
+import '../styles/components/cultures.css';
 
 const PAGE_SIZE = 10;
 
@@ -55,6 +57,7 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
     {story.title && <h2 id={`post-title-${story.id}`} className="post-title">{story.title}</h2>}
 
     {text && <p className={`post-text ${expanded || !long ? '' : 'is-clamped'}`}>{text}</p>}
+    {text && <ReadInMyLanguage text={story.text} sourceLanguage={story.originalLanguage}/>}
     {long && <button type="button" className="post-more" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>{expanded ? 'See less' : 'See more'}</button>}
     {!text && !story.audio && !images.length && <p className="post-text muted">No written text.</p>}
 
@@ -67,6 +70,7 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
     {showingTranslation && story.translation && <div className="post-translation">
       <p className="post-translation-label">{story.translationLanguage} · {translationOriginLabel(story.translationOrigin)}{!story.translationChecked && ' · not checked by a speaker'}</p>
       <p>{story.translation}</p>
+      <ReadInMyLanguage text={story.translation} sourceLanguage={story.translationLanguage}/>
     </div>}
 
     <footer className="post-actions">

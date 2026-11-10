@@ -21,7 +21,9 @@ export async function api(url, options = {}) {
   const response = await fetch(url, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw Error(data.error || `Request failed (${response.status})`);
+    const error = Error(data.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
 }

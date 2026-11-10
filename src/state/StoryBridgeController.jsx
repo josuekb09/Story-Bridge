@@ -164,7 +164,8 @@ export default function App() {
     const route = nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
     // Keep the OAuth callback (?code=… / ?error=…) until Supabase has read it; it is removed after getSession().
     const oauthCallback = /[?&](code|error|error_description)=/.test(window.location.search) ? window.location.search : '';
-    if (window.location.pathname !== route || window.history.state?.storyBridgePage !== nextPage) window.history[oauthCallback ? 'replaceState' : 'pushState']({ storyBridgePage: nextPage }, '', route + oauthCallback);
+    const routeSearch = window.location.pathname === route ? window.location.search : '';
+    if (window.location.pathname !== route || window.history.state?.storyBridgePage !== nextPage) window.history[oauthCallback ? 'replaceState' : 'pushState']({ storyBridgePage: nextPage }, '', route + (oauthCallback || routeSearch));
     setPage(nextPage);
     if(nextPage==='mine'&&session?.access_token)api('/api/objects').then(setObjectSettings).catch(()=>setObjectSettings({objects:[],canManage:false,error:true}));
   }
@@ -466,7 +467,7 @@ export default function App() {
       const draft = await api('/api/translation-draft', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: form.text, originalLanguage: form.originalLanguage, targetLanguage: form.translationLanguage }) });
       if (!scopeIsCurrent(scope) || requestId !== translationRequest.current || shareStep !== 3) return;
       setForm(previous => ({ ...previous, translation: draft.translation, translationOrigin: 'ai_draft', translationApproved: false }));
-    } catch (cause) { if (scopeIsCurrent(scope) && requestId === translationRequest.current) setTranslationError(cause.message); }
+    } catch (cause) { if (scopeIsCurrent(scope) && requestId === translationRequest.current) setTranslationError(cause.status === 502 ? `${cause.message}\nTip: readers can still read your story in their language with the 'Read in…' button.` : cause.message); }
     finally { if (requestId === translationRequest.current) { translationBusyRef.current = false; setTranslationBusy(false); } }
   }
 

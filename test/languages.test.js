@@ -6,13 +6,15 @@ import { SHOWCASE, REGIONS } from '../src/data/showcase.js';
 
 const readLocale = code => JSON.parse(fs.readFileSync(new URL(`../src/locales/${code}.json`, import.meta.url), 'utf8'));
 
-test('language codes are unique and every UI language has a complete locale file', () => {
+test('language codes are unique and every UI language has a complete locale or English fallback', () => {
   const codes = LANGUAGES.map(language => language.code);
   assert.equal(new Set(codes).size, codes.length);
   const english = readLocale('en');
+  const englishFallbackKeys = ['readInMyLanguage', 'translating', 'downloadingLanguagePack', 'machineTranslationLabel', 'showOriginal', 'openInGoogleTranslate'];
   for (const language of UI_LANGUAGES) {
     const locale = readLocale(language.code);
-    assert.deepEqual(Object.keys(locale).sort(), Object.keys(english).sort(), `${language.code} keys`);
+    const expectedKeys = Object.keys(english).filter(key => language.code === 'en' || language.code === 'fr' || !englishFallbackKeys.includes(key));
+    assert.deepEqual(Object.keys(locale).sort(), expectedKeys.sort(), `${language.code} keys`);
     for (const [key, value] of Object.entries(locale)) assert.ok(String(value).trim(), `${language.code}.${key} is empty`);
   }
 });

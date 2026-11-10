@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import AudioPlayer from '../components/AudioPlayer.jsx';
+import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
 import { authorizedObjectUrl } from '../lib/api.js';
 import { translationOriginLabel } from '../lib/i18n.js';
 import '../styles/components/story-detail.css';
+import '../styles/components/cultures.css';
 
 function storyTitle(story) {
   return story.title || (story.text || 'A voice carried across languages').split(/[.!?\n]/)[0].slice(0, 90);
@@ -115,7 +117,7 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
         </figure>)}
       </section>}
 
-      <section className="panel story-detail-original"><h2>Original story</h2><AudioPlayer story={story} privateAudio={privateAudio}/><p className="story-text">{story.text || 'No written text provided.'}</p></section>
+      <section className="panel story-detail-original"><h2>Original story</h2><AudioPlayer story={story} privateAudio={privateAudio}/><p className="story-text">{story.text || 'No written text provided.'}</p><ReadInMyLanguage text={story.text} sourceLanguage={story.originalLanguage}/></section>
 
       {(story.people || story.region || story.tags?.length > 0 || story.sources?.length > 0 || story.licence || story.access) && <section className="panel story-detail-documentation">
         <h2>Documentation</h2>

@@ -49,5 +49,11 @@
  "footer.credits": "Crédits des images",
  "footer.github": "Le projet sur GitHub",
  "machine.notice": "Cette langue a été traduite automatiquement et n'a pas encore été vérifiée par un locuteur.",
+ "readInMyLanguage": "Lire en {language}",
+ "translating": "Traduction…",
+ "downloadingLanguagePack": "Téléchargement du pack de langue {language} (une seule fois)…",
+ "machineTranslationLabel": "Traduction automatique, non relue par un locuteur",
+ "showOriginal": "Afficher l'original",
+ "openInGoogleTranslate": "Ouvrir dans Google Translate ({language})",
  "photo": "Photo"
 }

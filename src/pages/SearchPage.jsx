@@ -7,7 +7,10 @@ import { cultureHref } from './CulturesPage.jsx';
 import '../styles/components/cultures.css';
 
 const normalise = value => String(value || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-const readQuery = () => new URLSearchParams(window.location.search).get('q') || '';
+// The controller may rewrite the URL to a bare /search before this page mounts, so also
+// accept the query from the referrer-free history state and from the initial entry URL.
+const INITIAL_QUERY = (() => { try { return new URLSearchParams(window.location.search).get('q') || ''; } catch { return ''; } })();
+const readQuery = () => new URLSearchParams(window.location.search).get('q') || window.history.state?.searchQuery || INITIAL_QUERY;
 
 function matches(terms, fields) {
   const haystack = normalise(fields.filter(Boolean).join(' '));
@@ -20,7 +23,7 @@ export default function SearchPage({ stories = [], showStory = () => {} }) {
   useEffect(() => { input.current?.focus(); document.title = 'Search — Story Bridge'; }, []);
   useEffect(() => {
     const url = query.trim() ? `/search?q=${encodeURIComponent(query.trim())}` : '/search';
-    window.history.replaceState(window.history.state, '', url);
+    window.history.replaceState({ ...(window.history.state || {}), storyBridgePage: 'search', searchQuery: query.trim() }, '', url);
   }, [query]);
 
   const terms = normalise(query).split(/\s+/).filter(Boolean);
