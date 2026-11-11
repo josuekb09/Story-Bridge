@@ -24,6 +24,14 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
+# Root-level personal documents and local editor settings
+/*.pdf
+/*.pptx
+/*.docx
+/*.zip
+/.vscode/
+/codex-final-fixes-*.md
+
 # Browser and tool downloads/caches
 .cache/
 .playwright-browsers/

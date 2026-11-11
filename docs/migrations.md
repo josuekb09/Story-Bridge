@@ -7,3 +7,5 @@ Phase 1 posts: apply `supabase/migrations/202611080005_learning_posts.sql` after
 Environment variable names used for first-post moderation: `STORY_BRIDGE_OBJECT_ADMIN_ID`.
 
 The owner reports migrations `202611070001` through `202611080005` are already applied in production; do not replay them. The owner confirmed `supabase/migrations/202611080006_profile_avatar_webp.sql` is also applied. It adds `image/webp` to the existing private `story-bridge-audio` bucket's allowed MIME types and preserves the existing allowlist. No new migration was needed for email/Google sign-in or welcome profile fields because the profile columns and avatar storage support were already present.
+
+The owner confirmed `supabase/migrations/202611090007_social_layer.sql` was applied in production on 11 November 2026; do not replay it. It adds profile handles, story culture/country fields, and the social interaction, notification, and moderation tables with row-level security and indexes.

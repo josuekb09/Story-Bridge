@@ -38,21 +38,21 @@ The app shell and static interface files can be installed as a PWA. Its service 
 |---|---|
 | Public site, landing page, Discover, objects, profiles, posting, delete | Live and checked on the demo |
 | Email-code and Google sign-in | Live. Google OAuth is in *Testing* mode: only accounts added as test users can sign in with Google until the app is published |
-| Database migrations `202611070001` … `202611080006` | Applied to the production Supabase project |
+| Database migrations `202611070001` … `202611090007` | Applied to the production Supabase project |
 | AI translation | Key configured on the host; the live provider call is still being verified (errors are now logged as status/code/model only) |
 | Interface translation | Landing page in 20 languages; other screens are English for now |
 | Phase L0 (live) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are deployed. Render serves the pushed build; the live header and static resource types were checked. Signed-in email privacy is covered by the browser suite with synthetic authentication |
 | Culture directory and search | Live in the app build; public showcase data only, with no social schema or API changes |
 | First-post admin review | Available only to accounts authorized by the pending-post endpoint; publish and keep-private actions are confirmed |
 | Responsive and loading review | Lazy-loaded page routes; initial JavaScript is about 158 kB gzip. Twenty screens were captured at 375, 768 and 1280 px with no horizontal overflow, clipped text, undersized controls or browser console issues in the synthetic review. |
-| Phase L1 | Not started for submission; no social migration is included or applied |
+| Phase L1 social schema | Migration `202611090007_social_layer.sql` is applied in production |
 
 This is a demonstration build, not a production service for sensitive stories or recordings.
 
 ## Safety and moderation
 
 - New members' first posts wait for moderator review before becoming public. Signed-in members can report a post; reports are private to the moderator, who can dismiss a report or hide the post. A hidden post becomes private and withdrawn, and its moderator note appears in My stories.
-- Production reports are unavailable until the owner applies migration `202611090007_social_layer.sql`; no schema changes are included in this code update.
+- Production reports use the social schema from migration `202611090007_social_layer.sql` (applied by the owner on 11 November 2026).
 - Follow the [community guidelines](/guidelines): share only what you have permission to share, respect sacred or restricted knowledge, avoid personal information and harassment, and credit sources and images.
 - Members can delete their account from Profile after confirming by typing `DELETE`. This removes the profile, posts and stored files; it cannot remove copies already downloaded by others.
 - Data processors listed in the [Privacy notice](/privacy): Supabase provides the database, file storage and sign-in; Render hosts the app; Google is used for optional Google sign-in and Google Fonts; OpenAI receives story text only when an author requests an AI translation draft; Google receives text only if a reader clicks the external Google Translate link.
@@ -170,6 +170,17 @@ npm run check:dist-secrets    # narrow check for configured secrets in source an
 ```
 
 Browser tests use isolated data under `.test-data/` and save evidence under `test-evidence/`; they never touch `data/` or `uploads/`. Authentication in tests uses local keys and a mocked provider: automated tests do not prove that a real Supabase, email, Google or OpenAI configuration works.
+
+## Quality
+
+Lighthouse scores from the live site on 10 November 2026 (Performance / Accessibility / Best Practices / SEO, each out of 100):
+
+| Page | Desktop | Mobile |
+|---|---:|---:|
+| Home | 55 / 97 / 100 / 92 | 55 / 96 / 100 / 92 |
+| Discover | 55 / 96 / 100 / 100 | 54 / 96 / 100 / 92 |
+
+Full HTML and JSON reports, including Search and story detail, are in [`docs/quality/`](docs/quality/).
 
 ## Privacy, security and limits
 
