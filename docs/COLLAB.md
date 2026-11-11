@@ -111,7 +111,7 @@ the chosen files in `src/data/showcase.js`.
 
 - [x] **1. Reader translation:** implementation commit `bb74ebd` added reviewed EN/FR reader controls and corrected the post-translation toggle. The browser-first translation and CSP allowance were already in `b765034`. Live Playwright verified Nosihle's post in French, Kiswahili, Tshiluba, Lingála and Arabic (RTL), and Jenovic's French post in English; all had the machine-translation label and zero console errors. The live server fallback still returns HTTP 502. The Render CLI is not installed, so I could not inspect Render logs for the provider-specific reason; no dashboard was opened.
 - [x] **2. Home counters:** already computed on `LandingPage` from `GET /api/stories` (source commit `f5c54d0`); no code change or new endpoint was needed. Live home shows **8 stories / 2 languages** with no console errors. `GET /api/stats` still returns 503, but the page does not call it. `npm run build` and all 105 tests passed for this section.
-- [ ] **3. Mobile overflow and bottom navigation clearance.**
+- [x] **3. Mobile overflow and bottom navigation clearance:** implementation commit `ebf7986` clamps the region filter, feed cards and image grids and reserves bottom-navigation space on `main`. At 375×844, live Playwright measured the filter right edge at 355px and card at 357px; Discover, Nosihle’s story, Cultures and Share had no visible element past 375px. Read-in controls sat above the nav; zero console errors. Build and all 106 tests passed.
 - [ ] **4. Direct search load.**
 - [ ] **5. Unknown routes, Zulu summary copy and brand translation guard.**
 - [ ] **6. Demo video comparison and poster.**
