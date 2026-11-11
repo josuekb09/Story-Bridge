@@ -1,86 +1,85 @@
-// "Read in my language" — reader-side machine translation with no server and no API key.
+// "Read in my language": every reader can read any post in any of the 36 languages.
 // Owner: Claude (see docs/COLLAB.md).
-// 1. Chrome's built-in Translator API (on-device, free; the language pack downloads once).
-// 2. Fallback: open the text in Google Translate in a new tab.
-// Both are labelled as machine translation, never saved, and never replace the original.
-import { useEffect, useRef, useState } from 'react';
+// The text is translated by our server (/api/read-translate), so it works in every browser
+// and on phones, with no API key and no Chrome-only feature. Output is always labelled as
+// machine translation, never saved, and never replaces the original.
+import { useEffect, useState } from 'react';
 import { findLanguage, LANGUAGES } from '../lib/languages.js';
 import { useUiLanguage } from '../lib/i18n.js';
 
 const MAX_CHARS = 5000;
 
-// Map a story language label ("English", "Tshiluba", "fr") to a BCP-47 code when we know it.
+// Map a story language label ("English", "isiZulu", "Tshiluba", "fr") to a code when we know it.
 export function languageCode(label) {
   if (!label) return '';
   const value = String(label).trim().toLowerCase();
-  const hit = LANGUAGES.find(l => l.code === value || l.name.toLowerCase() === value || l.nativeName.toLowerCase() === value);
+  const hit = LANGUAGES.find(l => l.code === value || l.name.toLowerCase() === value || l.nativeName.toLowerCase() === value
+    || l.name.toLowerCase().replace(/^isi|^si|^chi|^se/, '') === value.replace(/^isi|^si|^chi|^se/, ''));
   return hit ? hit.code : '';
 }
 
-// The browser translator can stall forever (no response while a language pack is unavailable,
-// or in some embedded browsers). Never leave the reader waiting: give up after a few seconds.
-function withTimeout(promise, ms) {
-  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('translator-timeout')), ms))]);
-}
+const PREF_KEY = 'story-bridge-read-language';
+function savedTarget() { try { return localStorage.getItem(PREF_KEY) || ''; } catch { return ''; } }
+function saveTarget(code) { try { localStorage.setItem(PREF_KEY, code); } catch { /* private mode */ } }
 
-function hasBuiltInTranslator() {
-  return typeof window !== 'undefined' && 'Translator' in window && typeof window.Translator?.create === 'function';
+function defaultTarget(uiLang, source) {
+  const saved = findLanguage(savedTarget());
+  if (saved && saved.code !== source) return saved.code;
+  const ui = findLanguage(uiLang);
+  if (ui && ui.code !== source) return ui.code;
+  return source === 'en' ? 'fr' : 'en';
 }
 
 export default function ReadInMyLanguage({ text, sourceLanguage, className = '' }) {
   const { lang: uiLang, t } = useUiLanguage();
-  const target = findLanguage(uiLang) || findLanguage('en');
-  // t() returns the key itself when a locale has no entry; fall back to English copy then.
-  const tr = (key, fallback) => { const value = t(key); return !value || value === key ? fallback : value.replace('{language}', target.nativeName); };
+  const tr = (key, fallback) => { const value = t(key); return !value || value === key ? fallback : value; };
   const source = languageCode(sourceLanguage);
-  const [state, setState] = useState('idle'); // idle | checking | downloading | translating | done | unsupported | error
+  const [target, setTarget] = useState(() => defaultTarget(uiLang, source));
+  const [state, setState] = useState('idle'); // idle | translating | done | error
   const [output, setOutput] = useState('');
-  const translator = useRef(null);
-  const sameLanguage = source && source === target.code;
+  const lang = findLanguage(target) || findLanguage('en');
 
-  useEffect(() => { setState('idle'); setOutput(''); translator.current = null; }, [text, target.code]);
+  useEffect(() => { setState('idle'); setOutput(''); }, [text]);
+  useEffect(() => { setTarget(defaultTarget(uiLang, source)); }, [uiLang, source]);
 
-  if (!text || sameLanguage) return null;
+  if (!text || !String(text).trim()) return null;
 
-  const googleUrl = `https://translate.google.com/?sl=${encodeURIComponent(source || 'auto')}&tl=${encodeURIComponent(target.code)}&op=translate&text=${encodeURIComponent(String(text).slice(0, MAX_CHARS))}`;
+  const googleUrl = `https://translate.google.com/?sl=${encodeURIComponent(source || 'auto')}&tl=${encodeURIComponent(lang.code)}&op=translate&text=${encodeURIComponent(String(text).slice(0, MAX_CHARS))}`;
 
-  async function translate() {
-    // Unknown source language or no built-in translator: go straight to the fallback link.
-    if (!source || !hasBuiltInTranslator()) { setState('unsupported'); return; }
+  async function translate(code = target) {
+    setState('translating');
     try {
-      setState('checking');
-      const options = { sourceLanguage: source, targetLanguage: target.code };
-      const availability = await withTimeout(window.Translator.availability(options), 3000);
-      if (availability === 'unavailable') { setState('unsupported'); return; }
-      if (availability !== 'available') setState('downloading');
-      translator.current = translator.current || await withTimeout(window.Translator.create({ ...options, monitor(m) { m.addEventListener('downloadprogress', () => setState('downloading')); } }), 20000);
-      setState('translating');
-      const result = await withTimeout(translator.current.translate(String(text).slice(0, MAX_CHARS)), 15000);
-      if (!result || !String(result).trim()) throw new Error('empty-translation');
-      setOutput(result);
-      setState('done');
+      const res = await fetch('/api/read-translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: String(text).slice(0, MAX_CHARS), source, target: code }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.translation) throw new Error(data.error || `http-${res.status}`);
+      setOutput(data.translation); setState('done');
     } catch (error) {
-      console.warn('read-in-my-language', error?.message || error?.name || error);
-      setState('unsupported');
+      console.warn('read-in-my-language', error?.message || error);
+      setState('error');
     }
   }
 
-  const label = tr('readInMyLanguage', `Read in ${target.nativeName}`);
+  function choose(code) { setTarget(code); saveTarget(code); if (state === 'done' || state === 'error') translate(code); }
 
-  return <div className={`read-in-language ${className}`.trim()} lang={state === 'done' ? target.code : undefined} dir={state === 'done' ? target.dir : undefined}>
-    {state === 'idle' && <button type="button" className="text-button" onClick={translate}>🌐 {label}</button>}
-    {(state === 'checking' || state === 'translating' || state === 'downloading') && <p className="muted" role="status">
-      {state === 'downloading' ? tr('downloadingLanguagePack', `Downloading the ${target.nativeName} language pack (once)…`) : tr('translating', 'Translating…')}
-      {' · '}<a href={googleUrl} target="_blank" rel="noreferrer noopener">{tr('openInGoogleTranslate', `Open in Google Translate (${target.nativeName})`)}</a>
-    </p>}
-    {state === 'done' && <div className="read-in-language-output">
-      <p className="post-translation-label">{target.nativeName} · {tr('machineTranslationLabel', 'Machine translation, not checked by a speaker')}</p>
+  const picker = <select className="read-in-language-select" aria-label={tr('readLanguagePicker', 'Language to read in')} value={target} onChange={event => choose(event.target.value)} translate="no">
+    {LANGUAGES.filter(l => l.code !== source).map(l => <option key={l.code} value={l.code}>{l.nativeName}{l.nativeName !== l.name ? ` (${l.name})` : ''}</option>)}
+  </select>;
+
+  return <div className={`read-in-language ${className}`.trim()}>
+    <div className="read-in-language-bar">
+      <button type="button" className="read-in-language-button" onClick={() => state === 'done' ? (setState('idle'), setOutput('')) : translate()} disabled={state === 'translating'} aria-expanded={state === 'done'}>
+        🌐 {state === 'done' ? tr('showOriginal', 'Hide translation') : state === 'translating' ? tr('translating', 'Translating…') : tr('readIn', 'Read in')}
+      </button>
+      {picker}
+    </div>
+    {state === 'done' && <div className="read-in-language-output" lang={lang.code} dir={lang.dir}>
+      <p className="post-translation-label">{lang.nativeName} · {tr('machineTranslationLabel', 'Machine translation, not checked by a speaker')}</p>
       <p>{output}</p>
-      <button type="button" className="text-button" onClick={() => { setState('idle'); setOutput(''); }}>{tr('showOriginal', 'Show original')}</button>
     </div>}
-    {(state === 'unsupported' || state === 'error') && <p className="muted read-in-language-fallback">
-      <a className="text-button" href={googleUrl} target="_blank" rel="noreferrer noopener">🌐 {tr('openInGoogleTranslate', `Open in Google Translate (${target.nativeName})`)} ↗</a>
-      {' · '}<span>{tr('machineTranslationLabel', 'Machine translation, not checked by a speaker')}</span>
+    {state === 'error' && <p className="muted read-in-language-fallback" role="status">
+      {tr('translationUnavailable', 'Translation is not available right now.')}{' '}
+      <button type="button" className="text-button" onClick={() => translate()}>{tr('tryAgain', 'Try again')}</button>
+      {' · '}<a href={googleUrl} target="_blank" rel="noreferrer noopener">{tr('openInGoogleTranslate', 'Open in Google Translate')} ↗</a>
     </p>}
   </div>;
 }

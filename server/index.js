@@ -15,6 +15,7 @@ import { OBJECT_IDS, OBJECT_RECORDS } from '../src/object-records.js';
 import { validateTranslationEntry } from '../src/share-validation.js';
 import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
 import { sendSitemap } from './sitemap.js';
+import { mountReadTranslate } from './read-translate.js';
 
 export const MODE = parseAccountConfig();
 
@@ -164,6 +165,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '256kb' }));
+mountReadTranslate(app);
 
 if (MODE.authMode === 'account') {
   const accountStore = MODE.backend === 'supabase' ? undefined : createFileAccountStore(path.resolve(process.env.STORY_ACCOUNT_DATA_DIR || path.join(ROOT,'account-data')));

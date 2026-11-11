@@ -65,3 +65,11 @@
 .culture-story-thumb>.post-image-content{object-fit:cover}
 .culture-languages a{border:1px solid var(--line);background:#fff;color:var(--forest);padding:9px 16px;min-height:44px;display:inline-flex;align-items:center;border-radius:999px;font-weight:600;text-decoration:none}
 .culture-languages a:hover{border-color:var(--moss);background:var(--sand)}
+
+/* Read in my language (Claude) */
+.read-in-language-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
+.read-in-language-button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--forest);background:var(--forest);color:#fff;border-radius:999px;padding:6px 14px;font:inherit;font-size:.88rem;font-weight:600;cursor:pointer;min-height:36px}
+.read-in-language-button:hover{filter:brightness(1.1)}
+.read-in-language-button:disabled{opacity:.7;cursor:progress}
+.read-in-language-select{border:1px solid var(--line,#d9d2c3);background:var(--paper,#fff);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:.88rem;min-height:36px;max-width:100%}
+.read-in-language-fallback{margin-top:6px;font-size:.88rem}
