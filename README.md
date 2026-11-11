@@ -1,110 +1,165 @@
 # Story Bridge
 
-**A learning-first social network for African cultures.** People share stories, objects, language, music, traditions and places from their own culture — in their own language and voice — with sources and context underneath. Anyone can read them in their own language, while the original always stays one click away.
+<p align="center"><img src="public/assets/logo/story-bridge-lockup-horizontal.svg" alt="Story Bridge wordmark and bridge icon" width="340"></p>
 
-**Live demo:** https://story-bridge.onrender.com
+<p align="center"><strong>Share your culture. Learn from every other.</strong><br>
+A social network where people share stories from their cultures in their own language, with context, credit and control.</p>
 
-Built for the Andela × OpenAI capstone *Telling African Stories*, and to be presented at the Africa Tech Festival (Cape Town).
+<p align="center"><a href="https://story-bridge.onrender.com">Open the live app</a> · <a href="https://github.com/josuekb09/Story-Bridge">View the source</a></p>
 
----
+## Demo video
+
+<p align="center"><img src="docs/screenshots/01-home-hero.jpg" alt="Poster frame for the Story Bridge demo: the landing page over a Table Mountain photograph" width="900"></p>
+
+**YouTube placeholder:** the video link will be added after the owner selects a cut. A five-minute review video is ready locally; it is not published in this repository while that choice is pending.
+
+## The problem
+
+African cultural knowledge is held by families and communities, often passed on orally and in languages that receive little support online. Stories are too often written about people rather than by them, separated from their sources, or presented without the voices of the people they belong to. Museum records can describe an object's collection history while leaving its community context unknown.
+
+## What it does
+
+The project brings together three named challenge tracks and a fourth product strand for consent and safety:
+
+### Voices & Languages
+
+People can write, record audio or add photos about stories, objects, songs, traditions and places in one of 36 suggested languages, including 31 African languages. The original stays intact. Authors may add their own translation or request an AI draft when OpenAI is configured; machine-drafted interface text and translations are labelled for readers.
+
+### Truth, Authorship & Ownership
+
+Posts can include people, region, tags, sources, photo credits, licence and a trust label such as a community story or research note. A story record tracks versions. Authors choose an audience and can withdraw or delete their work.
+
+### Discovery & Audience
+
+Discover has language and audio filters. Search brings public stories and culture entries together; culture pages show related stories and country languages. Museum object records stay separate from community stories and identify what is known, what is uncertain and what sources support the record.
+
+### Consent & Community Safety
+
+Stories can be public, members-only or private. A new member's first post is reviewed before publication. Readers can report a post; moderators can hide it. Terms, Privacy and Community Guidelines explain the rules, and account deletion is available.
 
 ## Screenshots
 
-Captured from the live site on 11 November 2026. These public-view screenshots are a dated snapshot; posts and profile details may change.
+These public-view captures were made from the live site on 11 November 2026 at 1440×900 with device scale 2, and at 390×844 with device scale 2 for mobile. The public feed contained eight posts at capture time; all eight are shown below. Six consecutive panels make up the full Discover feed, and three panels make up the complete culture directory. Every screenshot is linked to its full-size JPEG. No private or members-only content was captured.
+
+### Home & languages
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/01-home.jpg" alt="Landing page with Table Mountain hero and the Story Bridge headline"><br><sub><b>Home</b> — the public landing page.</sub></td>
-    <td width="50%"><img src="docs/screenshots/02-discover.jpg" alt="Discover feed with language and audio filters, a story card, and culture and collection links"><br><sub><b>Discover</b> — browse stories with language and audio filters.</sub></td>
+    <td><a href="docs/screenshots/01-home-hero.jpg"><img src="docs/screenshots/01-home-hero.jpg" alt="Landing hero with Story Bridge's headline over a Table Mountain photograph" width="520"></a><br><sub>Home hero and live visual identity.</sub></td>
+    <td><a href="docs/screenshots/02-how-it-works.jpg"><img src="docs/screenshots/02-how-it-works.jpg" alt="How it works: tell a story, document it and share it" width="520"></a><br><sub>How it works: tell, document and share.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/03-feed-post.jpg" alt="Feed card with a credited photo and Read, Translation, and Share actions"><br><sub><b>Feed post</b> — a story card with photo and reading actions.</sub></td>
-    <td><img src="docs/screenshots/04-story.jpg" alt="Story detail page for Painted walls of the Southern Ndebele"><br><sub><b>Story detail</b> — original text, author, language, and story documentation.</sub></td>
+    <td><a href="docs/screenshots/03-home-cultures.jpg"><img src="docs/screenshots/03-home-cultures.jpg" alt="Home page culture cards including Cape Town, Ndebele, Zulu and Luluwa" width="520"></a><br><sub>Culture cards on the home page.</sub></td>
+    <td><a href="docs/screenshots/04-home-counters.jpg"><img src="docs/screenshots/04-home-counters.jpg" alt="Live Story Bridge counters and the latest public stories" width="520"></a><br><sub>Live counters and latest stories.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/05-cultures.jpg" alt="Culture directory with region filters and Cape Town, Ndebele, and Zulu cards"><br><sub><b>Cultures</b> — browse showcase cultures by region.</sub></td>
-    <td><img src="docs/screenshots/06-culture-ndebele.jpg" alt="Ndebele culture page with a credited photo and South African language chips"><br><sub><b>Culture detail</b> — sourced context, with a language search shortcut.</sub></td>
+    <td><a href="docs/screenshots/05-home-languages.jpg"><img src="docs/screenshots/05-home-languages.jpg" alt="Write in yours. Read in any. Language section on the home page" width="520"></a><br><sub>Languages for writing and reading.</sub></td>
+    <td><a href="docs/screenshots/23-cultures-directory-01.jpg"><img src="docs/screenshots/23-cultures-directory-01.jpg" alt="Culture directory, first section of the public catalogue" width="520"></a><br><sub>Culture directory, panel 1 of 3.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/08-object-records.jpg" alt="Object records page with shared context and limits of museum records"><br><sub><b>Object records</b> — museum references remain separate from community stories.</sub></td>
-    <td align="center"><img src="docs/screenshots/07-mobile-home.jpg" width="260" alt="Mobile landing page with a painted wall hero and bottom navigation"><br><sub><b>Mobile</b> — landing page and bottom navigation.</sub></td>
+    <td><a href="docs/screenshots/23-cultures-directory-02.jpg"><img src="docs/screenshots/23-cultures-directory-02.jpg" alt="Culture directory, middle section of the public catalogue" width="520"></a><br><sub>Culture directory, panel 2 of 3.</sub></td>
+    <td><a href="docs/screenshots/23-cultures-directory-03.jpg"><img src="docs/screenshots/23-cultures-directory-03.jpg" alt="Culture directory, final section and footer of the public catalogue" width="520"></a><br><sub>Culture directory, panel 3 of 3.</sub></td>
   </tr>
 </table>
 
-## What you can do
+#### Culture pages
 
-- **Discover** a feed of public stories: author, region, time, original language, preserved paragraph breaks in previews, "See more", photos, audio, the storyteller's translation, and sharing. Stories load 10 at a time; cards use responsive 640w/1280w WebP variants and story detail uses the full image. Public images and versioned author photos have long-lived cache headers, and the public list is cached in memory briefly with ETags for revalidation. Culture and search row photos stay square and use a neutral loading background.
-- **Share** a post in four steps — language → tell → translate → review. A post can hold text, a voice recording or audio file, up to six photos, and documentation: post type and section, region, people, tags, sources, a trust label (*Told by a community member*, *Research note*, *Museum record*) and a licence. Photo credits start with the storyteller's profile name, alt text can be left blank and is filled from the post title, and validation guides the author to the field that needs attention.
-- **Translate with AI** (optional): *Draft with AI* asks OpenAI for a first translation. It is marked unapproved until the storyteller approves it, and editing it clears the approval. An empty `OPENAI_TRANSLATION_MODEL` uses `gpt-6-luna`; an optional fallback model is tried once if the provider reports the primary model is missing or access is denied.
-- **Read in my language** — storyteller translations are labelled with their language and author; on-device translation in Chrome and the Google Translate link are labelled as machine translation. The machine option is hidden when the author's translation matches the selected interface language.
-- **Guard translations** — the author must provide a target language different from the original. A text-similarity check blocks identical or near-identical copies; this is a heuristic, not a translation-quality check.
-- **Stay in control**: every story starts as a private draft. The storyteller approves sharing, can withdraw it, or **delete it permanently** (text, audio, photos and translations).
-- **Load protected media safely**: members-only, pending and private post photos and recordings use the signed-in session; only public posts with public access use cacheable direct media URLs.
-- **Profiles and post identity**: photo, name, country, languages and counts, with an *Edit profile* form. Public stories use the author's current profile name, then a Google account name or stored story name when needed, plus their photo (or initials). Welcome requires a display name, and Share saves a missing name before creating the post. The opt-in *Post as Community member* choice is off by default and tucked under Privacy options.
-- **Navigate consistently**: the same app header provides Discover, Cultures, Collections, Share, search, language choice and the account menu. The mobile bar links to My stories with a bookmark icon. The header never displays an email address; the address is inside Profile → Account.
-- **Explore cultures and search**: browse showcase cultures by region, open a culture page with credited photos and matching public stories, or search public posts and cultures together. Culture entries contain no invented background facts.
-- **Review first posts**: an admin account with access to the pending-post API can publish a first public post or keep it private. The review queue is hidden from other accounts.
-- **Read the full story**: open a story with its author label, language, region, relative date, full text, photos and credits, audio, translation origin and sources. Share a public link or return to the list you opened it from.
-- **Objects**: four museum reference records for Luluwa (Lulua) objects from DR Congo, each with *What we know*, *What we do not know*, sources, and community questions. Museum records are kept separate from community stories.
-- **Read the site in 20 languages**: English and French written by hand; Kiswahili, Hausa, Yorùbá, Igbo, Amharic, Afaan Oromoo, Somali, isiZulu, isiXhosa, Afrikaans, chiShona, Lingála, Ikinyarwanda, Malagasy, Wolof, Portuguese, Arabic (right-to-left) and Spanish as machine drafts, clearly labelled until a speaker checks them. Stories can be written in 36 languages (31 African), or any other language typed by hand.
-- **Sign in** with Google or a 6-digit email code. New accounts get a short welcome step.
+<table>
+  <tr>
+    <td><a href="docs/screenshots/24-zulu-culture.jpg"><img src="docs/screenshots/24-zulu-culture.jpg" alt="Zulu culture detail page with the beadwork photo and its introduction" width="520"></a><br><sub>Zulu culture page.</sub></td>
+    <td><a href="docs/screenshots/25-zulu-culture-stories.jpg"><img src="docs/screenshots/25-zulu-culture-stories.jpg" alt="Zulu culture page listing Nosihle Mavundla's public story" width="520"></a><br><sub>Zulu culture page and related public story.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/26-ndebele-culture.jpg"><img src="docs/screenshots/26-ndebele-culture.jpg" alt="Ndebele culture detail page with a photo of painted homestead walls" width="520"></a><br><sub>Ndebele culture page.</sub></td>
+    <td><a href="docs/screenshots/27-ndebele-culture-stories.jpg"><img src="docs/screenshots/27-ndebele-culture-stories.jpg" alt="Ndebele culture page listing Josue Kabuya's public research note" width="520"></a><br><sub>Ndebele culture page and related public research note.</sub></td>
+  </tr>
+</table>
 
-The app shell and static interface files can be installed as a PWA. Its service worker fetches pages network-first and falls back to the cached shell offline; it caches static resources but never `/api/` responses. Story and account data still require a network connection.
+### Stories from real members: Zulu, Congo, Lesotho and Zimbabwe
 
-### Honesty rules built into the product
+The first six images below are consecutive panels of Discover, from top to bottom, showing the complete public feed as it appeared during capture.
 
-- No invented translations of a person's story: machine translations are labelled, and the original is always available.
-- No invented cultural facts: object pages show sourced facts, our readings are marked as such, and unknowns say *Not recorded*.
-- Every image carries its author, licence and source.
+<table>
+  <tr>
+    <td><a href="docs/screenshots/06-discover-full-feed-01.jpg"><img src="docs/screenshots/06-discover-full-feed-01.jpg" alt="Discover public feed, panel 1 of 6, beginning at the feed header" width="520"></a><br><sub>Discover, full feed panel 1 of 6.</sub></td>
+    <td><a href="docs/screenshots/06-discover-full-feed-02.jpg"><img src="docs/screenshots/06-discover-full-feed-02.jpg" alt="Discover public feed, panel 2 of 6, continuing in page order" width="520"></a><br><sub>Discover, full feed panel 2 of 6.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/06-discover-full-feed-03.jpg"><img src="docs/screenshots/06-discover-full-feed-03.jpg" alt="Discover public feed, panel 3 of 6, continuing in page order" width="520"></a><br><sub>Discover, full feed panel 3 of 6.</sub></td>
+    <td><a href="docs/screenshots/06-discover-full-feed-04.jpg"><img src="docs/screenshots/06-discover-full-feed-04.jpg" alt="Discover public feed, panel 4 of 6, continuing in page order" width="520"></a><br><sub>Discover, full feed panel 4 of 6.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/06-discover-full-feed-05.jpg"><img src="docs/screenshots/06-discover-full-feed-05.jpg" alt="Discover public feed, panel 5 of 6, continuing in page order" width="520"></a><br><sub>Discover, full feed panel 5 of 6.</sub></td>
+    <td><a href="docs/screenshots/06-discover-full-feed-06.jpg"><img src="docs/screenshots/06-discover-full-feed-06.jpg" alt="Discover public feed, panel 6 of 6, ending at the last public story" width="520"></a><br><sub>Discover, full feed panel 6 of 6.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/12-zulu-nosihle.jpg"><img src="docs/screenshots/12-zulu-nosihle.jpg" alt="Nosihle Mavundla's public story about the pride and heritage of the Zulu nation, with its photos" width="520"></a><br><sub>Nosihle Mavundla — <em>The pride and Heritage of the Zulu Nation</em>.</sub></td>
+    <td><a href="docs/screenshots/13-ndebele-erwin.jpg"><img src="docs/screenshots/13-ndebele-erwin.jpg" alt="Erwin Mashobane's public story about the Mashobane clan and its heritage" width="520"></a><br><sub>Erwin Mashobane — <em>The Mashobane Clan: A Legacy of Pride and Heritage</em>.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/14-lesotho-scarlet.jpg"><img src="docs/screenshots/14-lesotho-scarlet.jpg" alt="Scarlet's public story Kobo ya Sesotho" width="520"></a><br><sub>Scarlet — <em>Kobo ya Sesotho</em>.</sub></td>
+    <td><a href="docs/screenshots/15-congo-jenovic.jpg"><img src="docs/screenshots/15-congo-jenovic.jpg" alt="Jenovic Kb's public story Dompteur de Taureau from Lubumbashi" width="520"></a><br><sub>Jenovic Kb — <em>Dompteur de Taureau</em>, Lubumbashi.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/16-congo-nathan.jpg"><img src="docs/screenshots/16-congo-nathan.jpg" alt="Nathan Kabange's public story Sanga, maîtres du Katanga" width="520"></a><br><sub>Nathan Kabange — <em>Sanga, maîtres du Katanga</em>.</sub></td>
+    <td><a href="docs/screenshots/17-congo-lwamba.jpg"><img src="docs/screenshots/17-congo-lwamba.jpg" alt="Lwamba Moket Dan's public story Monument de l'identité Katangaise" width="520"></a><br><sub>Lwamba Moket Dan — <em>Monument de l'identité Katangaise</em>.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/18-ndebele-josue.jpg"><img src="docs/screenshots/18-ndebele-josue.jpg" alt="Josue Kabuya's public research note about painted Southern Ndebele walls" width="520"></a><br><sub>Josue Kabuya — <em>Painted walls of the Southern Ndebele</em>.</sub></td>
+    <td><a href="docs/screenshots/19-zimbabwe-samantha.jpg"><img src="docs/screenshots/19-zimbabwe-samantha.jpg" alt="Samantha Mulungisi's public story about being Zimbabwean" width="520"></a><br><sub>Samantha Mulungisi — <em>The beauty of just being Zimbabwean</em>.</sub></td>
+  </tr>
+</table>
 
-## Current status (10 November 2026)
+### Documentation & objects
 
-| Area | Status |
-|---|---|
-| Public site, landing page, Discover, objects, profiles, posting, delete | Live and checked on the demo |
-| Email-code and Google sign-in | Live. Google OAuth is in *Testing* mode: only accounts added as test users can sign in with Google until the app is published |
-| Database migrations `202611070001` … `202611090007` | Applied to the production Supabase project |
-| AI translation | Key configured on the host; the live provider call is still being verified (errors are now logged as status/code/model only) |
-| Interface translation | English and French are reviewed; 18 machine locales now include drafts for the navigation, reader translation, feed, policy and audience keys added this morning. Other screen text may still fall back to English, and machine drafts remain unchecked by speakers. Brand and translated navigation opt out of browser auto-translation; story text stays translatable. |
-| Phase L0 (live) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are deployed. Render serves the pushed build; the live header and static resource types were checked. Signed-in email privacy is covered by the browser suite with synthetic authentication |
-| Culture directory and search | Live in the app build; public showcase data only, with no social schema or API changes |
-| First-post admin review | Available only to accounts authorized by the pending-post endpoint; publish and keep-private actions are confirmed |
-| Responsive and loading review | Lazy-loaded page routes; initial JavaScript is about 158 kB gzip. Twenty screens were captured at 375, 768 and 1280 px with no horizontal overflow, clipped text, undersized controls or browser console issues in the synthetic review. |
-| Phase L1 social schema | Migration `202611090007_social_layer.sql` is applied in production |
+<table>
+  <tr>
+    <td><a href="docs/screenshots/20-ndebele-reader-control.jpg"><img src="docs/screenshots/20-ndebele-reader-control.jpg" alt="Ndebele story reader-translation control with a language selector" width="520"></a><br><sub>Reader-side “Read in” control on a public Ndebele story.</sub></td>
+    <td><a href="docs/screenshots/21-ndebele-documentation-sources.jpg"><img src="docs/screenshots/21-ndebele-documentation-sources.jpg" alt="Ndebele story documentation section listing people, region, tags and sources" width="520"></a><br><sub>Story documentation and sources.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/22-ndebele-author-translation.jpg"><img src="docs/screenshots/22-ndebele-author-translation.jpg" alt="Ndebele story's French author translation, labelled as not yet checked by a speaker" width="520"></a><br><sub>Author-written French translation, labelled for review.</sub></td>
+    <td><a href="docs/screenshots/28-berlin-object-record.jpg"><img src="docs/screenshots/28-berlin-object-record.jpg" alt="Berlin Luluwa figure object record with photograph and museum details" width="520"></a><br><sub>Berlin statue: a separate museum record with image credit and object details.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><a href="docs/screenshots/29-read-in-my-language-live-unavailable.jpg"><img src="docs/screenshots/29-read-in-my-language-live-unavailable.jpg" alt="Reader-side translation request showing the live service's temporary-unavailable message" width="520"></a><br><sub>Live translation check: the production endpoint returned “Translation is not available right now” during capture; the original and author translation remain available.</sub></td>
+  </tr>
+</table>
 
-On phones, feed cards appear at full contrast immediately. Named authors keep initials visible while profile photos load or when a photo is unavailable, and the landing hero updates its caption only after the matching photo is ready.
+### Safety & rights
 
-This is a demonstration build, not a production service for sensitive stories or recordings.
+<table>
+  <tr>
+    <td><a href="docs/screenshots/30-signed-out-share-sign-in.jpg"><img src="docs/screenshots/30-signed-out-share-sign-in.jpg" alt="Signed-out Share screen with Google and email-code sign-in options, blank email field" width="520"></a><br><sub>Share opens sign-in for a signed-out visitor.</sub></td>
+    <td><a href="docs/screenshots/31-community-guidelines.jpg"><img src="docs/screenshots/31-community-guidelines.jpg" alt="Community Guidelines page for Story Bridge" width="520"></a><br><sub>Community Guidelines.</sub></td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/32-terms.jpg"><img src="docs/screenshots/32-terms.jpg" alt="Terms of Service page for Story Bridge" width="520"></a><br><sub>Terms.</sub></td>
+    <td><a href="docs/screenshots/33-privacy.jpg"><img src="docs/screenshots/33-privacy.jpg" alt="Privacy notice page for Story Bridge" width="520"></a><br><sub>Privacy notice.</sub></td>
+  </tr>
+</table>
 
-## Safety and moderation
+### Mobile
 
-- New members' first posts wait for moderator review before becoming public. Signed-in members can report a post; reports are private to the moderator, who can dismiss a report or hide the post. A hidden post becomes private and withdrawn, and its moderator note appears in My stories.
-- Production reports use the social schema from migration `202611090007_social_layer.sql` (applied by the owner on 11 November 2026).
-- Follow the [community guidelines](/guidelines): share only what you have permission to share, respect sacred or restricted knowledge, avoid personal information and harassment, and credit sources and images.
-- Members can delete their account from Profile after confirming by typing `DELETE`. This removes the profile, posts and stored files; it cannot remove copies already downloaded by others.
-- Data processors listed in the [Privacy notice](/privacy): Supabase provides the database, file storage and sign-in; Render hosts the app; Google is used for optional Google sign-in and Google Fonts; OpenAI receives story text only when an author requests an AI translation draft; Google receives text only if a reader clicks the external Google Translate link.
+<table>
+  <tr>
+    <td><a href="docs/screenshots/34-mobile-home.jpg"><img src="docs/screenshots/34-mobile-home.jpg" alt="Story Bridge home page on a 390 by 844 phone-sized viewport" width="260"></a><br><sub>Home at 390×844.</sub></td>
+    <td><a href="docs/screenshots/35-mobile-post.jpg"><img src="docs/screenshots/35-mobile-post.jpg" alt="Nosihle Mavundla's public Zulu story on a 390 by 844 phone-sized viewport" width="260"></a><br><sub>A public story at 390×844.</sub></td>
+    <td><a href="docs/screenshots/36-mobile-share.jpg"><img src="docs/screenshots/36-mobile-share.jpg" alt="Signed-out Share screen on a phone-sized viewport with the email-code button above the bottom navigation" width="260"></a><br><sub>Share sign-in at 390×844.</sub></td>
+  </tr>
+</table>
 
-## Tech stack
+## How it works
 
-React + Vite (frontend), Express (API), Supabase (Auth, Postgres with row-level security, private storage), OpenAI Responses API (optional translation drafts), Render (hosting).
-
+```mermaid
+flowchart LR
+  Browser["React + Vite PWA"] --> API["Express API"]
+  API --> Supabase["Supabase Auth, Postgres, Storage"]
+  API -. "author-requested draft, optional" .-> OpenAI["OpenAI API"]
+  API -. "reader translation request" .-> MT["Google Translate / MyMemory"]
 ```
-src/
-  App.jsx                 entry point
-  state/                  application state and routing
-  pages/                  screens (Landing, Discover feed, Share, Review, Profile, Objects…)
-  components/             audio player and previews
-  lib/                    api.js (session headers), i18n.js, languages.js (language registry)
-  locales/                interface text, one JSON file per language
-  data/                   showcase cultures and generated image credits
-  styles/                 tokens, base and per-screen CSS
-server/                   Express API, auth (JWT/JWKS), stores (Supabase or file), CSP
-supabase/migrations/      SQL migrations (review before applying)
-scripts/                  image fetching, tests, secret check
-docs/                     collaboration board, phase plan, object documentation, credits
-```
 
-Pages have real URLs: `/discover`, `/stories/:id`, `/profile`, `/mine`, `/share`, `/objects`, `/objects/:id`, `/cultures`, `/cultures/:id`, `/search` and `/admin`. Direct links and reloads work, signed in or not; private pages show the sign-in screen when no one is signed in. Admin review appears only after the signed-in user's pending-post request returns 200. Notifications are not implemented, so no `/notifications` route is registered.
+The browser contains the public interface and sends account requests to the server. Express checks sessions and applies access rules before using Supabase. OpenAI is used only when an author asks for a translation draft and the server has a configured key. Reader translation is a separate, on-demand server request to translation providers; the original story is retained.
 
 ## Run locally
 
@@ -115,122 +170,52 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The API listens on `127.0.0.1:3000`.
+Open `http://localhost:5173`. For account mode, place local settings in an ignored `.env` file. Never commit secret values. The project also has a local file mode for development; it is not the production account store.
 
-The server reads the ignored project-root `.env` before choosing its mode; process environment values take precedence. Values are trimmed, and a UTF-8 BOM or an inline ` # comment` is ignored. Restart the server after editing `.env`.
+## Environment variables
 
-### Local file mode
+Names only; configure values locally or in the deployment host's private settings.
 
-```dotenv
-STORY_BACKEND=file
-STORY_AUTH_MODE=legacy
+```text
+STORY_BACKEND
+STORY_AUTH_MODE
+SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SECRET_KEY
+SUPABASE_BUCKET
+STORY_EMAIL_CODE_SIGN_IN
+STORY_GOOGLE_SIGN_IN
+OPENAI_API_KEY
+OPENAI_TRANSLATION_MODEL
+OPENAI_TRANSLATION_FALLBACK_MODEL
+STORY_BRIDGE_OBJECT_ADMIN_ID
+RESEND_API_KEY
+NOTIFY_FROM
+ADMIN_NOTIFY_EMAIL
+HOST
+PORT
+STORY_TRUST_PROXY
+STORY_HTTPS
+STORY_WRITE_RATE_LIMIT
+STORY_WRITE_RATE_WINDOW_MS
 ```
 
-Stories are stored in `data/stories.json` and recordings in `uploads/`. The browser keeps an owner token in localStorage. This mode has no account sign-in and is refused by the production entry point. `npm run seed` creates six fictional public stories (it refuses to overwrite existing data).
+## Moderation & privacy
 
-### Supabase account mode
+- Authors choose whether a story is public, members-only or private. A first public post waits for moderator review.
+- Signed-in readers can report a post. Moderators can hide or dismiss reports; the report does not reveal the reporter to the author.
+- Story owners can withdraw or permanently delete posts. Account deletion removes the profile, posts and associated files.
+- Account sessions are verified by the server. Supabase row-level security protects account data; private media is served through authenticated API routes.
+- Uploaded images are re-encoded and stripped of embedded metadata. Each story can show its sources, photo credit and licence.
 
-Use `.env.example` as a template:
+## Known limits
 
-```dotenv
-STORY_BACKEND=supabase
-STORY_AUTH_MODE=account
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-SUPABASE_SECRET_KEY=YOUR_SERVER_ONLY_SECRET_KEY
-SUPABASE_BUCKET=story-bridge-audio
-STORY_EMAIL_CODE_SIGN_IN=true
-STORY_GOOGLE_SIGN_IN=false
-OPENAI_API_KEY=             # optional, server-only, never prefix with VITE_
-OPENAI_TRANSLATION_MODEL=   # optional, defaults to gpt-6-luna
-OPENAI_TRANSLATION_FALLBACK_MODEL= # optional, server-only; retry once on missing model/access denial
-STORY_BRIDGE_OBJECT_ADMIN_ID= # Supabase user id allowed to approve first posts
-RESEND_API_KEY=                # optional, server-only; Resend API key for admin alerts
-NOTIFY_FROM=                   # optional, server-only; verified Story Bridge sender
-ADMIN_NOTIFY_EMAIL=            # optional, server-only; admin alert recipient
-```
+- Video posts are not supported yet; profile bio is planned.
+- Sharing with selected people or groups is not available yet. The current choices are public, members-only and private.
+- AI translation drafts require OpenAI configuration and available API credit.
+- Reader-side translation is available in the interface, but its production endpoint returned HTTP 502 during this live capture; the fallback link and author-written translations remain available.
+- Machine-drafted interface languages still need review by speakers. The microphone workflow still needs a real-device test.
 
-| Variable | Required | Scope | Purpose |
-|---|---|---|---|
-| `RESEND_API_KEY` | Optional; all three alert values are required together | Server only | Authenticates admin alert requests to Resend |
-| `NOTIFY_FROM` | Optional | Server only | Verified Story Bridge sender address |
-| `ADMIN_NOTIFY_EMAIL` | Optional | Server only | Receives first-post, report, welcome and test alerts |
+## Credits
 
-`SUPABASE_URL` and the publishable key are browser-safe. `SUPABASE_SECRET_KEY`, `OPENAI_API_KEY`, and the Resend alert settings are server-only: never commit their values or expose them to the frontend. Admin alerts are silently disabled unless all three Resend settings are present.
-
-For a new Supabase project:
-
-1. Review, then apply every file in `supabase/migrations/` in order. See [docs/migrations.md](docs/migrations.md).
-2. Configure email sign-in with a template that includes `{{ .Token }}`. Set *Email OTP length* to 6 (the code screen has six boxes).
-3. Set the Site URL and redirect URLs for your local and deployed origins (for example `http://localhost:5173/**` and `https://your-domain/**`).
-4. For Google: create an OAuth client whose redirect URI is `https://YOUR_PROJECT.supabase.co/auth/v1/callback`, enable the Google provider in Supabase, then set `STORY_GOOGLE_SIGN_IN=true`.
-
-Missing or invalid account configuration stops server startup; it never silently falls back to local storage.
-
-### Landing-page photos
-
-`npm run images:fetch` downloads the landing-page photos from Wikimedia Commons. It accepts only public domain, CC0, CC BY and CC BY-SA files without personality-rights restrictions, skips files that describe people, re-encodes to WebP without metadata, and writes `src/data/africa-images.json` and `docs/image-manifest.json` with author, licence and source for each image. Review the manifest before publishing.
-
-The Zulu culture card uses a locally bundled, metadata-free CC0 photo of a beaded necklace, credited to Daderot; it shows the object without a person.
-
-## Deploy
-
-Set the account-mode variables in the host's private environment settings (on Render: *Environment*), then:
-
-```sh
-npm ci && npm run build
-npm start
-```
-
-`npm start` forces production mode and serves `dist/`. Use the host's `PORT`, set `HOST=0.0.0.0` when needed, and serve over HTTPS. `STORY_TRUST_PROXY=1` enables proxy-aware IP handling behind a trusted proxy; `STORY_HTTPS=1` enables HSTS.
-
-After deploying, check `/api/account/config` (`google` and `email` flags), sign in, save and delete a draft, and try *Draft with AI*.
-
-## Tests
-
-```sh
-npm test                      # backend and unit tests
-npx playwright install chromium
-npm run test:all              # build + backend + browser tests + secret check
-npm run test:screens          # screenshots at 375, 768 and 1280 px
-npm run check:dist-secrets    # narrow check for configured secrets in source and build
-```
-
-Browser tests use isolated data under `.test-data/` and save evidence under `test-evidence/`; they never touch `data/` or `uploads/`. Authentication in tests uses local keys and a mocked provider: automated tests do not prove that a real Supabase, email, Google or OpenAI configuration works.
-
-## Quality
-
-Lighthouse scores from the live site on 10 November 2026 (Performance / Accessibility / Best Practices / SEO, each out of 100):
-
-| Page | Desktop | Mobile |
-|---|---:|---:|
-| Home | 55 / 97 / 100 / 92 | 55 / 96 / 100 / 92 |
-| Discover | 55 / 96 / 100 / 100 | 54 / 96 / 100 / 92 |
-
-Full HTML and JSON reports, including Search and story detail, are in [`docs/quality/`](docs/quality/).
-
-## Privacy, security and limits
-
-- Account stories belong to verified Supabase user ids. Tokens are checked for signature, issuer, audience and expiry. The Supabase session lives in browser localStorage and is sent to the API as a bearer token; a strict Content Security Policy limits script sources.
-- Drafts, private, withdrawn and nonexistent stories all return the same 404 to anyone but the owner. Hidden storyteller names are removed from public responses. Private files are served through the API, never through public storage URLs. The profile photo is fetched with the session token.
-- Uploaded images are checked by file signature, re-encoded to WebP (up to 1600 px) and stripped of metadata. Audio uploads are limited to 10 MiB; each account is limited to 500 stories and 1 GiB of audio.
-- Deleting a story removes its text, audio, photos and media records. Deleting an account also removes its stories, audio and post photos.
-- Write requests are rate-limited per client IP (default 60 per 60 s; `STORY_WRITE_RATE_LIMIT`, `STORY_WRITE_RATE_WINDOW_MS`).
-- The AI translation request sends the story to OpenAI only when the storyteller presses *Draft with AI*. Server logs record only the provider status, error code and model — never the key or the story.
-- These controls and the automated tests are not a security audit.
-
-## Image and content credits
-
-- Landing-page photos: author, licence and source for each image are listed in the site footer (*Image credits*) and in [docs/image-manifest.json](docs/image-manifest.json).
-- Luluwa object photos and records: [docs/credits.md](docs/credits.md) and [docs/object-documentation.md](docs/object-documentation.md).
-
-## Known limits / roadmap
-
-- Video posts are not supported yet; **Profile bio (planned)**.
-- Sharing with selected people or groups is not available; stories can be private or public.
-- AI translation drafts need OpenAI configured with available credit; reader-side “Read in my language” works without it.
-- Microphone recording still needs a real-device test.
-
-## Project origin
-
-Created by Josué Kabuya (Grand Kasaï, DR Congo), who set the vision, product direction and content. The code, documentation and tests were developed with AI coding assistants working under his direction. Design decisions, iterations and test reports are recorded in [PLAN.md](PLAN.md), [docs/COLLAB.md](docs/COLLAB.md), [REVIEW.md](REVIEW.md) and [TEST-REPORT.md](TEST-REPORT.md).
+Designed by Josue Kabuya. Built with OpenAI Codex.
