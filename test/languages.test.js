@@ -17,6 +17,9 @@ const machineDraftKeys = [
   'audience.public', 'audience.publicDescription', 'audience.members', 'audience.membersDescription', 'audience.private', 'audience.privateDescription',
   'audience.heading', 'audience.whoCanSee', 'audience.pending', 'audience.aiUnavailable',
 ];
+// These four short reader controls have hand-written English and French labels;
+// other interface locales intentionally use the English fallback.
+const englishFallbackKeys = ['readIn', 'readLanguagePicker', 'translationUnavailable', 'tryAgain'];
 
 test('language codes are unique and machine locales draft all current UI keys', () => {
   const codes = LANGUAGES.map(language => language.code);
@@ -24,7 +27,8 @@ test('language codes are unique and machine locales draft all current UI keys', 
   const english = readLocale('en');
   for (const language of UI_LANGUAGES) {
     const locale = readLocale(language.code);
-    assert.deepEqual(Object.keys(locale).sort(), Object.keys(english).sort(), `${language.code} keys`);
+    const expectedKeys = Object.keys(english).filter(key => language.code === 'en' || language.code === 'fr' || !englishFallbackKeys.includes(key));
+    assert.deepEqual(Object.keys(locale).sort(), expectedKeys.sort(), `${language.code} keys`);
     for (const [key, value] of Object.entries(locale)) assert.ok(String(value).trim(), `${language.code}.${key} is empty`);
     if (language.uiStatus === 'machine') {
       for (const key of machineDraftKeys) {

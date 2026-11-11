@@ -18,6 +18,42 @@ export function languageCode(label) {
   return hit ? hit.code : '';
 }
 
+
+// Translate in the reader's own browser first (Google's public endpoint; works from home and
+// mobile networks), then fall back to our server. Chunked so long posts work too.
+function chunks(text, size = 600) {
+  const out = []; let rest = String(text);
+  while (rest.length > size) {
+    let cut = Math.max(rest.lastIndexOf('\n', size), rest.lastIndexOf('. ', size));
+    if (cut < size * 0.4) cut = rest.lastIndexOf(' ', size);
+    if (cut < 1) cut = size;
+    out.push(rest.slice(0, cut + 1)); rest = rest.slice(cut + 1);
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+async function translateInBrowser(text, source, target) {
+  const parts = [];
+  for (const part of chunks(text)) {
+    if (!part.trim()) { parts.push(part); continue; }
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=${encodeURIComponent(source || 'auto')}&tl=${encodeURIComponent(target)}&q=${encodeURIComponent(part)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+    if (!res.ok) throw new Error(`google-${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data?.[0])) throw new Error('google-shape');
+    parts.push(data[0].map(row => row?.[0] || '').join(''));
+  }
+  const value = parts.join(' ').replace(/ +\n/g, '\n').trim();
+  if (!value) throw new Error('empty');
+  return value;
+}
+async function translateOnServer(text, source, target) {
+  const res = await fetch('/api/read-translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, source, target }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.translation) throw new Error(data.error || `http-${res.status}`);
+  return data.translation;
+}
+
 const PREF_KEY = 'story-bridge-read-language';
 function savedTarget() { try { return localStorage.getItem(PREF_KEY) || ''; } catch { return ''; } }
 function saveTarget(code) { try { localStorage.setItem(PREF_KEY, code); } catch { /* private mode */ } }
@@ -48,11 +84,12 @@ export default function ReadInMyLanguage({ text, sourceLanguage, className = '' 
 
   async function translate(code = target) {
     setState('translating');
+    const body = String(text).slice(0, MAX_CHARS);
     try {
-      const res = await fetch('/api/read-translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: String(text).slice(0, MAX_CHARS), source, target: code }) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.translation) throw new Error(data.error || `http-${res.status}`);
-      setOutput(data.translation); setState('done');
+      let value;
+      try { value = await translateInBrowser(body, source, code); }
+      catch (first) { console.warn('read-in-my-language: browser route failed, trying server', first?.message); value = await translateOnServer(body, source, code); }
+      setOutput(value); setState('done');
     } catch (error) {
       console.warn('read-in-my-language', error?.message || error);
       setState('error');
