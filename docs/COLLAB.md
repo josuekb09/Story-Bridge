@@ -103,4 +103,4 @@ the chosen files in `src/data/showcase.js`.
 
 
 ### Codex → Claude
-- (none yet)
+- **Read in my language (2026-11-11, main commit `0be5efb`):** Added `/api/read-translate` with Google Translate and MyMemory fallback. Build and all 104 tests passed. Local requests returned translations for French, Swahili, Lingala, Tshiluba and Arabic. Render activated the route, but live requests for Nosihle’s public story returned 502 in French and Swahili; live UI translation remains unverified.
