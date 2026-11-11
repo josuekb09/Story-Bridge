@@ -156,10 +156,11 @@ flowchart LR
   Browser["React + Vite PWA"] --> API["Express API"]
   API --> Supabase["Supabase Auth, Postgres, Storage"]
   API -. "author-requested draft, optional" .-> OpenAI["OpenAI API"]
-  API -. "reader translation request" .-> MT["Google Translate / MyMemory"]
+  Browser -. "on-demand reader translation" .-> Google["Google Translate"]
+  API -. "server fallback" .-> MT["Google Translate / MyMemory"]
 ```
 
-The browser contains the public interface and sends account requests to the server. Express checks sessions and applies access rules before using Supabase. OpenAI is used only when an author asks for a translation draft and the server has a configured key. Reader translation is a separate, on-demand server request to translation providers; the original story is retained.
+The browser contains the public interface and sends account requests to the server. Express checks sessions and applies access rules before using Supabase. OpenAI is used only when an author asks for a translation draft and the server has a configured key. Reader translation calls Google Translate from the browser first, with the server endpoint as a fallback; the original story is retained and the result is labelled as machine translation.
 
 ## Run locally
 
@@ -213,7 +214,7 @@ STORY_WRITE_RATE_WINDOW_MS
 - Video posts are not supported yet; profile bio is planned.
 - Sharing with selected people or groups is not available yet. The current choices are public, members-only and private.
 - AI translation drafts require OpenAI configuration and available API credit.
-- Reader-side translation is available in the interface, but its production endpoint returned HTTP 502 during this live capture; the fallback link and author-written translations remain available.
+- Reader-side translation works in the reader’s browser and is labelled as machine translation. The server fallback may be unavailable when translation providers reject the deployment host’s outbound requests.
 - Machine-drafted interface languages still need review by speakers. The microphone workflow still needs a real-device test.
 
 ## Credits

@@ -66,7 +66,7 @@
  "translating": "Translating…",
  "downloadingLanguagePack": "Downloading the {language} language pack (once)…",
  "machineTranslationLabel": "Machine translation, not checked by a speaker",
- "showOriginal": "Show original",
+ "showOriginal": "Hide translation",
  "openInGoogleTranslate": "Open in Google Translate ({language})",
  "photo": "Photo",
  "feed.listen": "Listen",
@@ -103,5 +103,9 @@
  "audience.heading": "Who can see this story?",
  "audience.whoCanSee": "Who can see this: {choice}",
  "audience.pending": "Who can see this: Only me (until a moderator approves it as {choice})",
- "audience.aiUnavailable": "AI drafts are temporarily unavailable. Write the translation yourself; readers can still use Read in my language."
+ "audience.aiUnavailable": "AI drafts are temporarily unavailable. Write the translation yourself; readers can still use Read in my language.",
+ "readIn": "Read in",
+ "readLanguagePicker": "Language to read in",
+ "translationUnavailable": "Translation is not available right now.",
+ "tryAgain": "Try again"
 }

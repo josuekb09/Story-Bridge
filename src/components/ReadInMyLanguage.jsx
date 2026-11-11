@@ -68,7 +68,11 @@ function defaultTarget(uiLang, source) {
 
 export default function ReadInMyLanguage({ text, sourceLanguage, className = '' }) {
   const { lang: uiLang, t } = useUiLanguage();
-  const tr = (key, fallback) => { const value = t(key); return !value || value === key ? fallback : value; };
+  const tr = (key, fallback) => {
+    if (key === 'showOriginal' && uiLang !== 'en' && uiLang !== 'fr') return fallback;
+    const value = t(key);
+    return !value || value === key ? fallback : value;
+  };
   const source = languageCode(sourceLanguage);
   const [target, setTarget] = useState(() => defaultTarget(uiLang, source));
   const [state, setState] = useState('idle'); // idle | translating | done | error

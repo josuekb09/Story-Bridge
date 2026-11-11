@@ -23,7 +23,9 @@ test('language codes are unique and machine locales draft all current UI keys', 
   const english = readLocale('en');
   for (const language of UI_LANGUAGES) {
     const locale = readLocale(language.code);
-    assert.deepEqual(Object.keys(locale).sort(), Object.keys(english).sort(), `${language.code} keys`);
+    const fallbackOnlyKeys = language.uiStatus === 'reviewed' ? [] : ['readIn', 'readLanguagePicker', 'translationUnavailable', 'tryAgain'];
+    const expectedKeys = Object.keys(english).filter(key => !fallbackOnlyKeys.includes(key));
+    assert.deepEqual(Object.keys(locale).sort(), expectedKeys.sort(), `${language.code} keys`);
     for (const [key, value] of Object.entries(locale)) assert.ok(String(value).trim(), `${language.code}.${key} is empty`);
     if (language.uiStatus === 'machine') {
       for (const key of machineDraftKeys) {
@@ -39,6 +41,18 @@ test('language codes are unique and machine locales draft all current UI keys', 
       assert.notEqual(locale['machine.notice'], english['machine.notice'], `${language.code} machine translation notice`);
     }
   }
+});
+
+test('reader translation controls use reviewed English and French labels', () => {
+  const en = readLocale('en');
+  const fr = readLocale('fr');
+  assert.deepEqual([en.readIn, en.readLanguagePicker, en.translationUnavailable, en.tryAgain, en.showOriginal], [
+    'Read in', 'Language to read in', 'Translation is not available right now.', 'Try again', 'Hide translation',
+  ]);
+  assert.deepEqual([fr.readIn, fr.readLanguagePicker, fr.translationUnavailable, fr.tryAgain, fr.showOriginal], [
+    'Lire en', 'Langue de lecture', "La traduction n'est pas disponible pour le moment.", 'Réessayer', 'Masquer la traduction',
+  ]);
+  assert.equal(readLocale('sw').readIn, undefined, 'unreviewed locales use the English fallback');
 });
 
 test('at least fifteen African languages have interface text', () => {
