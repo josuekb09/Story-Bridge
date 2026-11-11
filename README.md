@@ -223,7 +223,7 @@ Full HTML and JSON reports, including Search and story detail, are in [`docs/qua
 
 ## Known limits / roadmap
 
-- Video posts are not supported yet.
+- Video posts are not supported yet; **Profile bio (planned)**.
 - Sharing with selected people or groups is not available; stories can be private or public.
 - AI translation drafts need OpenAI configured with available credit; reader-side “Read in my language” works without it.
 - Microphone recording still needs a real-device test.

@@ -723,10 +723,14 @@ try {
     ensure(await pageA.evaluate(() => document.activeElement?.id) === 'share-text', 'Missing story text did not receive focus.');
     await pageA.getByLabel('Your story').fill('A synthetic story for checking field-level validation.');
     await pageA.getByRole('button',{name:'Continue to translation'}).click();
+    ensure(await pageA.getByText(/AI drafts are temporarily unavailable/).isVisible(), 'The disabled AI draft action did not explain the manual translation option.');
     for (const width of [1280, 375]) {
       const shot = await captureScreen(pageA, 'share', width); results.push({ name: `Share screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
     }
     await pageA.getByRole('button',{name:'Continue to review'}).click();
+    ensure(await pageA.locator('input[name="share-audience"][value="private"]').isChecked(), 'Share review did not default to the private audience.');
+    await pageA.locator('input[name="share-audience"][value="members"]').check();
+    ensure(await pageA.getByText('Only people signed in to Story Bridge').isVisible(), 'Members-only audience explanation is missing.');
     await pageA.getByRole('button',{name:'Save draft and open review'}).click();
     await pageA.getByText('Confirm that this story is yours or that you have permission.').waitFor();
     await pageA.waitForFunction(() => document.activeElement?.id === 'share-consent');
@@ -885,7 +889,7 @@ try {
     ensure(before.body.status === 'draft' && before.body.text === draftActionText && before.body.translation === draftActionTranslation, 'Draft baseline was not available for the approval check.');
     await pageA.getByLabel('Original text').fill(approvedActionText);
     await pageA.getByLabel('Translation entered by you').fill(approvedActionTranslation);
-    await pageA.getByRole('radio', { name: 'Anyone who opens this app' }).check();
+    await pageA.locator('input[name="audience"][value="public"]').check();
     const routePattern = `**/api/stories/${storyId}`;
     let failOnce = true;
     await pageA.route(routePattern, async route => {
@@ -928,7 +932,7 @@ try {
   await record('Only me approval remains private and B direct mutations are forbidden', async () => {
     await pageA.locator('.mine-card').filter({ hasText: 'Public' }).getByRole('button', { name: 'Review', exact: true }).click();
     await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
-    await pageA.getByLabel('Only me').check();
+    await pageA.locator('input[name="audience"][value="private"]').check();
     ensure(await pageA.getByRole('button', { name: 'Approve for only me', exact: true }).isVisible(), 'Private approval is not labeled as private.');
     await pageA.getByRole('button', { name: 'Approve for only me', exact: true }).click(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
     const ownerStory = await direct(ownerA, `/api/stories/${storyId}`); ensure(ownerStory.status === 200 && ownerStory.body.visibility === 'private', 'Only me approval was not private.');
@@ -968,7 +972,7 @@ try {
   }, haveStory);
 
   await record('Public approval is visible to B and hidden author is absent from API and UI', async () => {
-    await pageA.getByRole('radio', { name: 'Anyone who opens this app' }).check();
+    await pageA.locator('input[name="audience"][value="public"]').check();
     await pageA.getByRole('button', { name: 'Approve and share' }).click(); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
     const publicOwner = await direct(ownerA, `/api/stories/${storyId}`); ensure(publicOwner.body.status === 'shared' && publicOwner.body.visibility === 'public', 'Public approval did not apply.');
     ensure((await direct(ownerA, `/api/stories/${storyId}/audio`)).status === 200, 'Owner could not read public audio.');
@@ -1016,7 +1020,7 @@ try {
     await pageA.getByRole('heading', { name: 'Review your story' }).waitFor();
     ensure(await pageA.getByText('This approval will keep the story private to you.').isVisible(), 'Private re-approval wording was incorrect.');
     ensure(await pageA.getByRole('button', { name: 'Approve for only me', exact: true }).isVisible(), 'Private re-approval label implied public sharing.');
-    await pageA.getByRole('radio', { name: 'Anyone who opens this app' }).check();
+    await pageA.locator('input[name="audience"][value="public"]').check();
     ensure(await pageA.getByText('This story will become public again.').isVisible(), 'Public re-approval wording was missing.');
     ensure(await pageA.getByRole('button', { name: 'Publish again', exact: true }).isVisible(), 'Public re-approval did not use the Publish again label.');
     for (const width of [1280, 375]) {
@@ -1597,7 +1601,7 @@ try {
       if(route.request().method()==='PUT'&&route.request().postDataJSON()?.approve===true){publishRequests++;await delay(300);}
       await route.continue();
     });
-    await livePage.getByRole('radio',{name:'Anyone who opens this app'}).check();
+    await livePage.locator('input[name="audience"][value="public"]').check();
     await doubleClick('Approve and share');
     const publishing=livePage.getByRole('button',{name:'Publishing…',exact:true});
     await publishing.waitFor({state:'visible'});
@@ -1695,7 +1699,7 @@ try {
     const savedDraftCard=livePage.locator('.mine-card').filter({hasText:'Synthetic language'});
     await savedDraftCard.getByRole('button',{name:'Review',exact:true}).click();
     await livePage.getByRole('heading',{name:'Review your story'}).waitFor();
-    await livePage.getByLabel('Anyone who opens this app').check();
+    await livePage.locator('input[name="audience"][value="public"]').check();
     await livePage.getByRole('button',{name:'Approve and share',exact:true}).click();
     await livePage.getByRole('heading',{name:'My stories'}).waitFor();
     await livePage.unroute(storyPattern);

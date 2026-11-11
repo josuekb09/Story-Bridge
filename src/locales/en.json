@@ -93,5 +93,15 @@
  "policy.navLabel": "Policies",
  "policy.guidelines": "Community guidelines",
  "policy.terms": "Terms",
- "policy.privacy": "Privacy"
+ "policy.privacy": "Privacy",
+ "audience.public": "Public",
+ "audience.publicDescription": "Anyone can read it, even without an account",
+ "audience.members": "Members only",
+ "audience.membersDescription": "Only people signed in to Story Bridge",
+ "audience.private": "Only me",
+ "audience.privateDescription": "Private, nobody else can see it",
+ "audience.heading": "Who can see this story?",
+ "audience.whoCanSee": "Who can see this: {choice}",
+ "audience.pending": "Who can see this: Only me (until a moderator approves it as {choice})",
+ "audience.aiUnavailable": "AI drafts are temporarily unavailable. Write the translation yourself; readers can still use Read in my language."
 }

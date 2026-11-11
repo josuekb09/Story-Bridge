@@ -145,7 +145,7 @@ const isOwner = (req, story) => {
   return !!token && crypto.timingSafeEqual(Buffer.from(hash(token)), Buffer.from(story.ownerHash));
 };
 const clean = (story, owner) => {
-  const result = { id: story.id, objectId:story.objectId || null,title:story.title||'',kind:story.kind||'story',section:story.section||'stories',trustLabel:story.trustLabel||'Told by a community member',licence:story.licence||'All rights reserved',region:story.region||'',people:story.people||'',tags:story.tags||[],sources:story.sources||[],consentConfirmed:!!story.consentConfirmed,access:story.access||'Public', originalLanguage: story.originalLanguage, text: story.text, translationLanguage: story.translationLanguage, translation: story.translation, translationOrigin: story.translationOrigin || 'storyteller', translationChecked: story.translationChecked, checkedBy: story.translationChecked ? story.checkedBy : '', visibility: story.visibility, status: story.status, createdAt: story.createdAt, audio: !!story.audio };
+  const result = { id: story.id, objectId:story.objectId || null,title:story.title||'',kind:story.kind||'story',section:story.section||'stories',trustLabel:story.trustLabel||'Told by a community member',licence:story.licence||'All rights reserved',region:story.region||'',people:story.people||'',tags:story.tags||[],sources:story.sources||[],consentConfirmed:!!story.consentConfirmed,access:story.access||'Public',requestedVisibility:story.requestedVisibility||(story.visibility==='public'?'public':'private'), originalLanguage: story.originalLanguage, text: story.text, translationLanguage: story.translationLanguage, translation: story.translation, translationOrigin: story.translationOrigin || 'storyteller', translationChecked: story.translationChecked, checkedBy: story.translationChecked ? story.checkedBy : '', visibility: story.visibility, status: story.status, createdAt: story.createdAt, audio: !!story.audio };
   result.images=(story.postMedia||[]).filter(item=>item.kind==='image').map(item=>({id:item.id,kind:item.kind,altText:item.alt_text,credit:item.credit,licence:item.licence,width:item.width,height:item.height,sha256:item.sha256,url:`/api/posts/${story.id}/media/${encodeURIComponent(item.storage_key)}`}));
   result.versionLog=storyRecord(story);
   if (story.showName || owner) result.storytellerName = story.storytellerName;
@@ -260,6 +260,7 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/storie
     const token = ownerToken(req);
     if (!token) return res.status(400).json({ error: 'A browser owner token is required.' });
     const body = req.body || {};
+    if(body.requestedVisibility!==undefined&&!['private','public'].includes(body.requestedVisibility))return res.status(400).json({error:'Choose a valid audience.'});
     const audioFile=req.files?.audio?.[0];const imageFiles=req.files?.images||[];
     const metadataError=validatePostMetadata(body);if(metadataError)return res.status(400).json({error:metadataError});
     let imageMetadata=[];try{imageMetadata=JSON.parse(body.imageMetadata||'[]')}catch{return res.status(400).json({error:'Image details could not be read.'})}
@@ -303,7 +304,7 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/storie
     const reservation=uploadReservations.get(req.uploadReservationId);if(reservation)reservation.filenames=savedMedia;
     const post=normalizePostMetadata(body);
     const story = {
-      title:post.title,kind:post.kind,section:post.section,trustLabel:post.trust_label,licence:post.licence,region:post.region,people:post.people,tags:post.tags,sources:post.sources,consentConfirmed:post.consent_confirmed,access:post.access,
+      title:post.title,kind:post.kind,section:post.section,trustLabel:post.trust_label,licence:post.licence,region:post.region,people:post.people,tags:post.tags,sources:post.sources,consentConfirmed:post.consent_confirmed,access:post.access,requestedVisibility:body.requestedVisibility||'private',
       id, ownerHash, objectId:body.objectId || null, originalLanguage: String(body.originalLanguage).trim(), text,
       translationLanguage: String(body.translationLanguage || '').trim(), translation: String(body.translation || ''),
       translationOrigin: body.translation ? (body.translationOrigin === 'ai_approved' && isTranslationApproved(body.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller',
@@ -343,6 +344,7 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories
   if (!isOwner(req, story)) return res.sendStatus(403);
   const body = req.body || {};
   const before={...story};
+  if(body.requestedVisibility!==undefined){if(!['private','public'].includes(body.requestedVisibility))return res.status(400).json({error:'Choose a valid audience.'});story.requestedVisibility=body.requestedVisibility}
   if (body.text !== undefined) { if (typeof body.text !== 'string' || body.text.length > 12_000) return res.status(413).json({ error: 'Story text is limited to 12,000 characters.' }); story.text = body.text; }
   if (body.translation !== undefined) { if (typeof body.translation !== 'string' || body.translation.length > 12_000) return res.status(413).json({ error: 'Translation is limited to 12,000 characters.' }); story.translation = body.translation; story.translationChecked = false; story.checkedBy = ''; }
   if (body.translation !== undefined || body.translationOrigin !== undefined) {

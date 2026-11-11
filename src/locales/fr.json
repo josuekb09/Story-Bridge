@@ -93,5 +93,15 @@
  "policy.navLabel": "Politiques",
  "policy.guidelines": "Charte communautaire",
  "policy.terms": "Conditions",
- "policy.privacy": "Confidentialité"
+ "policy.privacy": "Confidentialité",
+ "audience.public": "Public",
+ "audience.publicDescription": "Tout le monde peut la lire, même sans compte",
+ "audience.members": "Membres seulement",
+ "audience.membersDescription": "Seules les personnes connectées à Story Bridge peuvent la lire",
+ "audience.private": "Moi uniquement",
+ "audience.privateDescription": "Privée, personne d’autre ne peut la voir",
+ "audience.heading": "Qui peut voir cette histoire ?",
+ "audience.whoCanSee": "Qui peut voir cette histoire : {choice}",
+ "audience.pending": "Qui peut voir cette histoire : Moi uniquement (jusqu’à l’approbation par un modérateur comme {choice})",
+ "audience.aiUnavailable": "Les brouillons IA sont temporairement indisponibles. Rédigez vous-même la traduction ; les lecteurs peuvent toujours utiliser « Lire dans ma langue »."
 }

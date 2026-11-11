@@ -147,8 +147,8 @@
 .home-rights-grid p{margin:0;color:var(--ink-soft)}
 
 /* Footer */
-.home-footer{background:var(--forest-deep);color:var(--sand);text-align:center;padding:48px var(--home-pad);display:grid;justify-items:center;gap:10px;border-top:6px solid transparent;border-image:var(--bead) 6}
-.home-footer a{color:var(--gold)}
+.home-footer{background:var(--forest-deep);color:var(--paper);text-align:center;padding:48px var(--home-pad);display:grid;justify-items:center;gap:10px;border-top:6px solid transparent;border-image:var(--bead) 6}
+.home-footer a{color:var(--paper)}
 .home-footer p{margin:0}
 .home-credits{max-width:820px;text-align:left;font-size:.82rem}
 .home-credits summary{cursor:pointer;text-align:center;font-weight:700}

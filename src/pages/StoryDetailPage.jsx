@@ -6,6 +6,7 @@ import ReportPostAction from '../components/ReportPostAction.jsx';
 import { authorizedObjectUrl } from '../lib/api.js';
 import { translationOriginLabel, useUiLanguage } from '../lib/i18n.js';
 import { shouldShowMachineTranslation } from '../share-validation.js';
+import { audienceLine } from '../audience.js';
 import '../styles/components/story-detail.css';
 import '../styles/components/cultures.css';
 
@@ -55,7 +56,7 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
   const privateAudio = !!story._own && !(story.status === 'shared' && story.visibility === 'public');
   const title = storyTitle(story);
   const publicStory = story.status === 'shared' && story.visibility === 'public';
-  const visibilityLabel = story.visibility === 'private' ? 'Only me' : story.visibility === 'public' ? 'Public' : '';
+  const whoCanSee = audienceLine(story, t);
   const date = story.createdAt && !Number.isNaN(new Date(story.createdAt).getTime()) ? new Date(story.createdAt) : null;
   const showMachineTranslation = shouldShowMachineTranslation(story, uiLanguage);
 
@@ -127,16 +128,15 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
 
       <section className="panel story-detail-original"><h2>{t('feed.original').replace('{language}', story.originalLanguage || t('feed.translation'))}</h2><AudioPlayer story={story} privateAudio={privateAudio}/><p className="story-text">{story.text || 'No written text provided.'}</p>{showMachineTranslation && <ReadInMyLanguage text={story.text} sourceLanguage={story.originalLanguage}/>}</section>
 
-      {(story.people || story.region || story.tags?.length > 0 || story.sources?.length > 0 || story.licence || story.access || visibilityLabel) && <section className="panel story-detail-documentation">
+      <section className="panel story-detail-documentation">
         <h2>Documentation</h2>
         {story.people && <p><b>People:</b> {story.people}</p>}
         {story.region && <p><b>Region:</b> {story.region}</p>}
         {story.tags?.length > 0 && <p><b>Tags:</b> {story.tags.join(', ')}</p>}
         {story.sources?.length > 0 && <div><h3>Sources</h3><ul>{story.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.label || source.url}</a></li>)}</ul></div>}
         {story.licence && <p><b>Licence:</b> {story.licence}</p>}
-        {visibilityLabel && <p><b>Visibility:</b> {visibilityLabel}</p>}
-        {story._own && story.access && story.access !== visibilityLabel && <p><b>Requested audience:</b> {story.access}</p>}
-      </section>}
+        <p>{whoCanSee}</p>
+      </section>
 
       {String(story.translation || '').trim() && <section className="panel translation-panel story-detail-translation">
         <h2>{story.translationLanguage ? t('feed.translationByAuthor').replace('{language}', story.translationLanguage) : t('feed.translationByAuthorNoLanguage')}</h2>

@@ -16,6 +16,8 @@ test('language codes are unique and every UI language has a complete locale or E
     'feed.seeMore', 'feed.seeLess', 'feed.read', 'feed.share', 'feed.shareStory', 'feed.original', 'feed.translation',
     'feed.translationByAuthor', 'feed.translationByAuthorNoLanguage', 'feed.originalStory', 'feed.exploreCultures',
     'feed.collections', 'feed.browseObjects', 'feed.joinStoryBridge', 'policy.navLabel', 'policy.guidelines', 'policy.terms', 'policy.privacy',
+    'audience.public', 'audience.publicDescription', 'audience.members', 'audience.membersDescription', 'audience.private', 'audience.privateDescription',
+    'audience.heading', 'audience.whoCanSee', 'audience.pending', 'audience.aiUnavailable',
   ];
   for (const language of UI_LANGUAGES) {
     const locale = readLocale(language.code);

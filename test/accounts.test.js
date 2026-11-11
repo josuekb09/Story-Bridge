@@ -188,6 +188,19 @@ test('account stories expose version fingerprints on creation and append a versi
   const saved=await edited.json();assert.equal(saved.versionLog.length,2);assert.equal(saved.versionLog[1].change,'Original story edited');assert.notEqual(saved.versionLog[0].fingerprint,saved.versionLog[1].fingerprint);assert.equal(store.rows.get(story.id).version_log.length,2);
 });
 
+test('public, members-only and private audience choices persist through first-post review',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const form=new FormData();
+  for(const [key,value] of Object.entries({title:'Members-only audience fixture',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Community only',requestedVisibility:'public',consentConfirmed:'true'}))form.append(key,value);
+  form.append('originalLanguage','Synthetic');form.append('text','Audience visibility test story.');
+  const createdResponse=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('audience-user'),body:form});assert.equal(createdResponse.status,201);
+  const created=await createdResponse.json();assert.equal(created.requestedVisibility,'public');assert.equal(created.visibility,'private');assert.equal(created.access,'Community only');
+  const submitted=await fetch(`${base}/api/stories/${created.id}`,{method:'PUT',headers:{...auth('audience-user'),'content-type':'application/json'},body:JSON.stringify({visibility:'public',access:'Community only',requestedVisibility:'public',approve:true})});
+  assert.equal(submitted.status,200);const pending=await submitted.json();assert.equal(pending.visibility,'private');assert.equal(pending.requestedVisibility,'public');assert.equal(pending.moderationStatus,'pending_review');
+  assert.equal(store.rows.get(created.id).requested_visibility,'public');assert.equal(store.rows.get(created.id).access,'Community only');
+  const invalid=await fetch(`${base}/api/stories/${created.id}`,{method:'PUT',headers:{...auth('audience-user'),'content-type':'application/json'},body:JSON.stringify({requestedVisibility:'members'})});assert.equal(invalid.status,400);
+});
+
 test('multipart story text fields preserve UTF-8 on write and read',async t=>{
   const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
   const title='identité — test';const storytellerName='Josué Kabuya';const form=new FormData();

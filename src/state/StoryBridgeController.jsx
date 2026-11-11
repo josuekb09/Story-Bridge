@@ -6,6 +6,7 @@ import { editAiTranslationDraft, translationApprovalCanContinue } from '../trans
 import { OBJECT_RECORDS, CULTURAL_GROUP_RECORD, OBJECT_IDS, objectRecordView } from '../object-records.js';
 import { prepareImageMetadata, validateTranslationEntry } from '../share-validation.js';
 import { useUiLanguage } from '../lib/i18n.js';
+import { audienceFields, requestedAudienceFromStory } from '../audience.js';
 
 const Landing = lazy(() => import('../pages/LandingPage.jsx'));
 const SignInPage = lazy(() => import('../pages/SignInPage.jsx'));
@@ -25,7 +26,7 @@ const SearchPage = lazy(() => import('../pages/SearchPage.jsx'));
 const AdminPostsPage = lazy(() => import('../pages/AdminPostsPage.jsx'));
 const pageLoading = <main className="page-loading" aria-busy="true"><p role="status">Loading page…</p></main>;
 
-const EMPTY_POST_META = {title:'',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'',access:'Public',consentConfirmed:false};
+const EMPTY_POST_META = {title:'',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'',access:'Public',audience:'private',consentConfirmed:false};
 const googleDisplayName = session => {
   const user = session?.user;
   if (user?.app_metadata?.provider !== 'google' && !user?.identities?.some(identity => identity.provider === 'google')) return '';
@@ -77,7 +78,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const mutationBusyRef = useRef(false);
   const [review, setReview] = useState(null);
-  const [reviewVisibility, setReviewVisibility] = useState('private');
+  const [reviewAudience, setReviewAudience] = useState('private');
   const [withdrawConfirmationId, setWithdrawConfirmationId] = useState('');
   const [deleteConfirmationId, setDeleteConfirmationId] = useState('');
   const [deletingId, setDeletingId] = useState('');
@@ -217,7 +218,7 @@ export default function App() {
     translationRequest.current += 1; translationBusyRef.current = false; setTranslationBusy(false); setTranslationError('');
     setCurrent(null); setTranslationStoryId(''); setReview(null); setReviewBaseline(null);
     setForm(emptyForm); setFile(null); setFileKind(''); setAudioSaved(false); setCaptureBusy(false);
-    setReviewVisibility('private'); setCheckedBy(''); setWithdrawConfirmationId('');
+    setReviewAudience('private'); setCheckedBy(''); setWithdrawConfirmationId('');
     setProfileName(''); setSavedProfileName(''); setProfileState('idle'); setProfileError(''); setProfileNotice('');
     setError(''); setShareSubmitError(''); setSaving(false);
     transitionTo(nextPage);
@@ -334,7 +335,7 @@ export default function App() {
     };
     window.addEventListener('beforeunload', beforeUnload);
     return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [page, captureBusy, file, audioSaved, form, review, reviewBaseline, reviewVisibility]);
+  }, [page, captureBusy, file, audioSaved, form, review, reviewBaseline, reviewAudience]);
 
   async function refresh(sessionKey = currentSession.current, onlyKind = '') {
     const load = async (kind, url, setter) => {
@@ -467,7 +468,7 @@ export default function App() {
           : 'You have unsaved changes. Leaving this screen will discard them. Continue?';
       if (!window.confirm(message)) return;
       if (page === 'share') { setForm(emptyForm); setFile(null); setFileKind(''); setAudioSaved(false); setShareStep(1);setPostMeta(EMPTY_POST_META);setPostImages([]);setImageDetails([]);setShareSubmitError(''); }
-      if (page === 'review') setReviewBaseline({ text: review?.text || '', translation: review?.translation || '', visibility: reviewVisibility });
+      if (page === 'review') setReviewBaseline({ text: review?.text || '', translation: review?.translation || '', audience: reviewAudience });
       if (page === 'profile') setProfileName(savedProfileName);
     }
 
@@ -489,7 +490,7 @@ export default function App() {
 
   function hasUnsavedChanges() {
     if (page === 'share') return captureBusy || captureBusyRef.current || JSON.stringify(form) !== JSON.stringify(emptyForm) || JSON.stringify(postMeta)!==JSON.stringify(EMPTY_POST_META) || postImages.length>0 || !!(file && !audioSaved);
-    if (page === 'review' && review && reviewBaseline) return review.text !== reviewBaseline.text || review.translation !== reviewBaseline.translation || reviewVisibility !== reviewBaseline.visibility;
+    if (page === 'review' && review && reviewBaseline) return review.text !== reviewBaseline.text || review.translation !== reviewBaseline.translation || reviewAudience !== reviewBaseline.audience;
     if (page === 'profile' && ['ready','saving'].includes(profileState)) return profileName !== savedProfileName;
     return false;
   }
@@ -561,7 +562,10 @@ export default function App() {
     Object.entries(form).filter(([key]) => !['translationOrigin','translationApproved'].includes(key)).forEach(([key, value]) => formData.append(key, String(value)));
     formData.append('translationOrigin', form.translationOrigin === 'ai_draft' ? 'ai_approved' : 'storyteller');
     formData.append('translationApproved', String(form.translationApproved));
-    Object.entries(postMeta).filter(([key])=>key!=='sources').forEach(([key,value])=>formData.append(key,String(value)));
+    Object.entries(postMeta).filter(([key])=>!['sources','access','audience'].includes(key)).forEach(([key,value])=>formData.append(key,String(value)));
+    const selectedAudience = audienceFields(postMeta.audience || 'private');
+    formData.append('access', selectedAudience.access);
+    formData.append('requestedVisibility', selectedAudience.requestedVisibility);
     const sources=postMeta.sources.split('\n').map(line=>line.trim()).filter(Boolean).map(line=>{const split=line.indexOf('|');return split<0?{label:line,url:line}:{label:line.slice(0,split).trim(),url:line.slice(split+1).trim()};});
     formData.append('sources',JSON.stringify(sources));
     formData.append('imageMetadata',JSON.stringify(prepareImageMetadata(imageDetails, postMeta.title)));
@@ -575,8 +579,8 @@ export default function App() {
       setForm(emptyForm); setFile(null); setFileKind(''); setPostImages([]); setImageDetails([]);setPostMeta(EMPTY_POST_META);setShareStep(1);setShareSubmitError('');
       setAudioSaved(savedAudio);
       setReview({ ...story, audioSaved: savedAudio });
-      setReviewBaseline({ text: story.text || '', translation: story.translation || '', visibility: story.visibility || 'private' });
-      setReviewVisibility(story.visibility || 'private');
+      setReviewBaseline({ text: story.text || '', translation: story.translation || '', audience: postMeta.audience || 'private' });
+      setReviewAudience(postMeta.audience || 'private');
       // Open the review straight away: the draft is saved. Waiting for refresh() first let the
       // view scope change, so the user was sent back to step 1 and thought nothing was saved.
       transitionTo('review');
@@ -600,7 +604,7 @@ export default function App() {
       const story = await api(`/api/stories/${id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       if (!scopeIsCurrent(scope) || mutationRequest.current !== requestId) return null;
       if (scope.page === 'review' && review?.id === id) {
-        setReview(story); setReviewBaseline({ text: story.text || '', translation: story.translation || '', visibility: story.visibility || 'private' });
+        setReview(story); setReviewBaseline({ text: story.text || '', translation: story.translation || '', audience: requestedAudienceFromStory(story) });
       }
       if (current?.id === id) setCurrent({ ...story, _own: current._own });
       await refresh(scope.identity);
@@ -651,7 +655,7 @@ export default function App() {
     const scope = captureScope();
     try {
       setError('');
-      const saved = await saveReviewChanges({ visibility: reviewVisibility, approve });
+      const saved = await saveReviewChanges({ ...audienceFields(reviewAudience), approve });
       if (saved && scopeIsCurrent(scope)) transitionTo('mine');
     } catch (cause) { if (scopeIsCurrent(scope)) setError(cause.message); }
   }
@@ -661,8 +665,9 @@ export default function App() {
     try {
       const fullStory=await api(`/api/stories/${story.id}`);
       if(!scopeIsCurrent(scope)||detailRequest.current!==requestId)return;
-      setReview(fullStory);setCurrent(fullStory);setReviewVisibility(fullStory.visibility||'private');
-      setReviewBaseline({text:fullStory.text||'',translation:fullStory.translation||'',translationLanguage:fullStory.translationLanguage||'',visibility:fullStory.visibility||'private'});
+      const requestedAudience = requestedAudienceFromStory(fullStory);
+      setReview(fullStory);setCurrent(fullStory);setReviewAudience(requestedAudience);
+      setReviewBaseline({text:fullStory.text||'',translation:fullStory.translation||'',translationLanguage:fullStory.translationLanguage||'',audience:requestedAudience});
       setWithdrawConfirmationId('');setCheckedBy(fullStory.checkedBy||'');transitionTo('review');
     } catch(cause) { if(scopeIsCurrent(scope)&&detailRequest.current===requestId)setError(cause.message); }
   }
@@ -728,7 +733,7 @@ export default function App() {
       {page === 'group-record' && <CulturalGroupPage record={CULTURAL_GROUP_RECORD} navigate={navigate} onAddVoice={addVoiceToObject}/>}
       {page.startsWith('object:') && <ObjectRecordPage source={OBJECT_RECORDS.find(item => item.id === page.slice(7))} objectSettings={objectSettings} session={session} objectAccessSaving={objectAccessSaving} objectAccessError={objectAccessError} saveObjectAccess={saveObjectAccess} linkedStories={objectStories(page.slice(7))} showStory={showStory} addVoiceToObject={addVoiceToObject} navigate={navigate}/>}
       {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} requireAuthorName={!!accountConfig.account} onSaveAuthorName={saveShareAuthorName} submissionError={shareSubmitError} clearSubmissionError={()=>setShareSubmitError('')} onEditProfile={()=>navigate('profile')}/>}
-      {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
+      {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewAudience={reviewAudience} setReviewAudience={setReviewAudience} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
       {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} onChangeAuthorVisibility={changeAuthorVisibility} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId} profileAvatar={profileAvatar}/>}
       {page === 'cultures' && <CulturesPage stories={publicStories} showStory={showStory} navigate={navigate}/>}
       {page === 'search' && <SearchPage stories={publicStories} showStory={showStory}/>}

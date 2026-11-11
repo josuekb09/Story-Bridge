@@ -38,7 +38,7 @@ const authorFor = (row, profile, includeAvatar = false, authMetadata = null) => 
   return author;
 };
 const clean = (row, owner = false, profile = null, includeAvatar = false, authMetadata = null) => {
-  const out = { id: row.id, objectId: row.object_id || null, title:row.title||'',kind:row.kind||'story',section:row.section||'stories',trustLabel:row.trust_label||'Told by a community member',licence:row.licence||'All rights reserved',region:row.region||'',people:row.people||'',tags:row.tags||[],sources:row.sources||[],consentConfirmed:!!row.consent_confirmed,access:row.access||'Public',moderationStatus:row.moderation_status||'approved',originalLanguage: row.original_language, text: row.text, translationLanguage: row.translation_language, translation: row.translation, translationOrigin: row.translation_origin || 'storyteller', translationChecked: row.translation_checked, checkedBy: row.translation_checked ? row.checked_by : '', visibility: row.visibility, status: row.status, createdAt: row.created_at, audio: !!row.audio_key, versionLog:storyRecord(row) };
+  const out = { id: row.id, objectId: row.object_id || null, title:row.title||'',kind:row.kind||'story',section:row.section||'stories',trustLabel:row.trust_label||'Told by a community member',licence:row.licence||'All rights reserved',region:row.region||'',people:row.people||'',tags:row.tags||[],sources:row.sources||[],consentConfirmed:!!row.consent_confirmed,access:row.access||'Public',requestedVisibility:row.requested_visibility||'private',moderationStatus:row.moderation_status||'approved',originalLanguage: row.original_language, text: row.text, translationLanguage: row.translation_language, translation: row.translation, translationOrigin: row.translation_origin || 'storyteller', translationChecked: row.translation_checked, checkedBy: row.translation_checked ? row.checked_by : '', visibility: row.visibility, status: row.status, createdAt: row.created_at, audio: !!row.audio_key, versionLog:storyRecord(row) };
   const author = authorFor(row, profile, includeAvatar, authMetadata);
   out.author = author;
   out.storytellerName = author.name;
@@ -271,6 +271,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   app.get('/api/mine', session, async (req, res) => { try { const rows=(await store.listMine(req.account.id)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));res.json(await cleanPosts(rows,true,store)); } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
   app.post('/api/stories', session, rateLimit, limitPostBody, parsePostUpload, async (req, res) => {
     const b = req.body || {};
+    if (b.requestedVisibility !== undefined && !['private','public'].includes(b.requestedVisibility)) return res.status(400).json({error:'Choose a valid audience.'});
     const metadataError=validatePostMetadata({...b,consentConfirmed:b.consentConfirmed});
     if(metadataError)return res.status(400).json({error:metadataError});
     let imageMetadata=[];try{imageMetadata=JSON.parse(b.imageMetadata||'[]')}catch{return res.status(400).json({error:'Image details could not be read.'})}
@@ -291,7 +292,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       const firstPost=existingPosts.length===0||existingPosts.some(item=>item.first_post&&item.moderation_status==='pending_review');
       let row;
       const postAsCommunityMember = b.postAsCommunityMember === true || b.postAsCommunityMember === 'true';
-      const record={ ...normalized, owner_user_id: req.account.id, owner_hash: null, first_post:firstPost, moderation_status:'approved',requested_visibility:'private', object_id:b.objectId || null, original_language: b.originalLanguage.trim(), text: b.text || '', translation_language: b.translationLanguage || '', translation: b.translation || '', translation_origin: b.translation ? (b.translationOrigin === 'ai_approved' && isTranslationApproved(b.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller', translation_checked: false, checked_by: '', storyteller_name: String(b.storytellerName || '').slice(0,120), show_name: !postAsCommunityMember, visibility: 'private', status: 'draft', audio_key: audioKey, audio_mime:audioFile?.mimetype || '', audio_sha256:audioFile?sha256(audioFile.buffer):'' };
+      const record={ ...normalized, owner_user_id: req.account.id, owner_hash: null, first_post:firstPost, moderation_status:'approved',requested_visibility:b.requestedVisibility||'private', object_id:b.objectId || null, original_language: b.originalLanguage.trim(), text: b.text || '', translation_language: b.translationLanguage || '', translation: b.translation || '', translation_origin: b.translation ? (b.translationOrigin === 'ai_approved' && isTranslationApproved(b.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller', translation_checked: false, checked_by: '', storyteller_name: String(b.storytellerName || '').slice(0,120), show_name: !postAsCommunityMember, visibility: 'private', status: 'draft', audio_key: audioKey, audio_mime:audioFile?.mimetype || '', audio_sha256:audioFile?sha256(audioFile.buffer):'' };
       record.version_log=[makeStoryVersion(record,'Story created')];
       if(postAsCommunityMember)record.version_log=appendStoryVersion(record,'Posted as Community member');
       try { row = await store.create(record); }
@@ -341,6 +342,10 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     for (const [from, to] of Object.entries({ text:'text', translation:'translation', translationLanguage:'translation_language', originalLanguage:'original_language', storytellerName:'storyteller_name' })) if (b[from] !== undefined) changes[to] = b[from];
     if (b.showName !== undefined) changes.show_name = b.showName;
     for (const [from,to] of Object.entries({title:'title',kind:'kind',section:'section',trustLabel:'trust_label',licence:'licence',region:'region',people:'people',tags:'tags',sources:'sources',access:'access'})) if(b[from]!==undefined)changes[to]=b[from];
+    if (b.requestedVisibility !== undefined) {
+      if (!['private','public'].includes(b.requestedVisibility)) return res.status(400).json({error:'Choose a valid audience.'});
+      changes.requested_visibility = b.requestedVisibility;
+    }
     if (b.visibility !== undefined) {
       if (!['private','public'].includes(b.visibility)) return res.status(400).json({ error:'Invalid visibility.' });
       changes.visibility = b.visibility;
@@ -361,7 +366,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     }
     if (b.approve === true && req.story.first_post) {
       if (req.story.moderation_status === 'pending_review') return res.status(409).json({error:'This first post is awaiting admin review.'});
-      changes.status='draft';changes.visibility='private';changes.requested_visibility=b.visibility==='public'?'public':'private';changes.moderation_status='pending_review';
+      changes.status='draft';changes.visibility='private';changes.requested_visibility=b.requestedVisibility||(b.visibility==='public'?'public':'private');changes.moderation_status='pending_review';
     }
     else if (b.approve === true) changes.status = 'shared';
     else if (b.approve === false) changes.status = 'draft';
