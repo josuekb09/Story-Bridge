@@ -8,7 +8,10 @@
 .story-detail-author-avatar{width:32px;height:32px}
 .story-author-toggle{display:flex;align-items:center;gap:8px;margin-top:12px}
 .share-author{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.share-author-choice>.check{margin-top:8px}
+.share-privacy-options{margin:0 0 12px 42px}
+.share-privacy-options summary{cursor:pointer;color:var(--ink-soft);font-size:.9rem;font-weight:600}
+.share-privacy-options p{margin:8px 0;font-size:.9rem}
+.share-privacy-options .check{margin:0}
 .mine-author-avatar.author-avatar-initials{display:grid;place-items:center;background:linear-gradient(135deg,var(--forest,#1f4d3a),var(--moss,#6e8b70));color:var(--gold,#e8b04b);font-family:Fraunces,Georgia,serif;font-weight:800}
 .mine-author-avatar.author-avatar-placeholder,.post-avatar.author-avatar-placeholder{padding:8px;object-fit:contain;background:var(--sand,#f2eadb)}
 .mine-author-toggle{margin:8px 0 14px;font-size:.9rem}
