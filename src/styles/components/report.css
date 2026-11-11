@@ -1,0 +1,28 @@
+.post-menu{position:relative;margin-left:auto}
+.post-menu>summary{list-style:none;cursor:pointer;border:1px solid var(--line);border-radius:999px;min-width:38px;min-height:38px;display:grid;place-items:center;font-weight:800;letter-spacing:1px;color:var(--forest)}
+.post-menu>summary::-webkit-details-marker{display:none}
+.report-menu-action{position:absolute;z-index:5;right:0;top:calc(100% + 6px);display:flex;align-items:center;gap:8px;white-space:nowrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;box-shadow:0 8px 28px #1d38221c;color:var(--ink);cursor:pointer}
+.report-menu-action img{object-fit:contain}
+.report-overlay{position:fixed;z-index:1200;inset:0;background:#14251fc2;display:grid;place-items:center;padding:18px}
+.report-dialog{width:min(100%,520px);max-height:min(90vh,760px);overflow:auto;background:var(--paper,#fff);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 20px 80px #0004}
+.report-dialog h2{margin:0 0 16px;font-family:Fraunces,Georgia,serif;color:var(--forest-deep)}
+.report-dialog fieldset{border:0;padding:0;margin:0;display:grid;gap:7px}
+.report-dialog legend{font-weight:700;margin-bottom:8px}
+.report-reason{display:flex;align-items:center;gap:10px;min-height:40px}
+.report-details{display:grid;gap:5px;margin-top:14px}
+.report-details textarea{width:100%;resize:vertical}
+.report-details small{justify-self:end;color:var(--ink-soft)}
+.report-dialog .actions{justify-content:flex-end;margin-top:18px}
+.moderator-note{padding:10px 12px;border-left:3px solid var(--clay);background:#f8eee9;color:var(--ink);border-radius:0 8px 8px 0}
+.site-policy-footer{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;padding:18px 20px;margin-top:24px;background:var(--forest-deep);color:var(--paper);text-align:center;font-size:.9rem}
+.site-policy-footer nav{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px}
+.site-policy-footer a{color:var(--paper);text-underline-offset:3px}
+.danger-zone{width:min(100% - 32px,860px);margin:28px auto 96px;padding:20px;border:1px solid #b64032;border-radius:16px;background:#fff7f4}
+.danger-zone h2{margin:0 0 8px;color:#8b231b}
+.danger-zone>p{margin:0 0 16px}
+.delete-account-confirm{margin-top:16px;padding:16px;border:1px solid #e0a79e;border-radius:12px;background:#fff}
+.delete-account-confirm h3{margin:0 0 8px}
+.delete-account-confirm label{display:grid;gap:6px;font-weight:700}
+.delete-account-confirm input{max-width:280px}
+.delete-account-confirm .actions{justify-content:flex-start}
+@media(max-width:520px){.report-dialog{padding:18px}.report-dialog .actions>*{flex:1}.site-policy-footer{padding:16px 14px}}

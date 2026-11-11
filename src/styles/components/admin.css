@@ -16,4 +16,13 @@
 .admin-confirm{margin-top:16px;padding:14px;border-radius:12px;background:var(--sand-soft,#f7f2e6)}
 .admin-confirm p{margin:0}
 .admin-empty{padding:20px;border:1px dashed var(--line);border-radius:14px;color:var(--ink-soft)}
+.admin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:18px 0}
+.admin-stat{display:grid;gap:5px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff)}
+.admin-stat b{font-size:1.5rem;color:var(--forest-deep)}
+.admin-stat span{font-size:.82rem;color:var(--ink-soft)}
+.admin-tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:20px 0}
+.admin-tabs button{border:0;border-bottom:3px solid transparent;background:transparent;padding:10px 14px;color:var(--ink);font-weight:700;cursor:pointer}
+.admin-tabs button[aria-selected="true"]{border-bottom-color:var(--forest);color:var(--forest)}
+.admin-report-details{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--sand-soft,#f7f2e6);padding:12px;border-radius:10px}
+.admin-report a{color:var(--forest);text-underline-offset:3px}
 @media(max-width:520px){.admin-post{padding:16px}.admin-post-heading{display:block}.admin-post time{display:block}.admin-actions>*{flex:1 1 100%;min-height:44px}}

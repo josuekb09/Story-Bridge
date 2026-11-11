@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
+import ReportPostAction from '../components/ReportPostAction.jsx';
 import { translationOriginLabel } from '../lib/i18n.js';
 import { CULTURAL_GROUP_RECORD } from '../object-records.js';
 import { SHOWCASE } from '../data/showcase.js';
@@ -25,7 +26,7 @@ function timeAgo(value) {
   return format.format(0, 'minute');
 }
 
-function PostCard({ story, showStory, translationStoryId, setTranslationStoryId }) {
+function PostCard({ story, showStory, translationStoryId, setTranslationStoryId, signedIn, isAuthor, onReportSignIn, onReported }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [authorAvatarUnavailable, setAuthorAvatarUnavailable] = useState(false);
@@ -81,11 +82,12 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId 
       <a className="post-read" href={`/stories/${encodeURIComponent(story.id)}`} onClick={event => { event.preventDefault(); showStory(story); }}>📖 Read</a>
       {story.translation && <button type="button" aria-pressed={showingTranslation} onClick={() => setTranslationStoryId(value => value === story.id ? '' : story.id)}>🌍 {showingTranslation ? 'Original' : 'Translation'}</button>}
       <button type="button" onClick={share}>{copied ? '✓ Copied' : '↗ Share'}</button>
+      <ReportPostAction postId={story.id} signedIn={signedIn} isAuthor={isAuthor} onSignIn={onReportSignIn} onReported={onReported}/>
     </footer>
   </article>;
 }
 
-export default function FeedPage({ accountConfig, visibleStories, languageFilter, setLanguageFilter, regionFilter, setRegionFilter, audioOnly, setAudioOnly, listState, listErrors, retryList, filteredStories, navigate, translationStoryId, setTranslationStoryId, showStory, transitionTo, signedIn = false, onCulture = () => {} }) {
+export default function FeedPage({ accountConfig, visibleStories, ownedStoryIds = new Set(), languageFilter, setLanguageFilter, regionFilter, setRegionFilter, audioOnly, setAudioOnly, listState, listErrors, retryList, filteredStories, navigate, translationStoryId, setTranslationStoryId, showStory, transitionTo, signedIn = false, onReportSignIn = () => {}, onReported = () => {}, onCulture = () => {} }) {
   const [shown, setShown] = useState(PAGE_SIZE);
   const languages = useMemo(() => [...new Set(visibleStories.map(story => story.originalLanguage).filter(Boolean))], [visibleStories]);
   const regions = useMemo(() => [...new Set(visibleStories.map(story => story.region).filter(Boolean))], [visibleStories]);
@@ -120,7 +122,7 @@ export default function FeedPage({ accountConfig, visibleStories, languageFilter
       </section>}
 
       {listState.stories === 'ready' && filteredStories.length > 0 && <>
-        <div className="feed-list">{filteredStories.slice(0, shown).map(story => <PostCard key={story.id} story={story} showStory={showStory} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId}/>)}</div>
+        <div className="feed-list">{filteredStories.slice(0, shown).map(story => <PostCard key={story.id} story={story} showStory={showStory} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} signedIn={signedIn} isAuthor={ownedStoryIds.has(story.id)||(signedIn&&listState.mine==='loading')} onReportSignIn={onReportSignIn} onReported={onReported}/>)}</div>
         {shown < filteredStories.length ? <button type="button" className="secondary feed-more" onClick={() => setShown(value => value + PAGE_SIZE)}>Show more stories</button> : <p className="feed-end">You're all caught up ✓</p>}
       </>}
     </div>

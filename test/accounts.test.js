@@ -22,15 +22,22 @@ const token = (sub, extra) => signTestToken(baseClaims(sub, extra), pair.private
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 
 function fixtureStore() {
-  const rows = new Map(); const profiles = new Map();const media=[];const images=new Map();const avatars=new Map(); let lock = Promise.resolve();
+  const rows = new Map(); const profiles = new Map();const reports=new Map();const media=[];const images=new Map();const avatars=new Map(); let lock = Promise.resolve();
   const store = {
     rows,
+    reports,
     async listPublic() { return [...rows.values()].filter(row => row.status==='shared' && row.visibility==='public'); },
     async listMine(userId) { return [...rows.values()].filter(row => row.owner_user_id===userId); },
     async listPending() { return [...rows.values()].filter(row=>row.moderation_status==='pending_review'); },
     async get(id) { return rows.get(id) || null; },
     async create(row) { const saved={id:crypto.randomUUID(),created_at:new Date().toISOString(),...row};rows.set(saved.id,saved);return saved; },
     async update(id,userId,changes) { const row=rows.get(id);if(!row||row.owner_user_id!==userId)return null;Object.assign(row,changes);return row; },
+    async updateAdminStory(id,changes) { const row=rows.get(id);if(!row)return null;Object.assign(row,changes);return row; },
+    async listOpenPostReports() { return [...reports.values()].filter(row=>row.target_type==='post'&&row.status==='open').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)); },
+    async createPostReport(record) { const existing=[...reports.values()].find(row=>row.reporter_id===record.reporter_id&&row.target_type==='post'&&row.target_id===record.target_id&&row.status==='open');if(existing)return{created:false,report:existing};const report={id:crypto.randomUUID(),created_at:new Date().toISOString(),...record};reports.set(report.id,report);return{created:true,report}; },
+    async dismissReport(id) { const report=reports.get(id);if(!report||report.status!=='open')return false;report.status='dismissed';return true; },
+    async actionReportsForPost(postId) { let changed=0;for(const report of reports.values())if(report.target_type==='post'&&report.target_id===postId&&report.status==='open'){report.status='actioned';changed++;}return changed; },
+    async adminStats() { return{accounts:profiles.size,profilesCompleted:[...profiles.values()].filter(row=>row.display_name?.trim()).length,publicPosts:[...rows.values()].filter(row=>row.status==='shared'&&row.visibility==='public').length,pendingFirstPosts:[...rows.values()].filter(row=>row.first_post&&row.moderation_status==='pending_review').length,openReports:[...reports.values()].filter(row=>row.status==='open').length}; },
     async countMine(userId) { return [...rows.values()].filter(row=>row.owner_user_id===userId).length; },
     async putPostImage(key,buffer){images.set(key,buffer);},async createPostMedia(list){media.push(...list);return list;},async listPostMedia(id){return media.filter(item=>item.post_id===id);},async getPostImage(key){return{buffer:images.get(key),mime:'image/webp'};},
     async claimLegacy(ownerHash,userId) {
@@ -63,6 +70,7 @@ test('account sitemap includes public stories and omits private or community-onl
   const {base,server}=await serverFor(store);t.after(()=>new Promise(resolve=>server.close(resolve)));
   const response=await fetch(`${base}/sitemap.xml`);const xml=await response.text();
   assert.equal(response.status,200);assert.match(response.headers.get('cache-control')||'',/max-age=3600/);
+  assert.ok(xml.includes('https://story-bridge.onrender.com/guidelines'));
   assert.ok(xml.includes('/stories/public-sitemap'));assert.ok(!xml.includes('/stories/private-sitemap'));assert.ok(!xml.includes('/stories/community-sitemap'));
 });
 
@@ -342,4 +350,69 @@ test('public named story cards can load only their public author avatar',async t
   assert.equal(photo.status,200);assert.match(photo.headers.get('content-type'),/image\/webp/);assert.equal(photo.headers.get('x-content-type-options'),'nosniff');
   assert.deepEqual(Buffer.from(await photo.arrayBuffer()),image);
   for(const id of ['anonymous-public','community-public','restricted-object','private-story']) assert.equal((await fetch(`${base}/api/stories/${id}/author-avatar`)).status,404,id);
+});
+
+test('post reports are saved, idempotent per reporter and post, reject authors and validate reasons',async t=>{
+  const store=fixtureStore();
+  store.rows.set('reported-post',{...storyRow('reported-post','author','shared','public'),title:'Reportable post'});
+  store.rows.set('private-post',{...storyRow('private-post','author','draft','private'),title:'Private post'});
+  const {base,server}=await serverFor(store);t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const send=(user,body,id='reported-post')=>fetch(`${base}/api/posts/${id}/report`,{method:'POST',headers:{...auth(user),'content-type':'application/json'},body:JSON.stringify(body)});
+  const created=await send('reader',{reason:'privacy',details:'  A phone number is visible.  '});assert.equal(created.status,201);
+  assert.deepEqual(await created.json(),{ok:true});
+  const saved=[...store.reports.values()][0];assert.equal(saved.reporter_id,'reader');assert.equal(saved.target_type,'post');assert.equal(saved.target_id,'reported-post');assert.equal(saved.details,'A phone number is visible.');
+  assert.equal((await send('reader',{reason:'spam',details:'A second attempt'})).status,200);assert.equal(store.reports.size,1);
+  assert.equal((await send('author',{reason:'spam'})).status,403);
+  assert.equal((await send('reader',{reason:'not-a-reason'})).status,400);
+  assert.equal((await send('reader',{reason:'spam',details:'x'.repeat(1001)})).status,400);
+  assert.equal((await send('reader',{reason:'spam'},'private-post')).status,404);
+});
+
+test('admin reports queue hides reporter identity and supports hide and dismiss with admin-only access',async t=>{
+  const store=fixtureStore();
+  store.rows.set('reported-one',{...storyRow('reported-one','author','shared','public'),title:'First reported title'});
+  store.rows.set('reported-two',{...storyRow('reported-two','author','shared','public'),title:'Second reported title'});
+  const first=await store.createPostReport({reporter_id:'reader-one',target_type:'post',target_id:'reported-one',reason:'disrespectful',details:'Please review this.',status:'open'});
+  await store.createPostReport({reporter_id:'reader-two',target_type:'post',target_id:'reported-one',reason:'spam',details:null,status:'open'});
+  const second=await store.createPostReport({reporter_id:'reader-three',target_type:'post',target_id:'reported-two',reason:'privacy',details:'Private data.',status:'open'});
+  const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});t.after(()=>new Promise(resolve=>server.close(resolve)));
+  assert.equal((await fetch(`${base}/api/admin/reports`,{headers:auth('reader-one')})).status,403);
+  assert.equal((await fetch(`${base}/api/admin/posts/reported-one/hide`,{method:'POST',headers:{...auth('reader-one'),'content-type':'application/json'},body:JSON.stringify({note:'Reviewed'})})).status,403);
+  assert.equal((await fetch(`${base}/api/admin/reports/${second.report.id}/dismiss`,{method:'POST',headers:auth('reader-one')})).status,403);
+  const queue=await fetch(`${base}/api/admin/reports`,{headers:auth('admin-user')});assert.equal(queue.status,200);
+  const queued=await queue.json();assert.equal(queued.length,3);assert.equal(queued.find(row=>row.postId==='reported-one').reportCount,2);assert.ok(queued.some(row=>row.postTitle==='Second reported title'));assert.equal('reporter_id' in queued[0],false);assert.equal('email' in queued[0],false);
+  const hidden=await fetch(`${base}/api/admin/posts/reported-one/hide`,{method:'POST',headers:{...auth('admin-user'),'content-type':'application/json'},body:JSON.stringify({note:'Contains identifying information.'})});assert.equal(hidden.status,200);
+  const row=store.rows.get('reported-one');assert.equal(row.status,'withdrawn');assert.equal(row.visibility,'private');assert.ok(row.version_log.some(version=>version.change==='Hidden by moderator: Contains identifying information.'));
+  assert.equal([...store.reports.values()].filter(report=>report.target_id==='reported-one').every(report=>report.status==='actioned'),true);
+  assert.equal((await fetch(`${base}/api/admin/posts/reported-one/hide`,{method:'POST',headers:{...auth('admin-user'),'content-type':'application/json'},body:JSON.stringify({note:''})})).status,400);
+  const dismissed=await fetch(`${base}/api/admin/reports/${second.report.id}/dismiss`,{method:'POST',headers:auth('admin-user')});assert.equal(dismissed.status,204);assert.equal(store.reports.get(second.report.id).status,'dismissed');
+});
+
+test('admin statistics return file-store counts and reject non-admin accounts',async t=>{
+  const directory=path.join(process.cwd(),'_tmp',`admin-stats-${crypto.randomUUID()}`);const store=createFileAccountStore(directory);
+  await store.saveProfile('complete-user',{display_name:'A complete profile'});await store.saveProfile('empty-user',{display_name:''});
+  await store.create({...storyRow('public-stat','author','shared','public'),title:'Public post'});
+  await store.create({...storyRow('pending-stat','new-user','draft','private'),first_post:true,moderation_status:'pending_review'});
+  await store.createPostReport({reporter_id:'reader',target_type:'post',target_id:'public-stat',reason:'other',details:null,status:'open'});
+  const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});t.after(()=>{server.close();fs.rmSync(directory,{recursive:true,force:true});});
+  assert.equal((await fetch(`${base}/api/admin/stats`,{headers:auth('reader')})).status,403);
+  const response=await fetch(`${base}/api/admin/stats`,{headers:auth('admin-user')});assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{accounts:2,profilesCompleted:1,publicPosts:1,pendingFirstPosts:1,openReports:1});
+});
+
+test('account deletion requires a session and removes profile, stories, media files and submitted reports',async t=>{
+  const directory=path.join(process.cwd(),'_tmp',`account-delete-${crypto.randomUUID()}`);const store=createFileAccountStore(directory);
+  const audioKey=crypto.randomUUID(),imageKey=crypto.randomUUID(),avatarKey=crypto.randomUUID();
+  const story=await store.create({...storyRow('account-story','delete-user','shared','public',audioKey),title:'Story to remove'});
+  await store.putAudio(audioKey,Buffer.from('audio'));
+  await store.putPostImage(imageKey,Buffer.from('image'));
+  await store.createPostMedia([{id:crypto.randomUUID(),post_id:story.id,kind:'image',storage_key:imageKey}]);
+  await store.putProfileAvatar(avatarKey,Buffer.from('avatar'));
+  await store.saveProfile('delete-user',{display_name:'Delete this profile',avatar_key:avatarKey});
+  await store.createPostReport({reporter_id:'delete-user',target_type:'post',target_id:'other-post',reason:'other',details:null,status:'open'});
+  const {base,server}=await serverFor(store);t.after(()=>{server.close();fs.rmSync(directory,{recursive:true,force:true});});
+  assert.equal((await fetch(`${base}/api/account`,{method:'DELETE'})).status,401);
+  const response=await fetch(`${base}/api/account`,{method:'DELETE',headers:auth('delete-user')});assert.equal(response.status,204);
+  assert.equal(await store.get(story.id),null);assert.equal(await store.profile('delete-user'),null);assert.deepEqual(await store.listPostMedia(story.id),[]);assert.deepEqual(await store.listOpenPostReports(),[]);
+  for(const [folder,key,extension] of [['account-audio',audioKey,'.audio'],['post-media',imageKey,'.webp'],['profile-avatars',avatarKey,'.webp']])assert.equal(fs.existsSync(path.join(directory,folder,`${key}${extension}`)),false);
 });

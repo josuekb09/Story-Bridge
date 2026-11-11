@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { authorizedObjectUrl } from '../lib/api.js';
+import { api, authorizedObjectUrl } from '../lib/api.js';
 import '../styles/components/admin.css';
 
 function dateLabel(value) {
@@ -26,12 +26,50 @@ function ProtectedImage({ image }) {
 
 export default function AdminPostsPage({ posts = [], error = '', busyId = '', onAction = () => {}, onRetry = () => {} }) {
   const [confirmation, setConfirmation] = useState(null);
+  const [tab,setTab]=useState('posts');
+  const [stats,setStats]=useState(null);
+  const [statsError,setStatsError]=useState('');
+  const [reports,setReports]=useState([]);
+  const [reportsError,setReportsError]=useState('');
+  const [reportsBusy,setReportsBusy]=useState(false);
+  const [reportBusyId,setReportBusyId]=useState('');
+  const [hideTarget,setHideTarget]=useState('');
+  const [hideNote,setHideNote]=useState('');
+  async function loadStats(){try{setStatsError('');setStats(await api('/api/admin/stats'));}catch(cause){setStats(null);setStatsError(cause.message||'Admin statistics are unavailable.');}}
+  async function loadReports(){setReportsBusy(true);setReportsError('');try{const rows=await api('/api/admin/reports');if(!Array.isArray(rows))throw Error('Invalid reports response');setReports(rows);}catch(cause){setReportsError(cause.message||'The reports queue is unavailable.');}finally{setReportsBusy(false);}}
+  useEffect(()=>{loadStats();},[]);
+  useEffect(()=>{if(tab==='reports')loadReports();},[tab]);
+  async function dismissReport(id){setReportBusyId(id);setReportsError('');try{await api(`/api/admin/reports/${encodeURIComponent(id)}/dismiss`,{method:'POST'});setReports(rows=>rows.filter(row=>row.id!==id));await loadStats();}catch(cause){setReportsError(cause.message||'The report could not be dismissed.');}finally{setReportBusyId('');}}
+  async function hidePost(postId){if(!hideNote.trim())return;setReportBusyId(postId);setReportsError('');try{await api(`/api/admin/posts/${encodeURIComponent(postId)}/hide`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({note:hideNote})});setReports(rows=>rows.filter(row=>row.postId!==postId));setHideTarget('');setHideNote('');await loadStats();}catch(cause){setReportsError(cause.message||'The post could not be hidden.');}finally{setReportBusyId('');}}
   return <main className="admin-main">
     <header className="admin-head">
       <p className="eyebrow">Moderation</p>
       <h1>Admin review</h1>
       <p className="muted">Review first posts before they become public.</p>
     </header>
+    <section className="admin-stats" aria-label="Platform numbers">
+      {stats ? [['Accounts',stats.accounts],['Completed profiles',stats.profilesCompleted],['Public posts',stats.publicPosts],['Pending first posts',stats.pendingFirstPosts],['Open reports',stats.openReports]].map(([label,value])=><article className="admin-stat" key={label}><b>{value}</b><span>{label}</span></article>) : <p className="muted" role={statsError?'alert':'status'}>{statsError||'Loading platform numbers…'}</p>}
+    </section>
+    <div className="admin-tabs" role="tablist" aria-label="Moderation queues">
+      <button type="button" role="tab" aria-selected={tab==='posts'} onClick={()=>setTab('posts')}>First posts</button>
+      <button type="button" role="tab" aria-selected={tab==='reports'} onClick={()=>setTab('reports')}>Reports</button>
+    </div>
+    {tab==='reports' && <section className="admin-report-queue" aria-label="Open reports">
+      {reportsError && <section className="panel" role="alert"><p>{reportsError}</p><button type="button" className="secondary" onClick={loadReports}>Try again</button></section>}
+      {reportsBusy && <p role="status">Loading reports…</p>}
+      {!reportsBusy&&!reportsError&&!reports.length&&<p className="admin-empty">No open reports.</p>}
+      {!reportsBusy&&!reportsError&&reports.length>0&&<ul className="admin-post-list">{reports.map(report=>{
+        const busy=reportBusyId===report.id||reportBusyId===report.postId;
+        return <li key={report.id}><article className="admin-post admin-report">
+          <div className="admin-post-heading"><div><h2><a href={`/stories/${encodeURIComponent(report.postId)}`}>{report.postTitle}</a></h2><p>{report.reportCount} open report{report.reportCount===1?'':'s'} for this post</p></div><time dateTime={report.created_at}>{dateLabel(report.created_at)}</time></div>
+          <p><b>Reason:</b> {({wrong_or_harmful_information:'Wrong or harmful information',disrespectful:'Disrespectful',sacred_or_restricted:'Sacred or restricted knowledge',privacy:'Private information',spam:'Spam',other:'Other'})[report.reason]||report.reason}</p>
+          {report.details&&<p className="admin-report-details"><b>Details:</b> {report.details}</p>}
+          <div className="admin-actions"><button type="button" className="danger" disabled={!!reportBusyId} onClick={()=>{setHideTarget(report.postId);setHideNote('');}}>Hide post</button><button type="button" className="secondary" disabled={!!reportBusyId} onClick={()=>dismissReport(report.id)}>{busy?'Working…':'Dismiss'}</button></div>
+          {hideTarget===report.postId&&<div className="admin-confirm" role="alertdialog" aria-label="Hide reported post"><label>Short moderator note<input value={hideNote} maxLength={240} onChange={event=>setHideNote(event.target.value)}/></label><div className="admin-actions"><button type="button" className="secondary" disabled={!!reportBusyId} onClick={()=>setHideTarget('')}>Cancel</button><button type="button" className="danger" disabled={!hideNote.trim()||!!reportBusyId} onClick={()=>hidePost(report.postId)}>{busy?'Hiding…':'Confirm hide'}</button></div></div>}
+        </article></li>;
+      })}</ul>}
+    </section>}
+    {tab==='posts'&&<>
     {error && <section className="panel" role="alert"><p>{error}</p><button type="button" className="secondary" onClick={onRetry}>Try again</button></section>}
     {!error && posts.length === 0 && <p className="admin-empty">No posts are waiting for review.</p>}
     {posts.length > 0 && <ul className="admin-post-list">{posts.map(post => {
@@ -59,5 +97,6 @@ export default function AdminPostsPage({ posts = [], error = '', busyId = '', on
         </div>}
       </article></li>;
     })}</ul>}
+    </>}
   </main>;
 }

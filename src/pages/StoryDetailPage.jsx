@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
+import ReportPostAction from '../components/ReportPostAction.jsx';
 import { authorizedObjectUrl } from '../lib/api.js';
 import { translationOriginLabel } from '../lib/i18n.js';
 import '../styles/components/story-detail.css';
@@ -46,7 +47,7 @@ function StoryImage({ image, protectedFile }) {
   return src ? <img src={src} alt={image.altText || ''} width={image.width || 640} height={image.height || 480} sizes="(max-width: 720px) 100vw, 860px" loading="lazy" decoding="async"/> : <div className="story-photo-loading" role="status">Loading photo…</div>;
 }
 
-export default function StoryDetailPage({ story, navigate, backPage = 'discover' }) {
+export default function StoryDetailPage({ story, navigate, backPage = 'discover', signedIn = false, isAuthor = !!story._own, onReportSignIn = () => {}, onReported = () => {} }) {
   const [shareFeedback, setShareFeedback] = useState('');
   const privateAudio = !!story._own && !(story.status === 'shared' && story.visibility === 'public');
   const title = storyTitle(story);
@@ -108,6 +109,7 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
           {date && <time dateTime={date.toISOString()} title={date.toLocaleString()}>{relativeDate(date)}</time>}
         </p>
         <button type="button" className="secondary story-share" onClick={shareStory}>↗ Share story</button>
+        <ReportPostAction postId={story.id} signedIn={signedIn} isAuthor={isAuthor} onSignIn={onReportSignIn} onReported={onReported}/>
         {shareFeedback && <span className="story-share-feedback" role="status">{shareFeedback}</span>}
       </header>
 

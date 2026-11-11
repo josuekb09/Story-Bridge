@@ -15,8 +15,12 @@ function initials(name) {
 }
 
 // Profile: a readable card first (like a social profile), an edit form on demand.
-export default function ProfilePage({ navigate, profileState, profileError, loadProfile, identity, epoch, profileName, setProfileName, profileCountry, setProfileCountry, profileLanguages, setProfileLanguages, profileAvatar, profileNotice, saveProfile, signOut, changeAvatar, avatarBusy = false, storyCount = 0, publicCount = 0, email = '', accountOpen = false, onAccountToggle }) {
+export default function ProfilePage({ navigate, profileState, profileError, loadProfile, identity, epoch, profileName, setProfileName, profileCountry, setProfileCountry, profileLanguages, setProfileLanguages, profileAvatar, profileNotice, saveProfile, signOut, deleteAccount = async()=>false, changeAvatar, avatarBusy = false, storyCount = 0, publicCount = 0, email = '', accountOpen = false, onAccountToggle }) {
   const [editing, setEditing] = useState(false);
+  const [deleteOpen,setDeleteOpen]=useState(false);
+  const [deleteText,setDeleteText]=useState('');
+  const [deleting,setDeleting]=useState(false);
+  const [deleteError,setDeleteError]=useState('');
   const fileInput = useRef(null);
   const saving = profileState === 'saving';
   const languages = String(profileLanguages || '').split(',').map(item => item.trim()).filter(Boolean);
@@ -28,6 +32,7 @@ export default function ProfilePage({ navigate, profileState, profileError, load
     const saved = await saveProfile(event);
     if (saved) setEditing(false);
   }
+  async function confirmDelete(event){event.preventDefault();if(deleteText!=='DELETE'||deleting)return;setDeleting(true);setDeleteError('');try{const removed=await deleteAccount();if(removed){setDeleteOpen(false);setDeleteText('');}else setDeleteError('Your account could not be deleted. Try again.');}catch{setDeleteError('Your account could not be deleted. Try again.');}finally{setDeleting(false);}}
 
   return <main className="social-main">
     <button className="back" onClick={() => navigate('workspace')}>← Back</button>
@@ -76,6 +81,17 @@ export default function ProfilePage({ navigate, profileState, profileError, load
           </div>
         </form>}
       </div>
+    </section>}
+    {['ready','saving'].includes(profileState)&&<section className="danger-zone" aria-labelledby="delete-account-title">
+      <h2 id="delete-account-title">Delete my account</h2>
+      <p>This removes your profile, all your posts and files. It cannot be undone.</p>
+      {!deleteOpen&&<button type="button" className="danger" onClick={()=>{setDeleteOpen(true);setDeleteText('');setDeleteError('');}}>Delete my account</button>}
+      {deleteOpen&&<form className="delete-account-confirm" role="alertdialog" aria-labelledby="delete-account-confirm-title" onSubmit={confirmDelete}>
+        <h3 id="delete-account-confirm-title">Confirm account deletion</h3><p>This removes your profile, all your posts and files. It cannot be undone.</p>
+        <label>Type DELETE to confirm<input autoComplete="off" value={deleteText} disabled={deleting} onChange={event=>setDeleteText(event.target.value)}/></label>
+        {deleteError&&<p className="field-error" role="alert">{deleteError}</p>}
+        <div className="actions"><button type="button" className="secondary" disabled={deleting} onClick={()=>{setDeleteOpen(false);setDeleteText('');}}>Cancel</button><button type="submit" className="danger" disabled={deleteText!=='DELETE'||deleting}>{deleting?'Deleting…':'Delete account permanently'}</button></div>
+      </form>}
     </section>}
   </main>;
 }

@@ -1065,14 +1065,14 @@ try {
     ensure(privateRouteResponse.status() === 200 && new URL(accountPage.url()).pathname === '/mine', `Signed-out private deep link did not retain its address: HTTP ${privateRouteResponse.status()} ${accountPage.url()} body=${(await privateRouteResponse.text()).slice(0,180)} logs=${serverLogs.slice(-10).join(' | ')}.`);
     await accountPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     pass('Signed-out visitor opening /mine sees sign-in');
-    for (const [route, heading] of [['terms','Terms of use'],['privacy','Privacy notice']]) {
+    for (const [route, heading] of [['terms','Terms of use'],['privacy','Privacy notice'],['guidelines','Community guidelines']]) {
       const response = await accountPage.goto(`${webOrigin}/${route}`,{waitUntil:'domcontentloaded'});
       ensure(response.status() === 200, `Signed-out /${route} returned HTTP ${response.status()}.`);
       try { await accountPage.getByRole('heading',{name:heading,exact:true}).waitFor({timeout:5000}); }
       catch { throw new Error(`Signed-out /${route} did not render ${heading}; URL=${accountPage.url()}; body=${(await accountPage.locator('body').innerText()).replace(/\s+/g,' ').slice(0,500)}`); }
       ensure(new URL(accountPage.url()).pathname === `/${route}`, `Signed-out /${route} did not keep its direct URL.`);
     }
-    pass('Terms and Privacy load directly for signed-out visitors');
+    pass('Terms, Privacy and guidelines load directly for signed-out visitors');
     const accountResponse = await accountPage.goto(webOrigin, { waitUntil:'domcontentloaded' });
     ensure((await accountResponse.headerValue('content-security-policy')).includes("connect-src 'self' https://story-bridge-test.supabase.co"), 'The server CSP did not allow the configured Supabase origin.');
     await accountPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
@@ -1291,13 +1291,19 @@ try {
     ensure(await livePage.getByRole('button',{name:'Record voice'}).isVisible(),'Record voice did not return after microphone permission was denied.');
     ensure(await typedStory.inputValue() === 'Keep this typed story after microphone access fails.','The microphone denial cleared typed story text.');
     pass('Microphone denial returns to idle without clearing typed text');
-    for (const [route, heading] of [['terms','Terms of use'],['privacy','Privacy notice']]) {
+    await livePage.getByLabel('Post title').fill('Synthetic policy check');
+    await livePage.getByRole('button',{name:'Continue to translation'}).click();
+    await livePage.getByRole('button',{name:'Continue to review'}).click();
+    ensure(await livePage.locator('input[type="checkbox"][required]').count()===1,'The review step must keep a single required consent checkbox.');
+    ensure(await livePage.getByRole('link',{name:'community guidelines',exact:true}).getAttribute('href')==='/guidelines','The consent checkbox label must link to community guidelines.');
+    pass('Share review consent links to community guidelines without another required checkbox');
+    for (const [route, heading] of [['terms','Terms of use'],['privacy','Privacy notice'],['guidelines','Community guidelines']]) {
       const response = await livePage.goto(`${webOrigin}/${route}`,{waitUntil:'domcontentloaded'});
       ensure(response.status() === 200, `Signed-in /${route} returned HTTP ${response.status()}.`);
       await livePage.getByRole('heading',{name:heading,exact:true}).waitFor();
       ensure(new URL(livePage.url()).pathname === `/${route}`, `Signed-in /${route} did not keep its direct URL.`);
     }
-    pass('Terms and Privacy load directly for signed-in visitors');
+    pass('Terms, Privacy and guidelines load directly for signed-in visitors');
     await livePage.route('**/api/account/profile',route => route.request().method() === 'GET'
       ? route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:'Synthetic profile',country:'South Africa',languages:['english','tshiluba']})})
       : route.continue());

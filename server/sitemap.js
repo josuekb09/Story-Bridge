@@ -10,6 +10,9 @@ export function createSitemapXml(storyIds = []) {
     '/cultures',
     '/search',
     '/objects',
+    '/guidelines',
+    '/terms',
+    '/privacy',
     ...OBJECT_RECORDS.map(record => `/objects/${encodeURIComponent(record.id)}`),
     ...storyIds.map(id => `/stories/${encodeURIComponent(id)}`),
   ];

@@ -75,6 +75,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   }));
   app.delete('/api/account/profile/avatar',session,rateLimit,async(req,res)=>{try{const profile=await store.profile(req.account.id);if(profile?.avatar_key)await store.removeProfileAvatar(profile.avatar_key);const {avatar_key,...safe}=await store.saveProfile(req.account.id,{...(profile||{}),avatar_key:null});res.json({...safe,avatar_url:''})}catch{return res.status(503).json({error:'Profile photo could not be removed.'})}});
   app.get('/api/account/profile/avatar',session,async(req,res)=>{try{const profile=await store.profile(req.account.id);if(!profile?.avatar_key)return res.sendStatus(404);const image=await store.getProfileAvatar(profile.avatar_key);res.set('X-Content-Type-Options','nosniff').set('Cache-Control','private, no-store').type('image/webp').send(image.buffer)}catch{return res.sendStatus(404)}});
+  app.delete('/api/account',session,rateLimit,async(req,res)=>{try{await store.deleteAccount(req.account.id);return res.sendStatus(204)}catch{return res.status(503).json({error:'Your account could not be deleted. Try again.'})}});
   app.post('/api/account/claim/:id', session, rateLimit, async (req, res) => {
     const token = req.get('x-owner-token');
     if (!token || token.length < 32) return res.status(400).json({ error: 'This browser has no claimable stories.' });
@@ -117,6 +118,50 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   app.get('/api/admin/posts/pending', session, async (req,res)=>{
     if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
     try{res.json(await Promise.all((await store.listPending()).map(row=>cleanPost(row,true,store))))}catch{res.status(503).json({error:'Pending posts are unavailable.'})}
+  });
+  app.post('/api/posts/:id/report',session,rateLimit,async(req,res)=>{
+    const reason=req.body?.reason;
+    const details=req.body?.details;
+    const reasons=new Set(['wrong_or_harmful_information','disrespectful','sacred_or_restricted','privacy','spam','other']);
+    if(!reasons.has(reason)||details!==undefined&&details!==null&&(typeof details!=='string'||details.length>1000))return res.status(400).json({error:'Choose a report reason and use no more than 1,000 characters of details.'});
+    try{
+      const post=await store.get(req.params.id);
+      if(!post)return res.sendStatus(404);
+      if(post.owner_user_id===req.account.id)return res.sendStatus(403);
+      if(post.status!=='shared'||post.visibility!=='public')return res.sendStatus(404);
+      const result=await store.createPostReport({reporter_id:req.account.id,target_type:'post',target_id:post.id,reason,details:typeof details==='string'&&details.trim()?details.trim():null,status:'open'});
+      return res.status(result.created?201:200).json({ok:true});
+    }catch{return res.status(503).json({error:'Reports are temporarily unavailable. Please try again later.'})}
+  });
+  app.get('/api/admin/reports',session,async(req,res)=>{
+    if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
+    try{
+      const reports=await store.listOpenPostReports();
+      const counts=new Map();for(const report of reports)counts.set(report.target_id,(counts.get(report.target_id)||0)+1);
+      const posts=new Map(await Promise.all([...counts.keys()].map(async id=>[id,await store.get(id)])));
+      return res.json(reports.map(report=>({id:report.id,postId:report.target_id,postTitle:posts.get(report.target_id)?.title||'Post unavailable',reason:report.reason,details:report.details||'',created_at:report.created_at,reportCount:counts.get(report.target_id)})));
+    }catch{return res.status(503).json({error:'The reports queue is temporarily unavailable.'})}
+  });
+  app.get('/api/admin/stats',session,async(req,res)=>{
+    if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
+    try{return res.json(await store.adminStats())}catch{return res.status(503).json({error:'Admin statistics are temporarily unavailable.'})}
+  });
+  app.post('/api/admin/posts/:id/hide',session,rateLimit,async(req,res)=>{
+    if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
+    const note=typeof req.body?.note==='string'?req.body.note.trim():'';
+    if(!note||note.length>240)return res.status(400).json({error:'Enter a moderator note of 1–240 characters.'});
+    try{
+      const row=await store.get(req.params.id);if(!row)return res.sendStatus(404);
+      const changes={status:'withdrawn',visibility:'private'};
+      changes.version_log=appendStoryVersion({...row,...changes},`Hidden by moderator: ${note}`);
+      const saved=await store.updateAdminStory(row.id,changes);if(!saved)return res.sendStatus(404);
+      await store.actionReportsForPost(row.id);
+      return res.json({id:saved.id,status:saved.status,visibility:saved.visibility});
+    }catch{return res.status(503).json({error:'The post could not be hidden.'})}
+  });
+  app.post('/api/admin/reports/:id/dismiss',session,rateLimit,async(req,res)=>{
+    if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
+    try{return await store.dismissReport(req.params.id)?res.sendStatus(204):res.sendStatus(404)}catch{return res.status(503).json({error:'The report could not be dismissed.'})}
   });
   app.post('/api/admin/posts/:id/approve', session, rateLimit, async (req,res)=>{
     if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);

@@ -42,6 +42,7 @@ export default function App() {
     if (path.startsWith('/objects/')) return `object:${decodeURIComponent(path.slice('/objects/'.length))}`;
     if (path === '/terms') return 'terms';
     if (path === '/privacy') return 'privacy';
+    if (path === '/guidelines') return 'guidelines';
     if (/^\/stories\/[^/]+$/.test(path)) return 'detail';
     return 'landing';
   };
@@ -160,7 +161,7 @@ export default function App() {
   function transitionTo(nextPage, targetStoryId = '') {
     if (pageRef.current !== nextPage) { pageRef.current = nextPage; viewEpoch.current += 1; }
     const currentPath = window.location.pathname;
-    const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', cultures:'/cultures', search:'/search', admin:'/admin', terms:'/terms', privacy:'/privacy' };
+    const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', cultures:'/cultures', search:'/search', admin:'/admin', terms:'/terms', privacy:'/privacy', guidelines:'/guidelines' };
     const storyId = targetStoryId || current?.id || storyIdFromPath();
     const route = nextPage === 'cultures' && currentPath.startsWith('/cultures/')
       ? currentPath
@@ -264,7 +265,7 @@ export default function App() {
     if (identityChanged) {
       currentSession.current = sessionKey;
       identityEpoch.current += 1;
-      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search','terms','privacy'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share','admin'].includes(pageRef.current) ? pageRef.current : 'discover';
+      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search','terms','privacy','guidelines'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share','admin'].includes(pageRef.current) ? pageRef.current : 'discover';
       const keepPublicObjectRoute = initialPublicPage === 'objects' || initialPublicPage === 'group-record' || initialPublicPage.startsWith('object:');
       const needsWelcome=!!session&&!session.user?.user_metadata?.story_bridge_welcome_completed;
       clearPrivateState(accountConfig?.account && session && !keepPublicObjectRoute ? (needsWelcome?'welcome':initialPublicPage==='landing'?'discover':initialPublicPage) : initialPublicPage);
@@ -376,6 +377,14 @@ export default function App() {
       setError('Sign out could not be completed. Try again.'); refresh(oldIdentity); loadProfile(oldIdentity, identityEpoch.current);
     }
   }
+  async function deleteAccount() {
+    try { await api('/api/account',{method:'DELETE'}); }
+    catch(cause) { setProfileError(cause.message||'Your account could not be deleted. Try again.');return false; }
+    try { await supabase?.auth.signOut({scope:'local'}); } catch { /* The server already deleted this account. */ }
+    currentSession.current='';identityEpoch.current+=1;setAccountSessionToken('');setSession(null);setShowSignIn(true);
+    setStories([]);setMine([]);setListOwner('');setListState({stories:'loading',mine:'idle'});
+    clearPrivateState('landing');setToast('Account deleted');return true;
+  }
   async function saveProfile(event) {
     event.preventDefault();
     if (profileState !== 'ready') return;
@@ -403,18 +412,19 @@ export default function App() {
   const documentTitle = showSignIn && !session ? 'Sign in — Story Bridge' : page === 'detail' && current?.status === 'shared' && current?.visibility === 'public'
     ? `${current.title || 'Story'} — Story Bridge`
     : page.startsWith('object:') ? `${objectTitle || 'Objects'} — Story Bridge`
-      : ({ landing: 'Story Bridge — Your story, in your own voice', discover: 'Discover — Story Bridge', listen: 'Discover — Story Bridge', cultures: 'Cultures — Story Bridge', search: 'Search — Story Bridge', admin: 'Admin — Story Bridge', share: 'Share a story — Story Bridge', mine: 'My stories — Story Bridge', workspace: 'My workspace — Story Bridge', profile: 'Profile — Story Bridge', review: 'Review — Story Bridge', detail: 'Story — Story Bridge', objects: 'Objects — Story Bridge', 'group-record': 'Luluwa — Story Bridge', terms: 'Terms — Story Bridge', privacy: 'Privacy — Story Bridge', welcome: 'Welcome — Story Bridge' }[page] || 'Story Bridge');
+      : ({ landing: 'Story Bridge — Your story, in your own voice', discover: 'Discover — Story Bridge', listen: 'Discover — Story Bridge', cultures: 'Cultures — Story Bridge', search: 'Search — Story Bridge', admin: 'Admin — Story Bridge', share: 'Share a story — Story Bridge', mine: 'My stories — Story Bridge', workspace: 'My workspace — Story Bridge', profile: 'Profile — Story Bridge', review: 'Review — Story Bridge', detail: 'Story — Story Bridge', objects: 'Objects — Story Bridge', 'group-record': 'Luluwa — Story Bridge', terms: 'Terms — Story Bridge', privacy: 'Privacy — Story Bridge', guidelines: 'Community guidelines — Story Bridge', welcome: 'Welcome — Story Bridge' }[page] || 'Story Bridge');
   useEffect(() => { document.title = documentTitle; }, [documentTitle]);
+  const policyFooter = <footer className="site-policy-footer"><span>Stories stay under the storyteller’s control.</span><nav aria-label="Policies"><a href="/guidelines">Community guidelines</a><span aria-hidden="true"> · </span><a href="/terms">Terms</a><span aria-hidden="true"> · </span><a href="/privacy">Privacy</a></nav></footer>;
   const appHeader = <AppHeader page={page} signedIn={!!session} accountEnabled={!!accountConfig?.account} adminEnabled={adminAccess==='available'} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onNavigate={navigate} onSignIn={() => setShowSignIn(true)} onSignOut={signOut} onSettings={openSettings}/>;
   const mobileNav = <AppMobileNav page={page} onNavigate={navigate}/>;
-  if (!accountConfig) return <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main>{mobileNav}</div>;
-  if(page==='terms'||page==='privacy')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><LegalPage type={page} onBack={()=>transitionTo('landing')}/></Suspense>{mobileNav}</div>;
+  if (!accountConfig) return <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main>{policyFooter}{mobileNav}</div>;
+  if(page==='terms'||page==='privacy'||page==='guidelines')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><LegalPage type={page} onBack={()=>transitionTo('landing')}/></Suspense>{policyFooter}{mobileNav}</div>;
   // Private pages need a session: show the sign-in screen instead of an empty "could not be loaded" list.
   const privatePage = ['workspace', 'mine', 'review', 'profile', 'share','admin'].includes(page);
-  if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<Suspense fallback={pageLoading}><SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} setAuthCode={setAuthCode} authCode={authCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/></Suspense>{mobileNav}</div>;
-  if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/></Suspense>{mobileNav}</div>;
-   if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Suspense fallback={pageLoading}><Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{mobileNav}</div>;
-  if (currentSession.current !== activeIdentity) return <div className="app">{appHeader}<main><p role="status">Loading your account…</p></main>{mobileNav}</div>;
+  if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<Suspense fallback={pageLoading}><SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} setAuthCode={setAuthCode} authCode={authCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/></Suspense>{policyFooter}{mobileNav}</div>;
+  if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/></Suspense>{policyFooter}{mobileNav}</div>;
+   if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Suspense fallback={pageLoading}><Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{policyFooter}{mobileNav}</div>;
+  if (currentSession.current !== activeIdentity) return <div className="app">{appHeader}<main><p role="status">Loading your account…</p></main>{policyFooter}{mobileNav}</div>;
 
   function navigate(nextPage) {
     if (nextPage === page) return;
@@ -625,6 +635,7 @@ export default function App() {
   const visibleMine = listOwner === activeSessionKey ? mine : [];
   const visibleStories = listOwner === activeSessionKey ? stories : [];
   const publicStories = visibleStories;
+  const ownedStoryIds = new Set(visibleMine.map(story=>story.id));
   const category = story => story.status === 'withdrawn' ? 'withdrawn' : story.status === 'shared' && story.visibility === 'public' ? 'public' : story.status === 'shared' ? 'private' : 'draft';
   const sortedMine = [...visibleMine].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   const counts = { drafts: visibleMine.filter(item => category(item) === 'draft').length, public: visibleMine.filter(item => category(item) === 'public').length, private: visibleMine.filter(item => category(item) === 'private').length, withdrawn: visibleMine.filter(item => category(item) === 'withdrawn').length };
@@ -651,7 +662,7 @@ export default function App() {
   }
 
   return page === 'landing'
-    ? <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<Suspense fallback={pageLoading}><Landing showSignIn={!!accountConfig.account} repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>navigate('listen')} onObjects={()=>navigate('objects')} onShare={()=>navigate('share')} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{mobileNav}</div>
+    ? <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<Suspense fallback={pageLoading}><Landing showSignIn={!!accountConfig.account} repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>navigate('listen')} onObjects={()=>navigate('objects')} onShare={()=>navigate('share')} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{policyFooter}{mobileNav}</div>
     : <div className="app">
       {appHeader}
       {!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}
@@ -659,9 +670,9 @@ export default function App() {
 
       <Suspense fallback={pageLoading}>
       {page === 'workspace' && accountConfig.account && <WorkspacePage savedProfileName={savedProfileName} profileState={profileState} navigate={navigate} listState={listState} listErrors={listErrors} retryList={retryList} counts={counts} setCollectionFilter={setCollectionFilter} draftStories={draftStories} startReview={startReview}/>}
-      {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session} onCulture={openCulture}/>}
-      {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''} accountOpen={profileAccountOpen} onAccountToggle={setProfileAccountOpen}/>}
-      {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage}/>}
+      {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} ownedStoryIds={ownedStoryIds} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')} onCulture={openCulture}/>}
+      {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} deleteAccount={deleteAccount} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''} accountOpen={profileAccountOpen} onAccountToggle={setProfileAccountOpen}/>}
+      {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage} signedIn={!!session} isAuthor={!!current._own||!!session&&listState.mine==='loading'} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')}/>}
       {page === 'detail' && !current && <main>{error ? <section className="panel" role="alert"><p>{error}</p><button className="secondary" onClick={() => navigate(accountConfig.account ? 'discover' : 'listen')}>Back to stories</button></section> : <p role="status">Loading story…</p>}</main>}
       {page === 'objects' && <ObjectsPage objectSettings={objectSettings} visibleObjects={visibleObjects} museumFilter={museumFilter} setMuseumFilter={setMuseumFilter} museumChoices={museumChoices} objectTypeFilter={objectTypeFilter} setObjectTypeFilter={setObjectTypeFilter} typeChoices={typeChoices} transitionTo={transitionTo} retry={() => setObjectSettings(null)}/>}
       {page === 'group-record' && <CulturalGroupPage record={CULTURAL_GROUP_RECORD} navigate={navigate} onAddVoice={addVoiceToObject}/>}
@@ -677,6 +688,6 @@ export default function App() {
       </Suspense>
       {toast && <div className="app-toast" role="status" aria-live="polite">✓ {toast}</div>}
       <AppMobileNav page={page} onNavigate={navigate}/>
-      <footer>Stories stay under the storyteller’s control.</footer>
+      {policyFooter}
     </div>;
 }

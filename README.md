@@ -49,6 +49,14 @@ The app shell and static interface files can be installed as a PWA. Its service 
 
 This is a demonstration build, not a production service for sensitive stories or recordings.
 
+## Safety and moderation
+
+- New members' first posts wait for moderator review before becoming public. Signed-in members can report a post; reports are private to the moderator, who can dismiss a report or hide the post. A hidden post becomes private and withdrawn, and its moderator note appears in My stories.
+- Production reports are unavailable until the owner applies migration `202611090007_social_layer.sql`; no schema changes are included in this code update.
+- Follow the [community guidelines](/guidelines): share only what you have permission to share, respect sacred or restricted knowledge, avoid personal information and harassment, and credit sources and images.
+- Members can delete their account from Profile after confirming by typing `DELETE`. This removes the profile, posts and stored files; it cannot remove copies already downloaded by others.
+- Data processors listed in the [Privacy notice](/privacy): Supabase provides the database, file storage and sign-in; Render hosts the app; Google is used for optional Google sign-in and Google Fonts; OpenAI receives story text only when an author requests an AI translation draft; Google receives text only if a reader clicks the external Google Translate link.
+
 ## Tech stack
 
 React + Vite (frontend), Express (API), Supabase (Auth, Postgres with row-level security, private storage), OpenAI Responses API (optional translation drafts), Render (hosting).
