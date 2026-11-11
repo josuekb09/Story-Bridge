@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const MICROPHONE_UNAVAILABLE = 'Microphone not available. You can upload an audio file or write your story instead.';
 
 function formatDuration(milliseconds) {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -56,6 +57,8 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
+  const permissionTimerRef = useRef(null);
+  const permissionRequestRef = useRef(0);
   const startTimeRef = useRef(0);
   const mountedRef = useRef(true);
   const recognitionRef=useRef(null);
@@ -78,6 +81,9 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
 
   useEffect(() => () => {
     mountedRef.current = false;
+    permissionRequestRef.current += 1;
+    if (permissionTimerRef.current) window.clearTimeout(permissionTimerRef.current);
+    permissionTimerRef.current = null;
     clearTimer();
     onBusyChange(false);
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
@@ -120,11 +126,24 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
       return;
     }
 
+    const requestId = ++permissionRequestRef.current;
     setPhase('requesting');
+    const timeoutId = window.setTimeout(() => {
+      if (!mountedRef.current || permissionRequestRef.current !== requestId) return;
+      permissionRequestRef.current += 1;
+      if (permissionTimerRef.current === timeoutId) permissionTimerRef.current = null;
+      setPhase(file ? 'captured' : 'ready');
+      setError(MICROPHONE_UNAVAILABLE);
+    }, 15000);
+    permissionTimerRef.current = timeoutId;
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!mountedRef.current) {
+      if (permissionTimerRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        permissionTimerRef.current = null;
+      }
+      if (!mountedRef.current || permissionRequestRef.current !== requestId) {
         stream.getTracks().forEach(track => track.stop());
         return;
       }
@@ -191,10 +210,28 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
         if (startTimeRef.current) setElapsedMs(Date.now() - startTimeRef.current);
       }, 250);
     } catch (cause) {
+      if (permissionTimerRef.current === timeoutId) {
+        window.clearTimeout(timeoutId);
+        permissionTimerRef.current = null;
+      }
+      if (!mountedRef.current || permissionRequestRef.current !== requestId) {
+        stream?.getTracks().forEach(track => track.stop());
+        return;
+      }
       stream?.getTracks().forEach(track => track.stop());
-      failCapture(recordingError(cause));
+      if (stream) failCapture(recordingError(cause));
+      else { setPhase(file ? 'captured' : 'ready'); setError(MICROPHONE_UNAVAILABLE); }
     }
-  }, [busy, clearTimer, disabled, failCapture, onChange, saved, stopTracks]);
+  }, [busy, clearTimer, disabled, failCapture, file, onChange, saved, stopTracks]);
+
+  const cancelPermissionRequest = () => {
+    if (phase !== 'requesting') return;
+    permissionRequestRef.current += 1;
+    if (permissionTimerRef.current) window.clearTimeout(permissionTimerRef.current);
+    permissionTimerRef.current = null;
+    setPhase(file ? 'captured' : 'ready');
+    setError(MICROPHONE_UNAVAILABLE);
+  };
 
   const stopRecording = useCallback(() => {
     if (phase !== 'recording') return;
@@ -258,6 +295,7 @@ export default function RecordingCapture({ file, fileKind, saved, disabled = fal
     <div className="recording-status" role="status" aria-live="polite" aria-atomic="true">{status}</div>
     {phase === 'recording' && <span className="muted" role="timer" aria-label={`Recording elapsed ${formatDuration(elapsedMs)}`}>Elapsed: {formatDuration(elapsedMs)}</span>}
     {error && <p className="recording-error" role="alert">{error}</p>}
+    {phase === 'requesting' && <button type="button" className="secondary" onClick={cancelPermissionRequest}>Cancel</button>}
     {phase === 'recording' && <button type="button" className="secondary" onClick={stopRecording}>Stop recording</button>}
     {!busy && !file && <button type="button" className="secondary" onClick={startRetake} disabled={disabled || saved}>Record voice</button>}
     <label className="upload">Or choose an audio file<input type="file" accept="audio/*" disabled={busy || disabled || saved} onChange={chooseFile}/></label>

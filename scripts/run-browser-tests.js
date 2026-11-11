@@ -83,7 +83,7 @@ const approvedActionTranslation = 'Approval-action translation is public.';
 const ensure = (condition, message) => { if (!condition) throw new Error(message); };
 const pass = name => { results.push({ name, status: 'PASS' }); process.stdout.write(`PASS ${name}\n`); };
 const record = async (name, fn, prerequisite = true) => {
-  if (focusedScenario === 'account' && !['Isolated test server and storage under .test-data', 'Production server security headers and enforced CSP', 'PWA and sitemap resources have their expected types and cache policy', 'Launch bundled Chromium with isolated A and B contexts', 'Account screens have 375px and 1280px visual evidence'].includes(name)) {
+  if (focusedScenario === 'account' && !['Isolated test server and storage under .test-data', 'Production server security headers and enforced CSP', 'PWA and sitemap resources have their expected types and cache policy', 'Launch bundled Chromium with isolated A and B contexts', 'Culture directory, detail and grouped client search work', 'Account screens have 375px and 1280px visual evidence'].includes(name)) {
     results.push({ name, status: 'NOT EXECUTED', detail: 'Excluded by STORY_TEST_SCENARIOS=account.' }); process.stdout.write(`NOT EXECUTED ${name}\n`); return false;
   }
   if (!prerequisite) { results.push({ name, status: 'NOT TESTED', detail: 'Prerequisite did not pass.' }); process.stdout.write(`NOT TESTED ${name}\n`); return false; }
@@ -325,6 +325,7 @@ try {
       const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       navigator.mediaDevices.getUserMedia = async constraints => {
         await new Promise(resolve => setTimeout(resolve, 1500));
+        if (window.__stallNextMic) { window.__stallNextMic = false; return await new Promise(() => {}); }
         if (window.__denyNextMic) { window.__denyNextMic = false; throw new DOMException('Synthetic permission denial', 'NotAllowedError'); }
         if (window.__missingNextMic) { window.__missingNextMic = false; throw new DOMException('Synthetic missing microphone', 'NotFoundError'); }
         const stream = await original(constraints);
@@ -518,17 +519,24 @@ try {
 
     await pageCapture.evaluate(() => { window.__denyNextMic = true; });
     await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Retake recording' }), true);
-    await pageCapture.getByRole('alert').getByText(/Microphone permission was denied/).waitFor();
+    await pageCapture.getByRole('alert').getByText('Microphone not available. You can upload an audio file or write your story instead.').waitFor();
     ensure(await pageCapture.getByRole('status').getByText('Recording captured. Not saved yet.').isVisible(), 'Denied retake removed the previous capture.');
     ensure(await preview.getAttribute('src') === firstUrl, 'Denied retake replaced the previous preview.');
     await captureWidths(pageCapture, 'record-permission-denied');
 
     await pageCapture.evaluate(() => { window.__missingNextMic = true; });
     await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Retake recording' }), true);
-    await pageCapture.getByRole('alert').getByText(/No microphone device was found/).waitFor();
+    await pageCapture.getByRole('alert').getByText('Microphone not available. You can upload an audio file or write your story instead.').waitFor();
     ensure(await pageCapture.getByRole('status').getByText('Recording captured. Not saved yet.').isVisible(), 'Unavailable-device retake removed the previous capture.');
     ensure(await preview.getAttribute('src') === firstUrl, 'Unavailable-device retake replaced the previous preview.');
     await captureWidths(pageCapture, 'record-device-unavailable');
+
+    await pageCapture.evaluate(() => { window.__stallNextMic = true; });
+    await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Retake recording' }), true);
+    await pageCapture.getByRole('button',{name:'Cancel',exact:true}).waitFor();
+    await pageCapture.getByRole('button',{name:'Cancel',exact:true}).click();
+    await pageCapture.getByRole('alert').getByText('Microphone not available. You can upload an audio file or write your story instead.').waitFor();
+    ensure(await pageCapture.getByRole('status').getByText('Recording captured. Not saved yet.').isVisible() && await preview.getAttribute('src') === firstUrl, 'Canceling a pending microphone request did not preserve the existing capture.');
 
     await confirmAction(pageCapture, pageCapture.getByRole('button', { name: 'Retake recording' }), true);
     await pageCapture.getByRole('status').getByText('Recording.').waitFor();
@@ -1057,6 +1065,14 @@ try {
     ensure(privateRouteResponse.status() === 200 && new URL(accountPage.url()).pathname === '/mine', `Signed-out private deep link did not retain its address: HTTP ${privateRouteResponse.status()} ${accountPage.url()} body=${(await privateRouteResponse.text()).slice(0,180)} logs=${serverLogs.slice(-10).join(' | ')}.`);
     await accountPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
     pass('Signed-out visitor opening /mine sees sign-in');
+    for (const [route, heading] of [['terms','Terms of use'],['privacy','Privacy notice']]) {
+      const response = await accountPage.goto(`${webOrigin}/${route}`,{waitUntil:'domcontentloaded'});
+      ensure(response.status() === 200, `Signed-out /${route} returned HTTP ${response.status()}.`);
+      try { await accountPage.getByRole('heading',{name:heading,exact:true}).waitFor({timeout:5000}); }
+      catch { throw new Error(`Signed-out /${route} did not render ${heading}; URL=${accountPage.url()}; body=${(await accountPage.locator('body').innerText()).replace(/\s+/g,' ').slice(0,500)}`); }
+      ensure(new URL(accountPage.url()).pathname === `/${route}`, `Signed-out /${route} did not keep its direct URL.`);
+    }
+    pass('Terms and Privacy load directly for signed-out visitors');
     const accountResponse = await accountPage.goto(webOrigin, { waitUntil:'domcontentloaded' });
     ensure((await accountResponse.headerValue('content-security-policy')).includes("connect-src 'self' https://story-bridge-test.supabase.co"), 'The server CSP did not allow the configured Supabase origin.');
     await accountPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();
@@ -1236,7 +1252,7 @@ try {
         ensure(!headerMarkup.includes('reader@example.test'), 'Signed-in email appeared in the app header markup.');
       };
       await assertEmailIsOutsideHeader();
-      await clickHeaderMenu(livePage,'Settings');
+      await clickHeaderMenu(livePage,'Profile & settings');
       await livePage.locator('#account-settings').waitFor();
       await livePage.locator('#account-settings').getByText('reader@example.test',{exact:true}).waitFor();
       await assertEmailIsOutsideHeader();
@@ -1261,6 +1277,51 @@ try {
     await livePage.goto(`${webOrigin}/share`,{waitUntil:'domcontentloaded'});
     await livePage.getByRole('heading',{name:'Share a story'}).waitFor();
     ensure(new URL(livePage.url()).pathname === '/share', 'Signed-in Share deep link did not load at /share.');
+    await livePage.evaluate(() => {
+      const mediaDevices = {};
+      mediaDevices.getUserMedia = () => Promise.reject(new DOMException('Synthetic denial','NotAllowedError'));
+      Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:mediaDevices});
+    });
+    await livePage.getByLabel('Language told in').fill('Synthetic language');
+    await livePage.getByRole('button',{name:'Continue to your story'}).click();
+    const typedStory = livePage.getByLabel('Your story');
+    await typedStory.fill('Keep this typed story after microphone access fails.');
+    await livePage.getByRole('button',{name:'Record voice'}).click();
+    await livePage.locator('.recording-error').getByText('Microphone not available. You can upload an audio file or write your story instead.').waitFor();
+    ensure(await livePage.getByRole('button',{name:'Record voice'}).isVisible(),'Record voice did not return after microphone permission was denied.');
+    ensure(await typedStory.inputValue() === 'Keep this typed story after microphone access fails.','The microphone denial cleared typed story text.');
+    pass('Microphone denial returns to idle without clearing typed text');
+    for (const [route, heading] of [['terms','Terms of use'],['privacy','Privacy notice']]) {
+      const response = await livePage.goto(`${webOrigin}/${route}`,{waitUntil:'domcontentloaded'});
+      ensure(response.status() === 200, `Signed-in /${route} returned HTTP ${response.status()}.`);
+      await livePage.getByRole('heading',{name:heading,exact:true}).waitFor();
+      ensure(new URL(livePage.url()).pathname === `/${route}`, `Signed-in /${route} did not keep its direct URL.`);
+    }
+    pass('Terms and Privacy load directly for signed-in visitors');
+    await livePage.route('**/api/account/profile',route => route.request().method() === 'GET'
+      ? route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:'Synthetic profile',country:'South Africa',languages:['english','tshiluba']})})
+      : route.continue());
+    await livePage.goto(`${webOrigin}/profile`,{waitUntil:'domcontentloaded'});
+    await livePage.locator('.profile-langs li').first().waitFor();
+    const profileLanguages = await livePage.locator('.profile-langs li').allTextContents();
+    ensure(profileLanguages.includes('English') && profileLanguages.includes('Tshiluba'),'Profile languages were not displayed as native names.');
+    const interfaceLanguage = livePage.locator('.app-header-tools > .app-language-picker select');
+    await interfaceLanguage.selectOption('fr');
+    await livePage.getByRole('link',{name:'Découvrir',exact:true}).waitFor();
+    await livePage.getByRole('link',{name:'Rechercher'}).waitFor();
+    await livePage.setViewportSize({width:375,height:840});
+    const frenchMobileNav = livePage.getByRole('navigation',{name:'Navigation principale'});
+    await frenchMobileNav.getByRole('button',{name:'Partager'}).waitFor();
+    await frenchMobileNav.getByRole('button',{name:'Profil'}).waitFor();
+    await livePage.getByRole('button',{name:'Ouvrir le menu du profil'}).click();
+    await livePage.getByRole('button',{name:'Profil et paramètres',exact:true}).waitFor();
+    await livePage.getByRole('button',{name:'Se déconnecter',exact:true}).waitFor();
+    await livePage.keyboard.press('Escape');
+    await livePage.setViewportSize({width:1280,height:900});
+    await interfaceLanguage.selectOption('en');
+    await livePage.getByRole('link',{name:'Discover',exact:true}).waitFor();
+    await livePage.unroute('**/api/account/profile');
+    pass('Header and mobile navigation follow the French UI language');
     await record('Culture directory, detail and grouped client search work', async () => {
       await livePage.goto(`${webOrigin}/cultures`,{waitUntil:'domcontentloaded'});
       await livePage.getByRole('heading',{name:'Every country holds many cultures'}).waitFor();
@@ -1269,7 +1330,20 @@ try {
       await livePage.getByRole('heading',{name:'Zulu',exact:true}).waitFor();
       await livePage.getByText('Not yet documented — add what you know.',{exact:false}).waitFor();
       ensure(new URL(livePage.url()).pathname === '/cultures/za-zulu-beadwork', 'Culture card did not open its culture URL.');
-      await livePage.goto(`${webOrigin}/search`,{waitUntil:'domcontentloaded'});
+      await livePage.goto(`${webOrigin}/cultures/za-ndebele-murals`,{waitUntil:'domcontentloaded'});
+      await livePage.getByRole('heading',{name:'Ndebele',exact:true}).waitFor();
+      ensure(new URL(livePage.url()).pathname === '/cultures/za-ndebele-murals', 'Direct culture load changed the culture URL.');
+      await livePage.reload();
+      await livePage.getByRole('heading',{name:'Ndebele',exact:true}).waitFor();
+      ensure(new URL(livePage.url()).pathname === '/cultures/za-ndebele-murals', 'Refreshing a direct culture URL changed the culture URL.');
+      await livePage.goto(`${webOrigin}/search?q=Kasai`,{waitUntil:'domcontentloaded'});
+      await livePage.getByRole('searchbox').waitFor();
+      ensure(await livePage.getByRole('searchbox').inputValue() === 'Kasai', 'Direct search load did not populate its query.');
+      ensure(new URL(livePage.url()).pathname === '/search' && new URL(livePage.url()).searchParams.get('q') === 'Kasai', 'Direct search load did not keep its query.');
+      await livePage.reload();
+      await livePage.getByRole('searchbox').waitFor();
+      ensure(await livePage.getByRole('searchbox').inputValue() === 'Kasai', 'Refreshing a direct search URL lost its query value.');
+      ensure(new URL(livePage.url()).pathname === '/search' && new URL(livePage.url()).searchParams.get('q') === 'Kasai', 'Refreshing a direct search URL lost its query.');
       await livePage.getByRole('searchbox').fill('Zulu');
       await livePage.getByRole('heading',{name:'Cultures',exact:true}).waitFor();
       await livePage.getByRole('link').filter({hasText:'Zulu'}).first().waitFor();

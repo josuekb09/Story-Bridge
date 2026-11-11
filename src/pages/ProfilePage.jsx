@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { LANGUAGES, findLanguage } from '../lib/languages.js';
 import '../styles/components/social.css';
+
+function profileLanguageName(value) {
+  const raw = String(value || '').trim();
+  const normalized = raw.toLowerCase();
+  const match = LANGUAGES.find(language => [language.code, language.name, language.nativeName].some(label => label.toLowerCase() === normalized));
+  return findLanguage(match?.code || raw)?.nativeName || raw;
+}
 
 function initials(name) {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -39,7 +47,7 @@ export default function ProfilePage({ navigate, profileState, profileError, load
           <h1 id="profile-name" className="profile-name">{profileName || 'Your name'}</h1>
           {profileNotice && <p className="success" role="status">{profileNotice}</p>}
           <p className="profile-meta">{profileCountry || 'Add where you are from'}</p>
-          {languages.length > 0 && <ul className="profile-langs" aria-label="Languages">{languages.map(language => <li key={language}>{language}</li>)}</ul>}
+          {languages.length > 0 && <ul className="profile-langs" aria-label="Languages">{languages.map(language => <li key={language}>{profileLanguageName(language)}</li>)}</ul>}
           <dl className="profile-stats">
             <div><dt>Stories</dt><dd>{storyCount}</dd></div>
             <div><dt>Public</dt><dd>{publicCount}</dd></div>

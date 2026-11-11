@@ -45,7 +45,7 @@ export default function SearchPage({ stories = [], showStory = () => {} }) {
 
     {!terms.length && <div className="search-hints">
       <p className="muted">Try a language, a place or a culture:</p>
-      <div className="cultures-chips">{['Tshiluba', 'isiZulu', 'Kasai', 'Ndebele', 'Lalibela', 'Kente'].map(hint => <button type="button" key={hint} onClick={() => setQuery(hint)}>{hint}</button>)}</div>
+      <div className="cultures-chips">{['Ndebele', 'Kasai', 'Ethiopia', 'Ghana', 'Morocco', 'Zanzibar'].map(hint => <button type="button" key={hint} onClick={() => setQuery(hint)}>{hint}</button>)}</div>
     </div>}
 
     {terms.length > 0 && <p className="muted" role="status" aria-live="polite">{total === 0 ? `No results for “${query.trim()}”.` : `${total} result${total === 1 ? '' : 's'}`}</p>}
@@ -61,7 +61,7 @@ export default function SearchPage({ stories = [], showStory = () => {} }) {
     {results.stories.length > 0 && <section aria-labelledby="search-stories" className="culture-section">
       <h2 id="search-stories">Stories</h2>
       <ul className="culture-stories">{results.stories.map(story => <li key={story.id}><button type="button" onClick={() => showStory(story)}>
-        <span className="culture-story-lang">{story.originalLanguage}</span>
+        {story.images?.[0]?.url && <img className="culture-story-thumb" src={story.images[0].url} alt="" loading="lazy" decoding="async"/>}<span className="culture-story-lang">{story.originalLanguage}</span>
         <span className="culture-story-title">{story.title || String(story.text || '').slice(0, 90)}</span>
         {story.region && <small>{story.region}</small>}
       </button></li>)}</ul>

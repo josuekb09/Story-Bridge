@@ -169,6 +169,13 @@ Browser tests use isolated data under `.test-data/` and save evidence under `tes
 - Landing-page photos: author, licence and source for each image are listed in the site footer (*Image credits*) and in [docs/image-manifest.json](docs/image-manifest.json).
 - Luluwa object photos and records: [docs/credits.md](docs/credits.md) and [docs/object-documentation.md](docs/object-documentation.md).
 
+## Known limits / roadmap
+
+- Video posts are not supported yet.
+- Sharing with selected people or groups is not available; stories can be private or public.
+- AI translation drafts need OpenAI configured with available credit; reader-side “Read in my language” works without it.
+- Microphone recording still needs a real-device test.
+
 ## Project origin
 
 Created by Josué Kabuya (Grand Kasaï, DR Congo), who set the vision, product direction and content. The code, documentation and tests were developed with AI coding assistants working under his direction. Design decisions, iterations and test reports are recorded in [PLAN.md](PLAN.md), [docs/COLLAB.md](docs/COLLAB.md), [REVIEW.md](REVIEW.md) and [TEST-REPORT.md](TEST-REPORT.md).

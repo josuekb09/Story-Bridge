@@ -60,3 +60,7 @@
 .read-in-language-output{background:var(--sand);border-radius:12px;padding:10px 14px;margin-top:6px}
 .read-in-language-output p{margin:0 0 6px;white-space:pre-wrap}
 .read-in-language a{color:var(--forest);font-weight:600}
+
+.culture-story-thumb{width:56px;height:56px;border-radius:12px;object-fit:cover;flex:none}
+.culture-languages a{border:1px solid var(--line);background:#fff;color:var(--forest);padding:9px 16px;min-height:44px;display:inline-flex;align-items:center;border-radius:999px;font-weight:600;text-decoration:none}
+.culture-languages a:hover{border-color:var(--moss);background:var(--sand)}

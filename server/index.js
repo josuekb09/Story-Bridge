@@ -190,6 +190,8 @@ function rateLimitWrites(req, res, next) {
 }
 
 const upload = multer({
+  defCharset: 'utf8',
+  defParamCharset: 'utf8',
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_AUDIO_FILE_BYTES, files: 7 },
   fileFilter: (_req, file, callback) => /^(audio\/[a-z0-9.+-]+|image\/(jpeg|png|webp))$/i.test(file.mimetype) ? callback(null,true) : callback(Object.assign(new Error('invalid media'), { code: 'INVALID_MEDIA' })),

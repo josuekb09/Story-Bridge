@@ -10,6 +10,8 @@ import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, valid
 import { sendSitemap } from './sitemap.js';
 
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+// Busboy uses defCharset for text field values and defParamCharset for part-header parameters.
+const UTF8_MULTIPART = { defCharset: 'utf8', defParamCharset: 'utf8' };
 const clean = (row, owner = false) => {
   const out = { id: row.id, objectId: row.object_id || null, title:row.title||'',kind:row.kind||'story',section:row.section||'stories',trustLabel:row.trust_label||'Told by a community member',licence:row.licence||'All rights reserved',region:row.region||'',people:row.people||'',tags:row.tags||[],sources:row.sources||[],consentConfirmed:!!row.consent_confirmed,access:row.access||'Public',moderationStatus:row.moderation_status||'approved',originalLanguage: row.original_language, text: row.text, translationLanguage: row.translation_language, translation: row.translation, translationOrigin: row.translation_origin || 'storyteller', translationChecked: row.translation_checked, checkedBy: row.translation_checked ? row.checked_by : '', visibility: row.visibility, status: row.status, createdAt: row.created_at, audio: !!row.audio_key, versionLog:storyRecord(row) };
   if (row.show_name || owner) out.storytellerName = row.storyteller_name;
@@ -24,9 +26,9 @@ const cleanPost = async (row, owner = false, store, includePublicAuthorAvatar = 
 });
 
 export function mountAccountRoutes(app, config, { store = createSupabaseStore(config), verify = createTokenVerifier(config), rateLimit = (_req, _res, next) => next(), draftTranslation = async () => { throw new Error('translation-service-unavailable'); }, objectAdminId = process.env.STORY_BRIDGE_OBJECT_ADMIN_ID || '' } = {}) {
-  const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^audio\/[a-z0-9.+-]+$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid audio'), { code: 'INVALID_AUDIO' })) });
-  const avatarUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^image\/(jpeg|png|webp)$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid image'), { code: 'INVALID_IMAGE' })) });
-  const postUpload = multer({ storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:7},fileFilter:(_req,file,cb)=>/^(audio\/[a-z0-9.+-]+|image\/(jpeg|png|webp))$/i.test(file.mimetype)?cb(null,true):cb(Object.assign(new Error('invalid media'),{code:'INVALID_MEDIA'})) });
+  const audioUpload = multer({ ...UTF8_MULTIPART, storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^audio\/[a-z0-9.+-]+$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid audio'), { code: 'INVALID_AUDIO' })) });
+  const avatarUpload = multer({ ...UTF8_MULTIPART, storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^image\/(jpeg|png|webp)$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid image'), { code: 'INVALID_IMAGE' })) });
+  const postUpload = multer({ ...UTF8_MULTIPART, storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:7},fileFilter:(_req,file,cb)=>/^(audio\/[a-z0-9.+-]+|image\/(jpeg|png|webp))$/i.test(file.mimetype)?cb(null,true):cb(Object.assign(new Error('invalid media'),{code:'INVALID_MEDIA'})) });
   const limitPostBody=(req,res,next)=>{const size=Number(req.get('content-length'));if(Number.isFinite(size)&&size>10*1024*1024+6*IMAGE_MAX_BYTES+512*1024)return res.status(413).json({error:'A post may contain up to six 8 MB images and one 10 MB audio recording.'});next()};
   const parsePostUpload=(req,res,next)=>postUpload.fields([{name:'audio',maxCount:1},{name:'images',maxCount:6}])(req,res,error=>{if(!error)return next();if(error.code==='LIMIT_FILE_SIZE')return res.status(413).json({error:'Each image is limited to 8 MB and audio to 10 MB.'});return res.status(400).json({error:'Choose JPEG, PNG, WebP images or supported audio.'})});
   const session = async (req, res, next) => {

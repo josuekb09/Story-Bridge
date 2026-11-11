@@ -164,6 +164,18 @@ test('account stories expose version fingerprints on creation and append a versi
   const saved=await edited.json();assert.equal(saved.versionLog.length,2);assert.equal(saved.versionLog[1].change,'Original story edited');assert.notEqual(saved.versionLog[0].fingerprint,saved.versionLog[1].fingerprint);assert.equal(store.rows.get(story.id).version_log.length,2);
 });
 
+test('multipart story text fields preserve UTF-8 on write and read',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const title='identité — test';const storytellerName='Josué Kabuya';const form=new FormData();
+  for(const [key,value] of Object.entries({title,kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true',showName:'true'}))form.append(key,value);
+  form.append('originalLanguage','Français');form.append('text','Une histoire de test.');form.append('storytellerName',storytellerName);
+  const response=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(response.status,201);
+  const created=await response.json();assert.equal(created.title,title);assert.equal(created.storytellerName,storytellerName);
+  const read=await fetch(`${base}/api/stories/${created.id}`,{headers:auth('user-a')});assert.equal(read.status,200);
+  const saved=await read.json();assert.equal(saved.title,title);assert.equal(saved.storytellerName,storytellerName);
+  assert.equal(store.rows.get(created.id).title,title);assert.equal(store.rows.get(created.id).storyteller_name,storytellerName);
+});
+
 test('AI translation draft route requires an account and stores origin only after explicit approval',async t=>{
   const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
   const denied=await fetch(`${base}/api/translation-draft`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'Private synthetic story',originalLanguage:'Synthetic',targetLanguage:'English'})});

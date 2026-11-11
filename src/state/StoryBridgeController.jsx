@@ -159,13 +159,17 @@ export default function App() {
 
   function transitionTo(nextPage, targetStoryId = '') {
     if (pageRef.current !== nextPage) { pageRef.current = nextPage; viewEpoch.current += 1; }
+    const currentPath = window.location.pathname;
     const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', cultures:'/cultures', search:'/search', admin:'/admin', terms:'/terms', privacy:'/privacy' };
     const storyId = targetStoryId || current?.id || storyIdFromPath();
-    const route = nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
+    const route = nextPage === 'cultures' && currentPath.startsWith('/cultures/')
+      ? currentPath
+      : nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
     // Keep the OAuth callback (?code=… / ?error=…) until Supabase has read it; it is removed after getSession().
     const oauthCallback = /[?&](code|error|error_description)=/.test(window.location.search) ? window.location.search : '';
-    const routeSearch = window.location.pathname === route ? window.location.search : '';
-    if (window.location.pathname !== route || window.history.state?.storyBridgePage !== nextPage) window.history[oauthCallback ? 'replaceState' : 'pushState']({ storyBridgePage: nextPage }, '', route + (oauthCallback || routeSearch));
+    const keepSearchQuery = nextPage === 'search' && currentPath === '/search';
+    const routeSearch = keepSearchQuery || currentPath === route ? window.location.search : '';
+    if (currentPath !== route || window.history.state?.storyBridgePage !== nextPage) window.history[oauthCallback ? 'replaceState' : 'pushState']({ storyBridgePage: nextPage }, '', route + (oauthCallback || routeSearch));
     setPage(nextPage);
     if(nextPage==='mine'&&session?.access_token)api('/api/objects').then(setObjectSettings).catch(()=>setObjectSettings({objects:[],canManage:false,error:true}));
   }
@@ -260,7 +264,7 @@ export default function App() {
     if (identityChanged) {
       currentSession.current = sessionKey;
       identityEpoch.current += 1;
-      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share','admin'].includes(pageRef.current) ? pageRef.current : 'discover';
+      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search','terms','privacy'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share','admin'].includes(pageRef.current) ? pageRef.current : 'discover';
       const keepPublicObjectRoute = initialPublicPage === 'objects' || initialPublicPage === 'group-record' || initialPublicPage.startsWith('object:');
       const needsWelcome=!!session&&!session.user?.user_metadata?.story_bridge_welcome_completed;
       clearPrivateState(accountConfig?.account && session && !keepPublicObjectRoute ? (needsWelcome?'welcome':initialPublicPage==='landing'?'discover':initialPublicPage) : initialPublicPage);

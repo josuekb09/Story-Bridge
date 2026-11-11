@@ -147,7 +147,7 @@ function Live({ t, reduced, onListen }) {
         <div><dt>{t('live.stories')}</dt><dd><CountUp value={stories.length} reduced={reduced}/></dd></div>
         <div><dt>{t('live.languages')}</dt><dd><CountUp value={languages.size} reduced={reduced}/></dd></div>
       </dl>
-      {latest.length > 0 && <div className="home-latest"><h3>{t('live.latest')}</h3><ul>{latest.map(story => <li key={story.id}><button type="button" onClick={onListen}><span className="home-badge">{story.originalLanguage}</span><span>{story.title || String(story.text || '').slice(0, 90)}</span>{story.region && <small>{story.region}</small>}</button></li>)}</ul></div>}
+      {latest.length > 0 && <div className="home-latest"><h3>{t('live.latest')}</h3><ul>{latest.map(story => <li key={story.id}><button type="button" onClick={onListen}>{story.images?.[0]?.url ? <img className="home-latest-thumb" src={story.images[0].url} alt="" loading="lazy" decoding="async"/> : <span className="home-latest-thumb home-latest-thumb-empty" aria-hidden="true">{String(story.originalLanguage || '?').slice(0, 2)}</span>}<span className="home-latest-body"><span className="home-badge">{story.originalLanguage}</span><span>{story.title || String(story.text || '').slice(0, 90)}</span>{story.region && <small>{story.region}</small>}</span></button></li>)}</ul></div>}
     </>}
   </section>;
 }

@@ -6,6 +6,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SHOWCASE, REGIONS } from '../data/showcase.js';
 import AFRICA_IMAGES from '../data/africa-images.json';
+import { COUNTRY_LANGUAGES } from '../data/country-languages.js';
+import { findLanguage } from '../lib/languages.js';
 import '../styles/components/cultures.css';
 
 function imageFor(item) {
@@ -77,12 +79,18 @@ function CultureDetail({ item, stories, showStory, navigate, back }) {
       <button type="button" className="primary" onClick={() => navigate('share')}>Share a story about {item.culture}</button>
     </section>
 
+    {(COUNTRY_LANGUAGES[item.countryCode] || []).length > 0 && <section className="culture-section" aria-labelledby="culture-languages">
+      <h2 id="culture-languages">Languages of {item.country}</h2>
+      <p className="muted">Stories can be told in any of these. Tap one to look for stories in that language.</p>
+      <div className="cultures-chips culture-languages">{COUNTRY_LANGUAGES[item.countryCode].map(findLanguage).filter(Boolean).map(language => <a key={language.code} href={`/search?q=${encodeURIComponent(language.name)}`} lang={language.code}>{language.nativeName}</a>)}</div>
+    </section>}
+
     <section className="culture-section" aria-labelledby="culture-stories">
       <h2 id="culture-stories">Stories {related.length > 0 && <span className="culture-count">{related.length}</span>}</h2>
       {related.length === 0
         ? <p className="muted">No public story mentions {item.culture} yet. Yours could be the first.</p>
         : <ul className="culture-stories">{related.map(story => <li key={story.id}><button type="button" onClick={() => showStory(story)}>
-            <span className="culture-story-lang">{story.originalLanguage}</span>
+            {story.images?.[0]?.url && <img className="culture-story-thumb" src={story.images[0].url} alt="" loading="lazy" decoding="async"/>}<span className="culture-story-lang">{story.originalLanguage}</span>
             <span className="culture-story-title">{story.title || String(story.text || '').slice(0, 90)}</span>
             {story.region && <small>{story.region}</small>}
           </button></li>)}</ul>}

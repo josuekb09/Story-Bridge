@@ -117,9 +117,13 @@
 .home-live-empty{font-family:Fraunces,Georgia,serif;font-size:clamp(1.4rem,3vw,2rem);max-width:28ch;margin:0}
 .home-latest h3{font-size:1rem;margin:0 0 10px;opacity:.85}
 .home-latest ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.home-latest button{width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px;text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px;color:inherit;padding:14px 16px;cursor:pointer}
+.home-latest button{width:100%;display:flex;flex-wrap:nowrap;align-items:center;gap:14px;text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:12px;color:inherit;padding:14px 16px;cursor:pointer}
 .home-latest button:hover{background:rgba(255,255,255,.12)}
-.home-latest small{opacity:.7;margin-left:auto}
+.home-latest small{opacity:.7;display:block}
+.home-latest-thumb{width:64px;height:64px;border-radius:14px;object-fit:cover;flex:none;background:rgba(255,255,255,.1)}
+.home-latest-thumb-empty{display:grid;place-items:center;font-family:Fraunces,Georgia,serif;font-size:1.4rem;color:var(--gold,#E8B04B)}
+.home-latest-body{display:flex;flex-direction:column;gap:4px;min-width:0}
+.home-latest-body .home-badge{align-self:flex-start}
 .home-badge{background:var(--gold);color:var(--ink);font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
 
 /* Collection */
