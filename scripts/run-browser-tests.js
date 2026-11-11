@@ -1135,6 +1135,40 @@ try {
     await accountPage.close(); await accountContext.close();
     const googleDisabledContext=await browser.newContext({viewport:{width:1280,height:900}});await googleDisabledContext.route('**/api/account/config',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({account:true,url:'https://story-bridge-test.supabase.co',publishableKey:'sb_publishable_fake_local_test_key_123456',email:true,google:false})}));await googleDisabledContext.route('**/api/stories',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));await googleDisabledContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await googleDisabledContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));const googleDisabledPage=await googleDisabledContext.newPage();observePage(googleDisabledPage);await googleDisabledPage.goto(webOrigin,{waitUntil:'domcontentloaded'});await googleDisabledPage.getByRole('heading',{name:'Share your culture. Learn from every other.'}).waitFor();await clickHeaderMenu(googleDisabledPage,'Sign in');await googleDisabledPage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();ensure(await googleDisabledPage.getByRole('button',{name:'Continue with Google'}).count()===0,'Google sign-in was visible while disabled in the server config.');pass('Google button stays hidden when disabled by server config');await googleDisabledContext.close();
 
+    const googleNameContext=await browser.newContext({viewport:{width:1280,height:900}});
+    await googleNameContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await googleNameContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
+    const googleNameToken=signTestToken({sub:'google-name-user',iss:'https://story-bridge-test.supabase.co/auth/v1',aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600},testSigningKey.privateKey,'browser-local-key');
+    await googleNameContext.addInitScript(tokenValue=>localStorage.setItem('sb-story-bridge-test-auth-token',JSON.stringify({access_token:tokenValue,refresh_token:'synthetic-refresh',token_type:'bearer',expires_at:4102444800,user:{id:'google-name-user',aud:'authenticated',app_metadata:{provider:'google'},user_metadata:{full_name:'Google Profile Name',story_bridge_welcome_completed:true},created_at:'2026-01-01T00:00:00Z'}})),googleNameToken);
+    await googleNameContext.route('**/api/account/config',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({account:true,url:'https://story-bridge-test.supabase.co',publishableKey:'sb_publishable_fake_local_test_key_123456',email:true,google:true})}));
+    await googleNameContext.route('**/api/account/profile',route=>route.request().method()==='PUT'?route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:route.request().postDataJSON().displayName,country:'',languages:[]})}):route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:'',country:'',languages:[],avatar_url:''})}));
+    await googleNameContext.route('**/api/account/claim',route=>route.fulfill({status:409,contentType:'application/json',body:'{}'}));await googleNameContext.route('**/api/stories',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));await googleNameContext.route('**/api/mine',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));
+    await googleNameContext.route('https://story-bridge-test.supabase.co/**',supabaseMock);await googleNameContext.route('https://story-bridge-test.supabase.co/auth/v1/user',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:'google-name-user',aud:'authenticated',app_metadata:{provider:'google'},user_metadata:{full_name:'Google Profile Name',story_bridge_welcome_completed:true}})}));
+    const googleNamePage=await googleNameContext.newPage();observePage(googleNamePage);const googleProfilePut=googleNamePage.waitForRequest(request=>request.url().endsWith('/api/account/profile')&&request.method()==='PUT');
+    await googleNamePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});await googleNamePage.getByRole('heading',{name:'Discover'}).waitFor();
+    ensure((await googleProfilePut).postDataJSON().displayName==='Google Profile Name','Google full_name was not saved to an empty profile on sign-in.');
+    await googleNamePage.waitForFunction(()=>document.querySelector('.app-avatar-button')?.innerText==='GP');
+    pass('Google sign-in saves profile name from auth metadata');await googleNameContext.close();
+
+    const unnamedShareContext=await browser.newContext({viewport:{width:1280,height:900}});
+    await unnamedShareContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await unnamedShareContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
+    const unnamedToken=signTestToken({sub:'unnamed-user',iss:'https://story-bridge-test.supabase.co/auth/v1',aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600},testSigningKey.privateKey,'browser-local-key');
+    await unnamedShareContext.addInitScript(tokenValue=>localStorage.setItem('sb-story-bridge-test-auth-token',JSON.stringify({access_token:tokenValue,refresh_token:'synthetic-refresh',token_type:'bearer',expires_at:4102444800,user:{id:'unnamed-user',aud:'authenticated',app_metadata:{provider:'email'},user_metadata:{story_bridge_welcome_completed:true},created_at:'2026-01-01T00:00:00Z'}})),unnamedToken);
+    await unnamedShareContext.route('**/api/account/config',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({account:true,url:'https://story-bridge-test.supabase.co',publishableKey:'sb_publishable_fake_local_test_key_123456',email:true,google:false})}));
+    let savedAuthorName='';const authorSaveEvents=[];
+    await unnamedShareContext.route('**/api/account/profile',async route=>{if(route.request().method()==='PUT'){const body=route.request().postDataJSON();authorSaveEvents.push('profile');savedAuthorName=body.displayName;return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:savedAuthorName,country:body.country,languages:body.languages})});}return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({display_name:'',country:'',languages:[],avatar_url:''})});});
+    await unnamedShareContext.route('**/api/account/claim',route=>route.fulfill({status:409,contentType:'application/json',body:'{}'}));
+    await unnamedShareContext.route('**/api/stories',async route=>{if(route.request().method()==='POST'){authorSaveEvents.push('post');return route.fulfill({status:201,contentType:'application/json',body:JSON.stringify({id:'inline-author-story',title:'Inline author test',originalLanguage:'English',text:'Synthetic story text.',status:'draft',visibility:'private',showName:true,storytellerName:savedAuthorName,author:{name:savedAuthorName},versionLog:[],images:[]})});}return route.fulfill({status:200,contentType:'application/json',body:'[]'});});
+    await unnamedShareContext.route('**/api/mine',route=>route.fulfill({status:200,contentType:'application/json',body:'[]'}));await unnamedShareContext.route('https://story-bridge-test.supabase.co/**',supabaseMock);await unnamedShareContext.route('https://story-bridge-test.supabase.co/auth/v1/user',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:'unnamed-user',aud:'authenticated',app_metadata:{provider:'email'},user_metadata:{story_bridge_welcome_completed:true}})}));
+    const unnamedSharePage=await unnamedShareContext.newPage();observePage(unnamedSharePage);await unnamedSharePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});await unnamedSharePage.getByRole('heading',{name:'Discover'}).waitFor();
+    await clickAppNavigation(unnamedSharePage,'Share');await unnamedSharePage.getByRole('heading',{name:'Share a story'}).waitFor();
+    await unnamedSharePage.getByLabel('Language told in').fill('English');await unnamedSharePage.getByRole('button',{name:'Continue to your story'}).click();await unnamedSharePage.getByLabel('Post title').fill('Inline author test');await unnamedSharePage.getByLabel('Your story').fill('Synthetic story text.');await unnamedSharePage.getByRole('button',{name:'Continue to translation'}).click();await unnamedSharePage.getByRole('button',{name:'Continue to review'}).click();
+    const authorNameInput=unnamedSharePage.getByLabel('Your name as it appears on posts');ensure(await authorNameInput.isVisible(),'The Review step did not ask for a missing profile name.');
+    await unnamedSharePage.getByRole('button',{name:'Save draft and open review'}).click();await unnamedSharePage.getByText('Enter the name you want to appear on your posts.').waitFor();ensure(await authorNameInput.evaluate(element=>document.activeElement===element),'Missing profile name did not receive focus.');
+    await authorNameInput.fill('Friend Display Name');await unnamedSharePage.getByLabel('This is mine, or I have permission from the person telling it.').check();
+    const unnamedCreate=unnamedSharePage.waitForResponse(response=>response.url()===`${webOrigin}/api/stories`&&response.request().method()==='POST');await unnamedSharePage.getByRole('button',{name:'Save draft and open review'}).click();await unnamedCreate;await unnamedSharePage.getByRole('heading',{name:'Review your story'}).waitFor();
+    ensure(savedAuthorName==='Friend Display Name'&&authorSaveEvents.join(',')==='profile,post','The author profile was not saved before the post was created.');
+    pass('Share asks for and saves a missing author name before creating the post');await unnamedShareContext.close();
+
     const welcomeContext=await browser.newContext({viewport:{width:375,height:900}});
     await welcomeContext.route('https://fonts.googleapis.com/**',route=>route.fulfill({status:200,contentType:'text/css',body:''}));await welcomeContext.route('https://fonts.gstatic.com/**',route=>route.fulfill({status:204,body:''}));
     const welcomeToken=signTestToken({sub:'welcome-user',iss:'https://story-bridge-test.supabase.co/auth/v1',aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600,email:'welcome@example.test'},testSigningKey.privateKey,'browser-local-key');
@@ -1145,11 +1179,12 @@ try {
     await welcomePage.route('https://story-bridge-test.supabase.co/**',supabaseMock);
     await welcomePage.route('https://story-bridge-test.supabase.co/auth/v1/user',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:'welcome-user',aud:'authenticated',role:'authenticated',email:'welcome@example.test',app_metadata:{provider:'email'},user_metadata:{story_bridge_welcome_completed:true},created_at:'2026-01-01T00:00:00Z',updated_at:new Date().toISOString()})}));
     await welcomePage.goto(webOrigin,{waitUntil:'domcontentloaded'});await welcomePage.getByRole('heading',{name:'Welcome to Story Bridge'}).waitFor();
-    await welcomePage.getByLabel('Display name').fill('A New Storyteller');await welcomePage.getByLabel('Country').fill('Kenya');await welcomePage.getByLabel('Languages you speak').fill('Swahili, English');
     await welcomePage.getByLabel(/I accept the/).check();
+    await welcomePage.getByRole('button',{name:'Continue'}).click();ensure(await welcomePage.getByLabel('Display name').evaluate(input=>input.validity.valueMissing),'Welcome allowed an empty display name.');ensure(await welcomePage.getByRole('button',{name:'Skip for now'}).count()===0,'Welcome still allowed skipping the required display name.');
+    await welcomePage.getByLabel('Display name').fill('A New Storyteller');await welcomePage.getByLabel('Country').fill('Kenya');await welcomePage.getByLabel('Languages you speak').fill('Swahili, English');
     await captureEvidence('Welcome profile captures at 375px, 768px, and 1280px',async()=>{const shots=[];for(const width of [375,768,1280]){await welcomePage.setViewportSize({width,height:900});const file=path.join(evidenceDir,`welcome-profile-${width}.png`);await welcomePage.screenshot({path:file,fullPage:true});shots.push({file,metrics:{width}})}return shots});
     await welcomePage.getByRole('button',{name:'Continue'}).click();await welcomePage.getByRole('heading',{name:'Discover'}).waitFor();
-    pass('Welcome flow: new account saves details and opens Discover');
+    pass('Welcome requires a name and saves new account details');
     await welcomeContext.close();
 
     const profileContext = await browser.newContext({viewport:{width:375,height:900}});
@@ -1340,6 +1375,7 @@ try {
     await livePage.getByRole('button',{name:'Continue to translation'}).click();
     await livePage.getByRole('button',{name:'Continue to review'}).click();
     ensure(await livePage.locator('input[type="checkbox"][required]').count()===0,'Share validation should be handled inline instead of by browser banners.');
+    await livePage.getByLabel('Your name as it appears on posts').fill('Synthetic signed-in author');
     await livePage.getByRole('button',{name:'Save draft and open review'}).click();
     await livePage.getByText('Confirm that this story is yours or that you have permission.').waitFor();
     await livePage.waitForFunction(() => document.activeElement?.id === 'share-consent');
@@ -1468,6 +1504,7 @@ try {
     await livePage.getByLabel(/Or choose an audio file/).setInputFiles({name:'synthetic-account-audio.webm',mimeType:'audio/webm',buffer:Buffer.from('synthetic account audio')});
     await livePage.getByRole('button',{name:'Continue to translation'}).click();
     await livePage.getByRole('button',{name:'Continue to review'}).click();
+    await livePage.getByLabel('Your name as it appears on posts').fill('Synthetic signed-in author');
     await livePage.getByLabel('This is mine, or I have permission from the person telling it.').check();
     let releaseDraftRefresh;
     let signalDraftRefreshStarted;
@@ -1492,7 +1529,7 @@ try {
     ensure(reviewOpenedBeforeRefresh,'Saving a draft waited for the workspace refresh before opening review.');
     pass('Story A: saved draft opens review before the workspace refresh completes');
     await clickHeaderMenu(livePage,'My workspace');
-    await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
+    await livePage.getByRole('heading',{name:'Welcome, Synthetic signed-in author'}).waitFor();
     await livePage.getByRole('button',{name:'Create a story',exact:true}).click();
     ensure(await livePage.getByLabel('Language told in').inputValue()==='','Successful creation left the language in the next create form.');
     ensure(await livePage.locator('.recording-preview').count()===0,'Successful creation left the prior audio file in the next create form.');
@@ -1696,7 +1733,8 @@ try {
       await livePage.getByLabel('Email address').fill(email); await livePage.getByRole('button',{name:'Email me a code'}).click();
       for(const [index,digit] of [...'123456'].entries()) await livePage.getByRole('textbox',{name:`Code digit ${index+1}`}).fill(digit);
       await livePage.getByRole('heading',{name:'Discover'}).waitFor();
-      await clickHeaderMenu(livePage,'My workspace'); await livePage.getByRole('heading',{name:'Your storytelling space'}).waitFor();
+      await clickHeaderMenu(livePage,'My workspace');
+      await livePage.getByRole('heading',{name:email==='reader@example.test'?'Welcome, Synthetic signed-in author':'Your storytelling space'}).waitFor();
     };
     // Hold an A-owned private detail response across sign-out and B sign-in.
     await clickHeaderMenu(livePage,'My stories'); await livePage.getByRole('heading',{name:'My stories'}).waitFor();

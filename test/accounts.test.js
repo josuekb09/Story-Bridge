@@ -23,9 +23,10 @@ const token = (sub, extra) => signTestToken(baseClaims(sub, extra), pair.private
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 
 function fixtureStore() {
-  const rows = new Map(); const profiles = new Map();const reports=new Map();const media=[];const images=new Map();const avatars=new Map(); let lock = Promise.resolve();
+  const rows = new Map(); const profiles = new Map();const authMetadata = new Map();const reports=new Map();const media=[];const images=new Map();const avatars=new Map(); let lock = Promise.resolve();
   const store = {
     rows,
+    authMetadata,
     reports,
     profileBatchCalls: 0,
     async listPublic() { return [...rows.values()].filter(row => row.status==='shared' && row.visibility==='public'); },
@@ -50,6 +51,7 @@ function fixtureStore() {
     async claim(id,ownerHash,userId) { const row=rows.get(id);if(!row||row.owner_user_id!==null||row.owner_hash!==ownerHash)return false;row.owner_user_id=userId;row.owner_hash=null;return true; },
     async profile(id) { return profiles.get(id)||null; },
     async profilesByUserIds(ids) { this.profileBatchCalls++;const wanted=new Set(ids);return [...profiles.values()].filter(profile=>wanted.has(profile.user_id)); },
+    async authUserMetadataByUserIds(ids) { return new Map(ids.filter(id=>authMetadata.has(id)).map(id=>[id,authMetadata.get(id)])); },
     async saveProfile(id,profile) { const result={user_id:id,...(profiles.get(id)||{}),...profile};profiles.set(id,result);return result; },
     async putProfileAvatar(key,buffer){avatars.set(key,buffer);},async getProfileAvatar(key){return{buffer:avatars.get(key),mime:'image/webp'};},async removeProfileAvatar(key){avatars.delete(key);},
     async putAudio() {}, async removeAudio() {}, async audioUsage(){return 0;}, async audioResponse(){return new Response(new Uint8Array([1,2,3]),{headers:{'content-type':'audio/webm'}});},
@@ -130,6 +132,17 @@ test('Supabase claim adapter uses one conditional update and migration denies br
   const sql=readFileSync(path.resolve('supabase/migrations/202611070001_story_bridge_accounts.sql'),'utf8');
   assert.match(sql,/alter table public\.stories enable row level security/i);assert.match(sql,/alter table public\.profiles enable row level security/i);
   assert.match(sql,/revoke all on public\.profiles, public\.stories from anon, authenticated/i);assert.match(sql,/public\s*=\s*false/i);assert.match(sql,/for all to service_role/i);
+});
+
+test('Supabase author metadata uses the service client cache and keeps emails out of its result',async()=>{
+  let calls=0;
+  const client={auth:{admin:{async listUsers(){calls++;return{data:{users:[{id:'user-a',email:'private@example.test',user_metadata:{full_name:'Google Full',name:'Google Name'}},{id:'user-b',email:'other@example.test',user_metadata:{name:'Google Alias'}}],total:2},error:null};}}}};
+  const store=createSupabaseStore({...config},client);
+  const first=await store.authUserMetadataByUserIds(['user-a','user-b']);
+  assert.deepEqual([...first.entries()],[['user-a',{full_name:'Google Full',name:'Google Name'}],['user-b',{full_name:'',name:'Google Alias'}]]);
+  assert.equal(JSON.stringify([...first.values()]).includes('@example.test'),false);
+  await store.authUserMetadataByUserIds(['user-b']);
+  assert.equal(calls,1,'The short-lived process cache avoids another full auth-user listing.');
 });
 
 test('verifier checks signature, expiry, issuer and audience using a fake local JWKS', async()=>{
@@ -378,6 +391,34 @@ test('public posts use current profile identity unless a community-member choice
   const detail=await fetch(`${base}/api/stories/friend-like-public`).then(response=>response.json());
   assert.equal(detail.author.name,'Dan Renamed');
   assert.doesNotMatch(JSON.stringify(detail),/user-a|dan@example\.test/);
+});
+
+test('public authors fall back from profile to Google metadata to the stored storyteller name',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  await store.saveProfile('profile-owner',{display_name:'Profile Display Name'});
+  await store.saveProfile('google-owner',{display_name:'',avatar_key:'google-avatar'});
+  await store.putProfileAvatar('google-avatar',Buffer.from('synthetic google avatar'));
+  await store.saveProfile('metadata-name-owner',{display_name:''});
+  store.authMetadata.set('profile-owner',{full_name:'Google Name Must Lose',name:'Google Alias',email:'private@example.test'});
+  store.authMetadata.set('google-owner',{full_name:'Google Full Name',name:'Google Short Name',email:'private@example.test'});
+  store.authMetadata.set('metadata-name-owner',{full_name:'',name:'Google Name Field',email:'private@example.test'});
+  store.rows.set('profile-name-post',{...storyRow('profile-name-post','profile-owner','shared','public'),show_name:true,storyteller_name:'Stored Name'});
+  store.rows.set('google-full-name-post',{...storyRow('google-full-name-post','google-owner','shared','public'),show_name:true,storyteller_name:'Stored Name'});
+  store.rows.set('google-name-post',{...storyRow('google-name-post','metadata-name-owner','shared','public'),show_name:true,storyteller_name:'Stored Name'});
+  store.rows.set('stored-name-post',{...storyRow('stored-name-post','stored-owner','shared','public'),show_name:true,storyteller_name:'Stored Storyteller Name'});
+
+  const posts=await fetch(`${base}/api/stories`).then(response=>response.json());
+  assert.equal(posts.find(post=>post.id==='profile-name-post').author.name,'Profile Display Name');
+  const googleFull=posts.find(post=>post.id==='google-full-name-post');
+  assert.equal(googleFull.author.name,'Google Full Name');
+  assert.match(googleFull.authorAvatarUrl,/^\/api\/stories\/google-full-name-post\/author-avatar/);
+  assert.equal(posts.find(post=>post.id==='google-name-post').author.name,'Google Name Field');
+  assert.equal(posts.find(post=>post.id==='stored-name-post').author.name,'Stored Storyteller Name');
+  assert.doesNotMatch(JSON.stringify(posts),/user-a|profile-owner|google-owner|private@example\.test|user_metadata/);
+  const detail=await fetch(`${base}/api/stories/google-full-name-post`).then(response=>response.json());
+  assert.equal(detail.author.name,'Google Full Name');
+  const avatar=await fetch(`${base}${googleFull.authorAvatarUrl}`);
+  assert.equal(avatar.status,200);assert.deepEqual(Buffer.from(await avatar.arrayBuffer()),Buffer.from('synthetic google avatar'));
 });
 
 test('new Community member choice is recorded and owner can toggle post identity',async t=>{

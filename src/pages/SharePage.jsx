@@ -5,11 +5,14 @@ import { LANGUAGES } from '../lib/languages.js';
 import UnsavedAudioPreview from '../components/UnsavedAudioPreview.jsx';
 import { createImageDetails, mapShareSubmissionError, shareFieldId, validateShareStep } from '../share-validation.js';
 
-export default function SharePage({ objectContext, form, setForm, change, postMeta, setPostMeta, file, fileKind, audioSaved, saving, captureBusy, onAudioChange, onCaptureBusyChange, shareStep, setShareStep, postImages, setPostImages, imageDetails, setImageDetails, translationBusy, translationError, requestTranslationDraft, translationApprovalCanContinue, createDraft, profileName = '', profileAvatar = '', onEditProfile = () => {}, submissionError = '', clearSubmissionError = () => {} }) {
+export default function SharePage({ objectContext, form, setForm, change, postMeta, setPostMeta, file, fileKind, audioSaved, saving, captureBusy, onAudioChange, onCaptureBusyChange, shareStep, setShareStep, postImages, setPostImages, imageDetails, setImageDetails, translationBusy, translationError, requestTranslationDraft, translationApprovalCanContinue, createDraft, profileName = '', profileAvatar = '', requireAuthorName = false, onSaveAuthorName = async () => {}, onEditProfile = () => {}, submissionError = '', clearSubmissionError = () => {} }) {
   const [otherLanguageMode, setOtherLanguageMode] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState('');
+  const [authorNameInput, setAuthorNameInput] = useState(profileName);
   const languageSuggestions = [...new Set(LANGUAGES.flatMap(({ name, nativeName }) => [name, nativeName]))];
+
+  useEffect(() => { if (profileName) setAuthorNameInput(profileName); }, [profileName]);
 
   function focusField(field) {
     const element = document.getElementById(shareFieldId(field, otherLanguageMode));
@@ -71,6 +74,8 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
       people: postMeta.people,
       tags: postMeta.tags,
       sources: postMeta.sources,
+      authorDisplayName: authorNameInput,
+      requireAuthorName: requireAuthorName && !profileName.trim(),
     };
   }
 
@@ -100,7 +105,7 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
     setShareStep(4);
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     const checks = [
       [1, validateShareStep(1, valuesForValidation())],
@@ -112,6 +117,16 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
     if (!translationApprovalCanContinue(form)) {
       setStepError({ translationApproval: 'Approve the AI translation before saving.' }, 3);
       return;
+    }
+    if (requireAuthorName && !profileName.trim()) {
+      try {
+        const savedName = await onSaveAuthorName(authorNameInput.trim());
+        if (!savedName) throw new Error('Profile name save failed.');
+        setAuthorNameInput(savedName);
+      } catch {
+        setStepError({ authorName: 'Your name could not be saved. Try again.' }, 4);
+        return;
+      }
     }
     clearSubmissionError();
     setFieldErrors({});
@@ -175,7 +190,7 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
       </>}
       {shareStep === 4 && <>
         <section className="review-summary"><h2>{postMeta.title}</h2><p className="notice">{postMeta.trustLabel}</p><h3>Original · {form.originalLanguage}</h3><p className="story-text">{form.text || 'Audio recording only'}</p>{file && <UnsavedAudioPreview file={file} fileKind={fileKind}/>} {form.translation && <div><h3>{form.translationOrigin === 'ai_draft' ? (form.translationApproved ? 'AI draft approved by you' : 'AI draft: not yet approved by you') : 'Written by the storyteller'} · {form.translationLanguage}</h3><p className="story-text">{form.translation}</p></div>}</section>
-        <fieldset className="share-author-choice"><legend>Author</legend><div className="share-author"><AuthorAvatar story={{author:{name:profileName||'Community member',anonymous:!profileName}}} avatarUrl={profileAvatar||undefined} size="small"/>{profileName ? <b>Posting as {profileName}</b> : <a href="/profile" onClick={event => { event.preventDefault(); onEditProfile(); }}>Add your name in your profile</a>}</div><label className="check"><input type="checkbox" checked={!!form.postAsCommunityMember} onChange={event => change('postAsCommunityMember',event.target.checked)}/> Post as Community member instead (hide my name and photo on this post)</label></fieldset>
+        <fieldset className="share-author-choice"><legend>Author</legend><div className="share-author"><AuthorAvatar story={{author:{name:profileName||authorNameInput.trim()||'Community member',anonymous:!profileName&&!authorNameInput.trim()}}} avatarUrl={profileAvatar||undefined} size="small"/>{profileName ? <b>Posting as {profileName}</b> : requireAuthorName ? <label>Your name as it appears on posts<input id="share-author-name" maxLength="80" autoComplete="name" value={authorNameInput} onChange={event=>{setAuthorNameInput(event.target.value);clearFieldError('authorName');}} aria-invalid={!!fieldErrors.authorName} aria-describedby={fieldErrors.authorName?'share-error-authorName':undefined}/></label> : <a href="/profile" onClick={event => { event.preventDefault(); onEditProfile(); }}>Add your name in your profile</a>}</div>{!profileName&&requireAuthorName&&fieldError('authorName')}<label className="check"><input type="checkbox" checked={!!form.postAsCommunityMember} onChange={event => change('postAsCommunityMember',event.target.checked)}/> Post as Community member instead (hide my name and photo on this post)</label></fieldset>
         <label>Access<select id="share-access" value={postMeta.access} onChange={event => updateMeta('access', event.target.value)}><option>Public</option><option>Community only</option></select></label>{fieldError('access')}
         <label className="check"><input id="share-consent" type="checkbox" checked={postMeta.consentConfirmed} onChange={event => updateMeta('consentConfirmed', event.target.checked)} aria-invalid={!!fieldErrors.consent} aria-describedby={fieldErrors.consent ? 'share-error-consent' : undefined}/> This is mine, or I have permission from the person telling it. I follow the <a href="/guidelines">community guidelines</a>.</label>{fieldError('consent')}
         <p className="consent-copy">Nothing becomes public until you review and explicitly approve it. You can withdraw this post at any time. Its fingerprint and version record remain attached.</p>

@@ -10,6 +10,32 @@ function stablePostReportId(reporterId,postId){
 // All methods are async so the route layer does not depend on a particular storage engine.
 export function createSupabaseStore(config, client = createClient(config.url, config.secretKey, { auth: { autoRefreshToken: false, persistSession: false } })) {
   const fail = (error) => { if (error) throw new Error('storage-unavailable', { cause:error }); };
+  let authUserMetadataCache = new Map(), authUserMetadataCacheUntil = 0, authUserMetadataLoad = null;
+  async function allAuthUserMetadata() {
+    if (authUserMetadataCacheUntil > Date.now()) return authUserMetadataCache;
+    if (!authUserMetadataLoad) authUserMetadataLoad = (async () => {
+      const names = new Map(); let page = 1, userCount = 0; const perPage = 1000;
+      while (true) {
+        const { data, error } = await client.auth.admin.listUsers({ page, perPage }); fail(error);
+        const users = data?.users || [];
+        userCount += users.length;
+        for (const user of users) {
+          const metadata = user.user_metadata || {};
+          const fullName = typeof metadata.full_name === 'string' ? metadata.full_name.trim().slice(0, 120) : '';
+          const name = typeof metadata.name === 'string' ? metadata.name.trim().slice(0, 120) : '';
+          if (fullName || name) names.set(user.id, { full_name: fullName, name });
+        }
+        if (users.length < perPage || data?.total != null && userCount >= data.total) break;
+        page++;
+      }
+      return names;
+    })();
+    try {
+      authUserMetadataCache = await authUserMetadataLoad;
+      authUserMetadataCacheUntil = Date.now() + 60_000;
+      return authUserMetadataCache;
+    } finally { authUserMetadataLoad = null; }
+  }
   return {
     async listPublic() { const { data, error } = await client.from('stories').select('*').eq('status', 'shared').eq('visibility', 'public'); fail(error); return data; },
     async listMine(userId) { const { data, error } = await client.from('stories').select('*').eq('owner_user_id', userId); fail(error); return data; },
@@ -53,6 +79,7 @@ export function createSupabaseStore(config, client = createClient(config.url, co
     },
     async profile(userId) { const { data, error } = await client.from('profiles').select('*').eq('user_id', userId).maybeSingle(); fail(error); return data; },
     async profilesByUserIds(userIds) { if(!userIds.length)return[];const {data,error}=await client.from('profiles').select('user_id,display_name,avatar_key').in('user_id',userIds);fail(error);return data||[]; },
+    async authUserMetadataByUserIds(userIds) { if(!userIds.length||!client.auth?.admin?.listUsers)return new Map();const all=await allAuthUserMetadata();return new Map(userIds.filter(id=>all.has(id)).map(id=>[id,all.get(id)])); },
     async listOpenPostReports() { const {data,error}=await client.from('reports').select('id,target_id,reason,details,created_at').eq('target_type','post').eq('status','open').order('created_at',{ascending:false});fail(error);return data||[]; },
     async createPostReport(record) {
       const id=stablePostReportId(record.reporter_id,record.target_id);

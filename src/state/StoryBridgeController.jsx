@@ -25,6 +25,12 @@ const AdminPostsPage = lazy(() => import('../pages/AdminPostsPage.jsx'));
 const pageLoading = <main className="page-loading" aria-busy="true"><p role="status">Loading page…</p></main>;
 
 const EMPTY_POST_META = {title:'',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'',access:'Public',consentConfirmed:false};
+const googleDisplayName = session => {
+  const user = session?.user;
+  if (user?.app_metadata?.provider !== 'google' && !user?.identities?.some(identity => identity.provider === 'google')) return '';
+  const metadata = user.user_metadata || {};
+  return [metadata.full_name, metadata.name].find(value => typeof value === 'string' && value.trim())?.trim() || '';
+};
 
 export default function App() {
   const pathPage = () => {
@@ -230,9 +236,20 @@ export default function App() {
     const scope = captureScope();
     setProfileState('loading'); setProfileError(''); setProfileNotice('');
     try {
-      const profile = await api('/api/account/profile');
+      let profile = await api('/api/account/profile');
       if (currentSession.current !== identity || identityEpoch.current !== epoch || profileRequest.current !== requestId || (viewScoped && !scopeIsCurrent(scope))) return;
-      const name = typeof profile?.display_name === 'string' ? profile.display_name : '';
+      let name = typeof profile?.display_name === 'string' ? profile.display_name.trim() : '';
+      const googleName = googleDisplayName(session);
+      if (!name && googleName) {
+        try {
+          const currentProfile = profile;
+          const savedProfile = await api('/api/account/profile', { method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify({displayName:googleName,country:profile?.country||'',languages:Array.isArray(profile?.languages)?profile.languages:[]}) });
+          profile = { ...currentProfile, ...savedProfile, avatar_url:currentProfile?.avatar_url||'' };
+          name = typeof profile?.display_name === 'string' ? profile.display_name.trim() : '';
+        } catch { name = googleName; }
+        if (currentSession.current !== identity || identityEpoch.current !== epoch || profileRequest.current !== requestId || (viewScoped && !scopeIsCurrent(scope))) return;
+        if (!name) name = googleName;
+      }
       setSavedProfileName(name); setProfileName(name);setProfileCountry(profile.country||'');setProfileLanguages(Array.isArray(profile.languages)?profile.languages.join(', '):'');showAvatar(profile.avatar_url||''); setProfileState('ready');
     } catch {
       if (currentSession.current !== identity || identityEpoch.current !== epoch || profileRequest.current !== requestId || (viewScoped && !scopeIsCurrent(scope))) return;
@@ -355,6 +372,15 @@ export default function App() {
     try{const {error:cause}=await supabase.auth.verifyOtp({email:authEmail.trim(),token:authCode.trim(),type:'email'});if(cause)throw cause;}catch(cause){setError(/rate|too many/i.test(cause.message)?'Too many attempts. Wait before trying again.':'That code is incorrect or expired. Request a new code and try again.')}finally{setAuthBusy(false)}
   }
   async function resendEmailCode(){await sendEmailCode({preventDefault(){}})}
+  async function saveShareAuthorName(value) {
+    const displayName = String(value || '').trim();
+    if (!displayName) throw new Error('Display name is required.');
+    const profile = await api('/api/account/profile', { method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify({displayName,country:profileCountry,languages:profileLanguages.split(',').map(item=>item.trim()).filter(Boolean)}) });
+    const savedName = typeof profile?.display_name === 'string' ? profile.display_name.trim() : '';
+    if (!savedName) throw new Error('Display name could not be saved.');
+    setSavedProfileName(savedName); setProfileName(savedName); setProfileCountry(profile.country||''); setProfileLanguages((profile.languages||[]).join(', '));
+    return savedName;
+  }
   async function completeWelcome(values){setWelcomeBusy(true);setWelcomeError('');try{const profile=await api('/api/account/profile',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({displayName:values.displayName,country:values.country,languages:values.languages})});if(values.photo){const body=new FormData();body.append('avatar',values.photo);await api('/api/account/profile/avatar',{method:'POST',body});}const {error:cause}=await supabase.auth.updateUser({data:{story_bridge_welcome_completed:true,terms_accepted_at:new Date().toISOString(),privacy_accepted_at:new Date().toISOString()}});if(cause)throw cause;await api('/api/account/welcome-complete',{method:'POST'}).catch(()=>{});setSavedProfileName(profile.display_name||'');setProfileName(profile.display_name||'');setProfileCountry(profile.country||'');setProfileLanguages((profile.languages||[]).join(', '));(values.photo&&showAvatar('/api/account/profile/avatar'));setShowSignIn(false);transitionTo('discover')}catch{setWelcomeError('Your welcome details could not be saved. Try again.');}finally{setWelcomeBusy(false)}}
   async function signOut(global=false) {
     if (hasUnsavedChanges() && !window.confirm('You have unsaved changes. Sign out and discard them?')) return;
@@ -424,7 +450,7 @@ export default function App() {
   // Private pages need a session: show the sign-in screen instead of an empty "could not be loaded" list.
   const privatePage = ['workspace', 'mine', 'review', 'profile', 'share','admin'].includes(page);
   if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<Suspense fallback={pageLoading}><SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} setAuthCode={setAuthCode} authCode={authCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/></Suspense>{policyFooter}{mobileNav}</div>;
-  if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><WelcomePage saving={welcomeBusy} error={welcomeError} onComplete={completeWelcome}/></Suspense>{policyFooter}{mobileNav}</div>;
+  if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><WelcomePage saving={welcomeBusy} error={welcomeError} initialDisplayName={profileName||googleDisplayName(session)} onComplete={completeWelcome}/></Suspense>{policyFooter}{mobileNav}</div>;
    if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Suspense fallback={pageLoading}><Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{policyFooter}{mobileNav}</div>;
   if (currentSession.current !== activeIdentity) return <div className="app">{appHeader}<main><p role="status">Loading your account…</p></main>{policyFooter}{mobileNav}</div>;
 
@@ -691,7 +717,7 @@ export default function App() {
       {page === 'objects' && <ObjectsPage objectSettings={objectSettings} visibleObjects={visibleObjects} museumFilter={museumFilter} setMuseumFilter={setMuseumFilter} museumChoices={museumChoices} objectTypeFilter={objectTypeFilter} setObjectTypeFilter={setObjectTypeFilter} typeChoices={typeChoices} transitionTo={transitionTo} retry={() => setObjectSettings(null)}/>}
       {page === 'group-record' && <CulturalGroupPage record={CULTURAL_GROUP_RECORD} navigate={navigate} onAddVoice={addVoiceToObject}/>}
       {page.startsWith('object:') && <ObjectRecordPage source={OBJECT_RECORDS.find(item => item.id === page.slice(7))} objectSettings={objectSettings} session={session} objectAccessSaving={objectAccessSaving} objectAccessError={objectAccessError} saveObjectAccess={saveObjectAccess} linkedStories={objectStories(page.slice(7))} showStory={showStory} addVoiceToObject={addVoiceToObject} navigate={navigate}/>}
-      {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} submissionError={shareSubmitError} clearSubmissionError={()=>setShareSubmitError('')} onEditProfile={()=>navigate('profile')}/>}
+      {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} requireAuthorName={!!accountConfig.account} onSaveAuthorName={saveShareAuthorName} submissionError={shareSubmitError} clearSubmissionError={()=>setShareSubmitError('')} onEditProfile={()=>navigate('profile')}/>}
       {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
       {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} onChangeAuthorVisibility={changeAuthorVisibility} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId} profileAvatar={profileAvatar}/>}
       {page === 'cultures' && <CulturesPage stories={publicStories} showStory={showStory} navigate={navigate}/>}

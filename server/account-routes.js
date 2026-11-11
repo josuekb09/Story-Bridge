@@ -19,25 +19,34 @@ const publicAuthorAvatarUrl = (row, profile) => {
   const version = sha256(String(profile.avatar_key)).slice(0, 12);
   return `/api/stories/${encodeURIComponent(row.id)}/author-avatar?v=${version}`;
 };
-const authorFor = (row, profile, includeAvatar = false) => {
+const cleanName = value => typeof value === 'string' ? value.trim() : '';
+const authorNameFor = (row, profile, authMetadata = null) => cleanName(profile?.display_name)
+  || cleanName(authMetadata?.full_name)
+  || cleanName(authMetadata?.name)
+  || cleanName(row?.storyteller_name);
+const authMetadataFor = async (store, userIds) => {
+  if (!userIds.length || !store.authUserMetadataByUserIds) return new Map();
+  try { return await store.authUserMetadataByUserIds(userIds); } catch { return new Map(); }
+};
+const authorFor = (row, profile, includeAvatar = false, authMetadata = null) => {
   if (isCommunityMemberPost(row)) return { name: 'Community member', anonymous: true };
-  const name = String(profile?.display_name || '').trim() || String(row.storyteller_name || '').trim();
+  const name = authorNameFor(row, profile, authMetadata);
   const author = name ? { name } : { name: 'Community member', anonymous: true };
   const avatarUrl = includeAvatar && name ? publicAuthorAvatarUrl(row, profile) : '';
   if (avatarUrl) author.avatarUrl = avatarUrl;
   return author;
 };
-const clean = (row, owner = false, profile = null, includeAvatar = false) => {
+const clean = (row, owner = false, profile = null, includeAvatar = false, authMetadata = null) => {
   const out = { id: row.id, objectId: row.object_id || null, title:row.title||'',kind:row.kind||'story',section:row.section||'stories',trustLabel:row.trust_label||'Told by a community member',licence:row.licence||'All rights reserved',region:row.region||'',people:row.people||'',tags:row.tags||[],sources:row.sources||[],consentConfirmed:!!row.consent_confirmed,access:row.access||'Public',moderationStatus:row.moderation_status||'approved',originalLanguage: row.original_language, text: row.text, translationLanguage: row.translation_language, translation: row.translation, translationOrigin: row.translation_origin || 'storyteller', translationChecked: row.translation_checked, checkedBy: row.translation_checked ? row.checked_by : '', visibility: row.visibility, status: row.status, createdAt: row.created_at, audio: !!row.audio_key, versionLog:storyRecord(row) };
-  const author = authorFor(row, profile, includeAvatar);
+  const author = authorFor(row, profile, includeAvatar, authMetadata);
   out.author = author;
   out.storytellerName = author.name;
   if (owner) out.showName = !isCommunityMemberPost(row);
   if (includeAvatar && author.avatarUrl) out.authorAvatarUrl = author.avatarUrl;
   return out;
 };
-const cleanPost = async (row, owner = false, store, profile = null, includeAvatar = false) => ({
-  ...clean(row, owner, profile, includeAvatar),
+const cleanPost = async (row, owner = false, store, profile = null, includeAvatar = false, authMetadata = null) => ({
+  ...clean(row, owner, profile, includeAvatar, authMetadata),
   images:(await store.listPostMedia?.(row.id)||[]).filter(media=>media.kind==='image').map(media=>({id:media.id,kind:media.kind,altText:media.alt_text,credit:media.credit,licence:media.licence,width:media.width,height:media.height,sha256:media.sha256,url:`/api/posts/${row.id}/media/${encodeURIComponent(media.storage_key)}`})),
 });
 const cleanPosts = async (rows, owner, store, includeAvatar = () => false) => {
@@ -46,11 +55,17 @@ const cleanPosts = async (rows, owner, store, includeAvatar = () => false) => {
     ? await (store.profilesByUserIds ? store.profilesByUserIds(userIds) : store.profile ? Promise.all(userIds.map(userId => store.profile(userId))) : [])
     : [];
   const profiles = new Map((profileRows || []).filter(Boolean).map(profile => [profile.user_id, profile]));
-  return Promise.all(rows.map(row => cleanPost(row, owner, store, profiles.get(row.owner_user_id) || null, includeAvatar(row))));
+  const missingProfileNames = userIds.filter(userId => !cleanName(profiles.get(userId)?.display_name)
+    && rows.some(row => row.owner_user_id === userId && !isCommunityMemberPost(row)));
+  const metadata = await authMetadataFor(store, missingProfileNames);
+  return Promise.all(rows.map(row => cleanPost(row, owner, store, profiles.get(row.owner_user_id) || null, includeAvatar(row), metadata.get(row.owner_user_id) || null)));
 };
 const cleanSinglePost = async (row, owner, store, includeAvatar = false) => {
   const profile = row?.owner_user_id && store.profile ? await store.profile(row.owner_user_id) : null;
-  return cleanPost(row, owner, store, profile, includeAvatar);
+  const metadata = row?.owner_user_id && !isCommunityMemberPost(row) && !cleanName(profile?.display_name)
+    ? await authMetadataFor(store, [row.owner_user_id])
+    : new Map();
+  return cleanPost(row, owner, store, profile, includeAvatar, metadata.get(row.owner_user_id) || null);
 };
 
 export function mountAccountRoutes(app, config, { store = createSupabaseStore(config), verify = createTokenVerifier(config), rateLimit = (_req, _res, next) => next(), draftTranslation = async () => { throw new Error('translation-service-unavailable'); }, objectAdminId = process.env.STORY_BRIDGE_OBJECT_ADMIN_ID || '', adminNotify: sendAdminEmail = notifyAdmin, scheduleAdminNotify = scheduleAdminNotification, adminNotifyConfigured = isAdminNotifyConfigured } = {}) {
@@ -304,7 +319,9 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       if(!row || row.status!=='shared' || row.visibility!=='public' || row.moderation_status==='pending_review' || isCommunityMemberPost(row) || !row.owner_user_id || row.access==='Community only')return res.sendStatus(404);
       if(row.object_id && (await objectAccessList()).some(item=>item.id===row.object_id&&item.access==='Community only'))return res.sendStatus(404);
       const profile=await store.profile(row.owner_user_id);
-      if(!profile?.avatar_key||!String(profile.display_name||row.storyteller_name||'').trim())return res.sendStatus(404);
+      if(!profile?.avatar_key)return res.sendStatus(404);
+      const metadata=cleanName(profile.display_name)?new Map():await authMetadataFor(store,[row.owner_user_id]);
+      if(!authorNameFor(row,profile,metadata.get(row.owner_user_id)))return res.sendStatus(404);
       const image=await store.getProfileAvatar(profile.avatar_key);
       res.set('X-Content-Type-Options','nosniff').set('Cache-Control','public, max-age=300').type(image.mime||'image/webp').send(image.buffer);
     } catch { res.sendStatus(404); }

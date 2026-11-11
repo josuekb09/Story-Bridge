@@ -23,7 +23,7 @@ function sourcesAreValid(value) {
 
 export function validateShareStep(step, {
   originalLanguage = '', title = '', text = '', hasAudio = false, consentConfirmed = false,
-  postImages = [], imageDetails = [], region = '', people = '', tags = '', sources = '',
+  postImages = [], imageDetails = [], region = '', people = '', tags = '', sources = '', authorDisplayName = '', requireAuthorName = false,
 } = {}) {
   const errors = {};
   if (step === 1 && !String(originalLanguage).trim()) errors.language = 'Choose or enter a language.';
@@ -45,7 +45,10 @@ export function validateShareStep(step, {
     if (tagList.length > 20 || tagList.some(tag => tag.length > 40)) errors.tags = 'Use up to 20 tags, each 40 characters or fewer.';
     if (!sourcesAreValid(sources)) errors.sources = 'Sources must be labels and HTTPS links, with up to 20 entries.';
   }
-  if (step === 4 && !consentConfirmed) errors.consent = 'Confirm that this story is yours or that you have permission.';
+  if (step === 4) {
+    if (requireAuthorName && !String(authorDisplayName).trim()) errors.authorName = 'Enter the name you want to appear on your posts.';
+    if (!consentConfirmed) errors.consent = 'Confirm that this story is yours or that you have permission.';
+  }
   return errors;
 }
 
@@ -75,6 +78,7 @@ export function mapShareSubmissionError(message) {
 
 export function shareFieldId(field, otherLanguageMode = false) {
   if (field === 'language') return otherLanguageMode ? 'share-language-other' : 'share-language';
+  if (field === 'authorName') return 'share-author-name';
   if (field.startsWith('image-')) return `share-${field}`;
   if (field === 'translationApproval') return 'share-translation-approve';
   return `share-${field}`;

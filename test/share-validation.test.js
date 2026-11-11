@@ -35,6 +35,11 @@ test('Share flow validates each required step and does not require image alt tex
     title: 'A story', text: 'Some words', postImages: [{}], imageDetails: [{ altText: '', credit: '' }],
   })['image-credit-0'], 'Add a credit for this photo.');
   assert.equal(validateShareStep(4, { consentConfirmed: false }).consent, 'Confirm that this story is yours or that you have permission.');
+  assert.deepEqual(validateShareStep(4, { requireAuthorName:true, authorDisplayName:'  ', consentConfirmed:false }), {
+    authorName:'Enter the name you want to appear on your posts.',
+    consent:'Confirm that this story is yours or that you have permission.',
+  });
+  assert.deepEqual(validateShareStep(4, { requireAuthorName:true, authorDisplayName:' A Storyteller ', consentConfirmed:true }), {});
 });
 
 test('server validation messages are mapped to the corresponding Share field', () => {
