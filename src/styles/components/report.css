@@ -1,4 +1,4 @@
-.post-menu{position:relative;margin-left:auto}
+.post-menu{position:relative;width:fit-content;margin-left:auto}
 .post-menu>summary{list-style:none;cursor:pointer;border:1px solid var(--line);border-radius:999px;min-width:38px;min-height:38px;display:grid;place-items:center;font-weight:800;letter-spacing:1px;color:var(--forest)}
 .post-menu>summary::-webkit-details-marker{display:none}
 .report-menu-action{position:absolute;z-index:5;right:0;top:calc(100% + 6px);display:flex;align-items:center;gap:8px;white-space:nowrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;box-shadow:0 8px 28px #1d38221c;color:var(--ink);cursor:pointer}
