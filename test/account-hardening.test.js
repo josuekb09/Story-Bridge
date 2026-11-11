@@ -165,7 +165,7 @@ test('npm start entry serves the built app when configured, using ordinary key d
   }
   assert.ok(page?.ok); assert.match(output, /supabase\/account/);
   const csp = page.headers.get('content-security-policy');
-  assert.ok(csp.includes(`connect-src 'self' ${URL_}`));
+  assert.ok(csp.includes(`connect-src 'self' https://translate.googleapis.com ${URL_}`));
   assert.match(await page.text(), /<div id="root">/);
   const config = await (await fetch(`${origin}/api/account/config`)).json();
   assert.equal(config.account, true); assert.equal(config.email, true); assert.equal(config.google, false); assert.ok(!JSON.stringify(config).includes('sb_secret'));
