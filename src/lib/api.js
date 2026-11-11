@@ -17,8 +17,12 @@ export function ownerToken() {
 
 export const headers = () => ({ 'x-owner-token': ownerToken(), ...(accountSessionToken ? { Authorization: `Bearer ${accountSessionToken}` } : {}) });
 
+export async function apiResponse(url, options = {}) {
+  return fetch(url, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+}
+
 export async function api(url, options = {}) {
-  const response = await fetch(url, { ...options, headers: { ...headers(), ...(options.headers || {}) } });
+  const response = await apiResponse(url, options);
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     const error = Error(data.error || `Request failed (${response.status})`);

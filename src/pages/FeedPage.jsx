@@ -87,7 +87,7 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId,
   </article>;
 }
 
-export default function FeedPage({ accountConfig, visibleStories, ownedStoryIds = new Set(), languageFilter, setLanguageFilter, regionFilter, setRegionFilter, audioOnly, setAudioOnly, listState, listErrors, retryList, filteredStories, navigate, translationStoryId, setTranslationStoryId, showStory, transitionTo, signedIn = false, onReportSignIn = () => {}, onReported = () => {}, onCulture = () => {} }) {
+export default function FeedPage({ accountConfig, visibleStories, ownedStoryIds = new Set(), languageFilter, setLanguageFilter, regionFilter, setRegionFilter, audioOnly, setAudioOnly, listState, listErrors, retryList, filteredStories, hasMoreStories = false, storiesMoreLoading = false, storiesMoreError = '', loadMoreStories = () => {}, navigate, translationStoryId, setTranslationStoryId, showStory, transitionTo, signedIn = false, onReportSignIn = () => {}, onReported = () => {}, onCulture = () => {} }) {
   const { lang: uiLanguage, t } = useUiLanguage();
   const [shown, setShown] = useState(PAGE_SIZE);
   const languages = useMemo(() => [...new Set(visibleStories.map(story => story.originalLanguage).filter(Boolean))], [visibleStories]);
@@ -120,11 +120,13 @@ export default function FeedPage({ accountConfig, visibleStories, ownedStoryIds 
         <h2>{visibleStories.length ? 'No stories match these filters.' : 'The first stories are waiting to be told.'}</h2>
         <p>{visibleStories.length ? 'Try another language or region.' : 'Share something from your culture: a proverb, a recipe, a song, an object, a place.'}</p>
         {visibleStories.length ? <button className="secondary" onClick={() => { setLanguageFilter('all'); setRegionFilter('all'); setAudioOnly(false); }}>Clear filters</button> : <button className="primary" onClick={share}>Share the first story</button>}
+        {hasMoreStories && <button type="button" className="secondary feed-more" disabled={storiesMoreLoading} onClick={loadMoreStories}>{storiesMoreLoading ? 'Loading stories…' : 'Load more stories'}</button>}
+        {storiesMoreError && <p role="status">{storiesMoreError}</p>}
       </section>}
 
       {listState.stories === 'ready' && filteredStories.length > 0 && <>
         <div className="feed-list">{filteredStories.slice(0, shown).map(story => <PostCard key={story.id} story={story} showStory={showStory} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} signedIn={signedIn} isAuthor={ownedStoryIds.has(story.id)||(signedIn&&listState.mine==='loading')} onReportSignIn={onReportSignIn} onReported={onReported} uiLanguage={uiLanguage} t={t}/>)}</div>
-        {shown < filteredStories.length ? <button type="button" className="secondary feed-more" onClick={() => setShown(value => value + PAGE_SIZE)}>Show more stories</button> : <p className="feed-end">You're all caught up ✓</p>}
+        {shown < filteredStories.length || hasMoreStories ? <><button type="button" className="secondary feed-more" disabled={storiesMoreLoading} onClick={() => { if (shown < filteredStories.length) setShown(value => value + PAGE_SIZE); else { setShown(value => value + PAGE_SIZE); loadMoreStories(); } }}>{storiesMoreLoading ? 'Loading stories…' : 'Show more stories'}</button>{storiesMoreError && <p role="status">{storiesMoreError}</p>}</> : <p className="feed-end">You're all caught up ✓</p>}
       </>}
     </div>
 

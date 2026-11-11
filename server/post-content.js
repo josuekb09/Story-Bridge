@@ -55,3 +55,13 @@ export async function validateAndReencodeImage(buffer) {
     return { buffer: output.data, width: output.info.width, height: output.info.height, sha256: crypto.createHash('sha256').update(output.data).digest('hex'), mime: 'image/webp' };
   } catch { throw new Error('invalid-image'); }
 }
+
+export async function createImageVariant(buffer, width, quality = 78) {
+  const output = await sharp(buffer, { limitInputPixels: 64_000_000 })
+    .resize({ width, height: width, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality })
+    .toBuffer({ resolveWithObject: true });
+  return { buffer: output.data, width: output.info.width, height: output.info.height, sha256: crypto.createHash('sha256').update(output.data).digest('hex'), mime: 'image/webp' };
+}
+
+export const createFeedThumbnail = buffer => createImageVariant(buffer, 640, 78);

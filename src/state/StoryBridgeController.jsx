@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import FeedPage from '../pages/FeedPage.jsx';
 import { AppHeader, AppMobileNav } from '../components/AppHeader.jsx';
-import { api, ownerToken, setAccountSessionToken, authorizedObjectUrl } from '../lib/api.js';
+import { api, apiResponse, ownerToken, setAccountSessionToken, authorizedObjectUrl } from '../lib/api.js';
 import { editAiTranslationDraft, translationApprovalCanContinue } from '../translation-draft.js';
 import { OBJECT_RECORDS, CULTURAL_GROUP_RECORD, OBJECT_IDS, objectRecordView } from '../object-records.js';
 import { prepareImageMetadata, validateTranslationEntry } from '../share-validation.js';
@@ -63,6 +63,9 @@ export default function App() {
   };
   const [page, setPage] = useState(pathPage);
   const [stories, setStories] = useState([]);
+  const [storiesCursor, setStoriesCursor] = useState('');
+  const [storiesMoreLoading, setStoriesMoreLoading] = useState(false);
+  const [storiesMoreError, setStoriesMoreError] = useState('');
   const [mine, setMine] = useState([]);
   const [current, setCurrent] = useState(null);
   const [detailReturnPage, setDetailReturnPage] = useState('discover');
@@ -131,6 +134,9 @@ export default function App() {
   const [reviewBaseline, setReviewBaseline] = useState(null);
   const generation = useRef(0);
   const listRequest = useRef({ stories: 0, mine: 0 });
+  const storiesCursorRef = useRef('');
+  const storiesMoreRequest = useRef(0);
+  const storiesMoreSequence = useRef(0);
   const currentSession = useRef('');
   const identityEpoch = useRef(0);
   const pageRef = useRef(page);
@@ -338,6 +344,29 @@ export default function App() {
   }, [page, captureBusy, file, audioSaved, form, review, reviewBaseline, reviewAudience]);
 
   async function refresh(sessionKey = currentSession.current, onlyKind = '') {
+    const loadStories = async () => {
+      const requestGeneration = generation.current;
+      const requestId = ++listRequest.current.stories;
+      setListState(previous => ({ ...previous, stories: 'loading' }));
+      setListErrors(previous => ({ ...previous, stories: '' }));
+      setStoriesCursor(''); storiesCursorRef.current = ''; setStoriesMoreError(''); storiesMoreRequest.current = 0; setStoriesMoreLoading(false);
+      try {
+        const response = await apiResponse('/api/stories?limit=10');
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw Error(data.error || `Request failed (${response.status})`);
+        }
+        const data = await response.json();
+        if (!Array.isArray(data)) throw Error('Invalid list response');
+        if (generation.current !== requestGeneration || listRequest.current.stories !== requestId || currentSession.current !== sessionKey) return;
+        const nextCursor = response.headers.get('x-next-cursor') || '';
+        setStories(data); setStoriesCursor(nextCursor); storiesCursorRef.current = nextCursor;
+        setListOwner(sessionKey); setListState(previous => ({ ...previous, stories: 'ready' }));
+      } catch {
+        if (generation.current !== requestGeneration || listRequest.current.stories !== requestId || currentSession.current !== sessionKey) return;
+        setListErrors(previous => ({ ...previous, stories: 'This list could not be loaded.' })); setListState(previous => ({ ...previous, stories: 'error' }));
+      }
+    };
     const load = async (kind, url, setter) => {
       const requestGeneration = generation.current;
       const requestId = ++listRequest.current[kind];
@@ -354,10 +383,41 @@ export default function App() {
       }
     };
     const jobs = [];
-    if (!onlyKind || onlyKind === 'stories') jobs.push(load('stories', '/api/stories', setStories));
+    if (!onlyKind || onlyKind === 'stories') jobs.push(loadStories());
     if (!onlyKind || onlyKind === 'mine') jobs.push(load('mine', '/api/mine', setMine));
     await Promise.all(jobs);
   }
+
+  async function loadMoreStories() {
+    const cursor = storiesCursorRef.current;
+    if (!cursor || storiesMoreRequest.current) return;
+    const moreRequestId = ++storiesMoreSequence.current;
+    const requestGeneration = generation.current;
+    const requestId = listRequest.current.stories;
+    const sessionKey = currentSession.current;
+    storiesMoreRequest.current = moreRequestId; setStoriesMoreLoading(true); setStoriesMoreError('');
+    try {
+      const response = await apiResponse(`/api/stories?limit=10&cursor=${encodeURIComponent(cursor)}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw Error(data.error || `Request failed (${response.status})`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) throw Error('Invalid list response');
+      if (generation.current !== requestGeneration || listRequest.current.stories !== requestId || currentSession.current !== sessionKey) return;
+      const nextCursor = response.headers.get('x-next-cursor') || '';
+      setStories(previous => [...previous, ...data.filter(item => !previous.some(existing => existing.id === item.id))]);
+      setStoriesCursor(nextCursor); storiesCursorRef.current = nextCursor;
+    } catch {
+      if (generation.current === requestGeneration && listRequest.current.stories === requestId && currentSession.current === sessionKey) setStoriesMoreError('More stories could not be loaded. Try again.');
+    } finally {
+      if (storiesMoreRequest.current === moreRequestId) { storiesMoreRequest.current = 0; setStoriesMoreLoading(false); }
+    }
+  }
+
+  useEffect(() => {
+    if ((page === 'cultures' || page === 'search') && storiesCursor) void loadMoreStories();
+  }, [page, storiesCursor]);
 
   const onCaptureBusyChange = useCallback(busy => setCaptureBusy(busy), []);
   const onAudioChange = useCallback((nextFile, kind) => {
@@ -725,7 +785,7 @@ export default function App() {
 
       <Suspense fallback={pageLoading}>
       {page === 'workspace' && accountConfig.account && <WorkspacePage savedProfileName={savedProfileName} profileState={profileState} navigate={navigate} listState={listState} listErrors={listErrors} retryList={retryList} counts={counts} setCollectionFilter={setCollectionFilter} draftStories={draftStories} startReview={startReview}/>}
-      {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} ownedStoryIds={ownedStoryIds} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')} onCulture={openCulture}/>}
+      {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} ownedStoryIds={ownedStoryIds} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} hasMoreStories={!!storiesCursor} storiesMoreLoading={storiesMoreLoading} storiesMoreError={storiesMoreError} loadMoreStories={loadMoreStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')} onCulture={openCulture}/>}
       {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} deleteAccount={deleteAccount} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''} accountOpen={profileAccountOpen} onAccountToggle={setProfileAccountOpen}/>}
       {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage} signedIn={!!session} isAuthor={!!current._own||!!session&&listState.mine==='loading'} profileAvatar={profileAvatar} onChangeAuthorVisibility={showName=>changeAuthorVisibility(current,showName)} saving={saving} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')}/>}
       {page === 'detail' && !current && <main>{error ? <section className="panel" role="alert"><p>{error}</p><button className="secondary" onClick={() => navigate(accountConfig.account ? 'discover' : 'listen')}>Back to stories</button></section> : <p role="status">Loading story…</p>}</main>}

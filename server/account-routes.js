@@ -7,7 +7,7 @@ import { appendStoryVersion, makeStoryVersion, storyRecord } from './story-recor
 import { isTranslationApproved, translationDraftHandler } from './translation-draft.js';
 import { OBJECT_IDS } from '../src/object-records.js';
 import { validateTranslationEntry } from '../src/share-validation.js';
-import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
+import { createFeedThumbnail, createImageVariant, IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
 import { sendSitemap } from './sitemap.js';
 import { createAdminEmail, isAdminNotifyConfigured, notifyAdmin, scheduleAdminNotification } from './admin-notify.js';
 
@@ -21,6 +21,17 @@ const publicAuthorAvatarUrl = (row, profile) => {
   return `/api/stories/${encodeURIComponent(row.id)}/author-avatar?v=${version}`;
 };
 const cleanName = value => typeof value === 'string' ? value.trim() : '';
+const encodeStoryCursor = row => Buffer.from(JSON.stringify({ createdAt: row.created_at, id: row.id })).toString('base64url');
+const decodeStoryCursor = value => {
+  if (!value || value.length > 512 || !/^[\w-]+$/.test(value)) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+    return typeof parsed?.createdAt === 'string' && Number.isFinite(Date.parse(parsed.createdAt)) && typeof parsed.id === 'string' && parsed.id
+      ? { createdAt: Date.parse(parsed.createdAt), id: parsed.id }
+      : null;
+  } catch { return null; }
+};
+const newestFirst = (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || (String(a.id) === String(b.id) ? 0 : String(a.id) > String(b.id) ? -1 : 1);
 const authorNameFor = (row, profile, authMetadata = null) => cleanName(profile?.display_name)
   || cleanName(authMetadata?.full_name)
   || cleanName(authMetadata?.name)
@@ -46,9 +57,16 @@ const clean = (row, owner = false, profile = null, includeAvatar = false, authMe
   if (includeAvatar && author.avatarUrl) out.authorAvatarUrl = author.avatarUrl;
   return out;
 };
+const imageVariantStorageKey = (media, width) => `${media.sha256}-${media.storage_key}-${width}-v1`;
+const thumbnailStorageKey = media => imageVariantStorageKey(media, 640);
 const cleanPost = async (row, owner = false, store, profile = null, includeAvatar = false, authMetadata = null) => ({
   ...clean(row, owner, profile, includeAvatar, authMetadata),
-  images:(await store.listPostMedia?.(row.id)||[]).filter(media=>media.kind==='image').map(media=>({id:media.id,kind:media.kind,altText:media.alt_text,credit:media.credit,licence:media.licence,width:media.width,height:media.height,sha256:media.sha256,url:`/api/posts/${row.id}/media/${encodeURIComponent(media.storage_key)}`})),
+  images:(await store.listPostMedia?.(row.id)||[]).filter(media=>media.kind==='image').map(media=>{
+    const width=media.width||640,height=media.height||480,scale=Math.min(1,640/width,640/height);
+    const url=`/api/posts/${row.id}/media/${encodeURIComponent(media.storage_key)}`;
+    const large=Math.max(width,height)>1280;
+    return {id:media.id,kind:media.kind,altText:media.alt_text,credit:media.credit,licence:media.licence,width,height,thumbnailWidth:Math.max(1,Math.round(width*scale)),thumbnailHeight:Math.max(1,Math.round(height*scale)),mediumWidth:large?1280:width,sha256:media.sha256,url,thumbnailUrl:`${url}?variant=640`,mediumUrl:large?`${url}?variant=1280`:url};
+  }),
 });
 const cleanPosts = async (rows, owner, store, includeAvatar = () => false) => {
   const userIds = [...new Set(rows.map(row => row.owner_user_id).filter(Boolean))];
@@ -70,6 +88,15 @@ const cleanSinglePost = async (row, owner, store, includeAvatar = false) => {
 };
 
 export function mountAccountRoutes(app, config, { store = createSupabaseStore(config), verify = createTokenVerifier(config), rateLimit = (_req, _res, next) => next(), draftTranslation = async () => { throw new Error('translation-service-unavailable'); }, objectAdminId = process.env.STORY_BRIDGE_OBJECT_ADMIN_ID || '', adminNotify: sendAdminEmail = notifyAdmin, scheduleAdminNotify = scheduleAdminNotification, adminNotifyConfigured = isAdminNotifyConfigured } = {}) {
+  let publicListCache = null;
+  const listPublicRows = async () => {
+    if (publicListCache && publicListCache.expiresAt > Date.now()) return publicListCache.rows;
+    const rows = await store.listPublic();
+    publicListCache = { rows, expiresAt: Date.now() + 30_000 };
+    return rows;
+  };
+  const invalidatePublicList = () => { publicListCache = null; };
+  const thumbnailJobs = new Map();
   const audioUpload = multer({ ...UTF8_MULTIPART, storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^audio\/[a-z0-9.+-]+$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid audio'), { code: 'INVALID_AUDIO' })) });
   const avatarUpload = multer({ ...UTF8_MULTIPART, storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^image\/(jpeg|png|webp)$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid image'), { code: 'INVALID_IMAGE' })) });
   const postUpload = multer({ ...UTF8_MULTIPART, storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:7},fileFilter:(_req,file,cb)=>/^(audio\/[a-z0-9.+-]+|image\/(jpeg|png|webp))$/i.test(file.mimetype)?cb(null,true):cb(Object.assign(new Error('invalid media'),{code:'INVALID_MEDIA'})) });
@@ -126,12 +153,13 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   }));
   app.delete('/api/account/profile/avatar',session,rateLimit,async(req,res)=>{try{const profile=await store.profile(req.account.id);if(profile?.avatar_key)await store.removeProfileAvatar(profile.avatar_key);const {avatar_key,...safe}=await store.saveProfile(req.account.id,{...(profile||{}),avatar_key:null});res.json({...safe,avatar_url:''})}catch{return res.status(503).json({error:'Profile photo could not be removed.'})}});
   app.get('/api/account/profile/avatar',session,async(req,res)=>{try{const profile=await store.profile(req.account.id);if(!profile?.avatar_key)return res.sendStatus(404);const image=await store.getProfileAvatar(profile.avatar_key);res.set('X-Content-Type-Options','nosniff').set('Cache-Control','private, no-store').type('image/webp').send(image.buffer)}catch{return res.sendStatus(404)}});
-  app.delete('/api/account',session,rateLimit,async(req,res)=>{try{await store.deleteAccount(req.account.id);return res.sendStatus(204)}catch{return res.status(503).json({error:'Your account could not be deleted. Try again.'})}});
+  app.delete('/api/account',session,rateLimit,async(req,res)=>{try{await store.deleteAccount(req.account.id);invalidatePublicList();return res.sendStatus(204)}catch{return res.status(503).json({error:'Your account could not be deleted. Try again.'})}});
   app.post('/api/account/claim/:id', session, rateLimit, async (req, res) => {
     const token = req.get('x-owner-token');
     if (!token || token.length < 32) return res.status(400).json({ error: 'This browser has no claimable stories.' });
     try {
       const claimed = await store.claim(req.params.id, sha256(token), req.account.id);
+      if(claimed)invalidatePublicList();
       return claimed ? res.json({ claimed: true }) : res.status(409).json({ error: 'This story has already been claimed or cannot be claimed.' });
     } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); }
   });
@@ -140,6 +168,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     if (!token || token.length < 32) return res.status(400).json({ error: 'This browser has no claimable stories.' });
     try {
       const claimed = await store.claimLegacy(sha256(token), req.account.id);
+      if(claimed)invalidatePublicList();
       return claimed ? res.json({ claimed }) : res.status(409).json({ error: 'No unclaimed stories matched this browser token.' });
     }
     catch { res.status(503).json({ error: 'Story storage is unavailable.' }); }
@@ -163,7 +192,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   app.put('/api/objects/:id/access', session, rateLimit, async (req, res) => {
     if (!objectAdminId || req.account.id !== objectAdminId) return res.sendStatus(403);
     if (!OBJECT_IDS.includes(req.params.id) || !['Public','Community only'].includes(req.body?.access)) return res.status(400).json({ error:'Choose a valid object and access setting.' });
-    try { res.json(await store.setObjectAccess(req.params.id, req.body.access)); }
+    try { const saved=await store.setObjectAccess(req.params.id, req.body.access);invalidatePublicList();res.json(saved); }
     catch { res.status(503).json({ error:'Object access could not be saved.' }); }
   });
   app.get('/api/admin/posts/pending', session, async (req,res)=>{
@@ -215,6 +244,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       changes.version_log=appendStoryVersion({...row,...changes},`Hidden by moderator: ${note}`);
       const saved=await store.updateAdminStory(row.id,changes);if(!saved)return res.sendStatus(404);
       await store.actionReportsForPost(row.id);
+      invalidatePublicList();
       return res.json({id:saved.id,status:saved.status,visibility:saved.visibility});
     }catch{return res.status(503).json({error:'The post could not be hidden.'})}
   });
@@ -235,7 +265,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       const saved=typeof store.approvePending==='function'
         ? await store.approvePending(row.id,{status:next.status,visibility:next.visibility,moderation_status:next.moderation_status,first_post:false,version_log:next.version_log})
         : await store.update(row.id,row.owner_user_id,{status:next.status,visibility:next.visibility,moderation_status:next.moderation_status,first_post:false,version_log:next.version_log});
-      if(saved)return res.json(await cleanSinglePost(saved,false,store,saved.visibility==='public'));
+      if(saved){invalidatePublicList();return res.json(await cleanSinglePost(saved,false,store,saved.visibility==='public'));}
       const current=await store.get(row.id);
       return current?.moderation_status==='approved'&&current.status==='shared'?res.json(await cleanSinglePost(current,false,store,current.visibility==='public')):res.sendStatus(409);
     } catch(error) {
@@ -262,12 +292,26 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     }
   });
   app.get('/api/stories', optionalSession, async (req, res) => { try {
+    const limitValue=Number(req.query.limit||10),limit=Number.isInteger(limitValue)?Math.max(1,Math.min(10,limitValue)):10;
+    const cursorValue=typeof req.query.cursor==='string'?req.query.cursor:'';
+    const cursor=cursorValue?decodeStoryCursor(cursorValue):null;
+    if(cursorValue&&!cursor)return res.status(400).json({error:'Invalid story cursor.'});
     const access = await objectAccessList();
     const restricted = new Set(access.filter(item=>item.access==='Community only').map(item=>item.id));
-    const rows = (await store.listPublic()).filter(row => (!!req.account||row.access!=='Community only')&&(!row.object_id || !restricted.has(row.object_id) || !!req.account)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));
-    const posts = await cleanPosts(rows,false,store,
+    const sourceRows = req.account ? await store.listPublic() : await listPublicRows();
+    const rows = sourceRows.filter(row => (!!req.account||row.access!=='Community only')&&(!row.object_id || !restricted.has(row.object_id) || !!req.account))
+      .sort(newestFirst)
+      .filter(row => !cursor || Date.parse(row.created_at)<cursor.createdAt || Date.parse(row.created_at)===cursor.createdAt&&String(row.id)<cursor.id);
+    const pageRows=rows.slice(0,limit+1),hasMore=pageRows.length>limit,selectedRows=pageRows.slice(0,limit);
+    const posts = await cleanPosts(selectedRows,false,store,
       row => row.moderation_status!=='pending_review' && row.access!=='Community only' && (!row.object_id || !restricted.has(row.object_id)));
-    res.json(posts.map(post => post.objectId && restricted.has(post.objectId) ? { ...post, mediaRequiresSession: true } : post));
+    const payload=posts.map(post => post.objectId && restricted.has(post.objectId) ? { ...post, mediaRequiresSession: true } : post);
+    const nextCursor=hasMore?encodeStoryCursor(selectedRows.at(-1)):'';
+    if(nextCursor)res.set('X-Next-Cursor',nextCursor);
+    const etag=`"${sha256(JSON.stringify({items:payload,nextCursor}))}"`;
+    res.set('ETag',etag).set('Cache-Control',req.account?'private, no-store':'public, max-age=0, must-revalidate');
+    if(req.get('if-none-match')?.split(',').map(value=>value.trim()).includes(etag))return res.status(304).end();
+    res.json(payload);
   } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
   app.get('/api/mine', session, async (req, res) => { try { const rows=(await store.listMine(req.account.id)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));const restricted=new Set((await objectAccessList()).filter(item=>item.access==='Community only').map(item=>item.id));const posts=await cleanPosts(rows,true,store);res.json(posts.map(post=>post.objectId&&restricted.has(post.objectId)?{...post,mediaRequiresSession:true}:post)); } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
   app.post('/api/stories', session, rateLimit, limitPostBody, parsePostUpload, async (req, res) => {
@@ -288,7 +332,16 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       const audioKey = audioFile ? crypto.randomUUID() : null;
       if (audioFile) await store.putAudio(audioKey, audioFile.buffer, audioFile.mimetype);
       const normalized=normalizePostMetadata(b);const converted=[];
-      for(let index=0;index<images.length;index++){let prepared;try{prepared=await validateAndReencodeImage(images[index].buffer)}catch(error){return res.status(error.message==='image-too-large'?413:400).json({error:error.message==='image-too-large'?'Image files are limited to 8 MB.':'An uploaded image is not a valid JPEG, PNG or WebP.'})}const key=crypto.randomUUID();await store.putPostImage(key,prepared.buffer);converted.push({id:crypto.randomUUID(),kind:'image',storage_key:key,alt_text:imageMetadata[index].altText.trim(),credit:imageMetadata[index].credit.trim(),licence:normalized.licence,width:prepared.width,height:prepared.height,sha256:prepared.sha256});}
+      for(let index=0;index<images.length;index++){
+        let prepared,thumbnail,medium;
+        try{prepared=await validateAndReencodeImage(images[index].buffer);thumbnail=await createFeedThumbnail(prepared.buffer);if(Math.max(prepared.width,prepared.height)>1280)medium=await createImageVariant(prepared.buffer,1280,82)}
+        catch(error){return res.status(error.message==='image-too-large'?413:400).json({error:error.message==='image-too-large'?'Image files are limited to 8 MB.':'An uploaded image is not a valid JPEG, PNG or WebP.'})}
+        const key=`${prepared.sha256}-${crypto.randomUUID()}`;
+        await store.putPostImage(key,prepared.buffer);
+        await store.putPostImage(thumbnailStorageKey({sha256:prepared.sha256,storage_key:key}),thumbnail.buffer);
+        if(medium)await store.putPostImage(imageVariantStorageKey({sha256:prepared.sha256,storage_key:key},1280),medium.buffer);
+        converted.push({id:crypto.randomUUID(),kind:'image',storage_key:key,alt_text:imageMetadata[index].altText.trim(),credit:imageMetadata[index].credit.trim(),licence:normalized.licence,width:prepared.width,height:prepared.height,sha256:prepared.sha256});
+      }
       const existingPosts=await store.listMine(req.account.id);
       const firstPost=existingPosts.length===0||existingPosts.some(item=>item.first_post&&item.moderation_status==='pending_review');
       let row;
@@ -318,9 +371,30 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       if (!isOwner && !isAdmin && !isPublic && !isMemberOnly) return res.sendStatus(404);
       const item = (await store.listPostMedia(row.id)).find(media => media.storage_key === req.params.key);
       if (!item) return res.sendStatus(404);
-      const image = await store.getPostImage(item.storage_key);
+      const variant=req.query.variant||'';
+      if(variant&&!['640','1280'].includes(variant))return res.status(400).json({error:'Unsupported image variant.'});
+      let image;
+      const variantWidth=Number(variant);
+      if(variantWidth===1280&&Math.max(item.width||0,item.height||0)<=1280)image=await store.getPostImage(item.storage_key);
+      else if(variantWidth){
+        let source=null,digest=item.sha256||'';
+        if(!digest){source=await store.getPostImage(item.storage_key);digest=sha256(source.buffer);}
+        const thumbnailKey=imageVariantStorageKey({sha256:digest,storage_key:item.storage_key},variantWidth);
+        const loadOrCreate=async()=>{
+          try{const existing=await store.getPostImage(thumbnailKey);if(existing?.buffer)return existing;}catch{/* Lazily backfill thumbnails for images uploaded before variants existed. */}
+          source ||= await store.getPostImage(item.storage_key);
+          const thumbnail=variantWidth===640?await createFeedThumbnail(source.buffer):await createImageVariant(source.buffer,variantWidth,82);
+          try{await store.putPostImage(thumbnailKey,thumbnail.buffer)}catch{
+            try{return await store.getPostImage(thumbnailKey)}catch{throw new Error('storage-unavailable')}
+          }
+          return{buffer:thumbnail.buffer,mime:'image/webp'};
+        };
+        let job=thumbnailJobs.get(thumbnailKey);
+        if(!job){job=loadOrCreate();thumbnailJobs.set(thumbnailKey,job);}
+        try{image=await job}finally{if(thumbnailJobs.get(thumbnailKey)===job)thumbnailJobs.delete(thumbnailKey)}
+      }else image=await store.getPostImage(item.storage_key);
       res.set('X-Content-Type-Options', 'nosniff')
-        .set('Cache-Control', isPublic ? 'public, max-age=300' : 'private, no-store')
+        .set('Cache-Control', isPublic ? 'public, max-age=31536000, immutable' : 'private, no-store')
         .type(image.mime)
         .send(image.buffer);
     } catch { return res.status(503).json({ error: 'Post media is unavailable.' }); }
@@ -349,13 +423,13 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       const metadata=cleanName(profile.display_name)?new Map():await authMetadataFor(store,[row.owner_user_id]);
       if(!authorNameFor(row,profile,metadata.get(row.owner_user_id)))return res.sendStatus(404);
       const image=await store.getProfileAvatar(profile.avatar_key);
-      res.set('X-Content-Type-Options','nosniff').set('Cache-Control','public, max-age=300').type(image.mime||'image/webp').send(image.buffer);
+      res.set('X-Content-Type-Options','nosniff').set('Cache-Control','public, max-age=86400').type(image.mime||'image/webp').send(image.buffer);
     } catch { res.sendStatus(404); }
   });
   // Permanent delete: the owner removes the story, its audio and its images. Nothing is kept.
   app.delete('/api/stories/:id', session, rateLimit, ownerOnly, async (req, res) => {
     if (!req.isStoryOwner) return res.sendStatus(403);
-    try { const removed = await store.deleteStory(req.story.id, req.account.id); if (!removed) return res.sendStatus(404); res.sendStatus(204); }
+    try { const removed = await store.deleteStory(req.story.id, req.account.id); if (!removed) return res.sendStatus(404); invalidatePublicList();res.sendStatus(204); }
     catch (error) { console.error(JSON.stringify({ event: 'story-delete-failed', code: error?.cause?.code || error?.message || 'unknown' })); res.status(503).json({ error: 'Story storage is unavailable.' }); }
   });
   app.put('/api/stories/:id', session, rateLimit, ownerOnly, async (req, res) => {
@@ -408,6 +482,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     try {
       const row = await store.update(req.params.id, req.account.id, changes);
       if(!row)return res.sendStatus(409);
+      invalidatePublicList();
       if(enteredPendingReview)scheduleAdminNotify(`pending-review:${row.id}`,async()=>{
         const profile=await store.profile(row.owner_user_id).catch(()=>null);
         const createdAt=Date.parse(row.created_at||'');

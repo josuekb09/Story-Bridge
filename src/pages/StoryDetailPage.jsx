@@ -110,7 +110,7 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
 
       {story.images?.length > 0 && <section className="post-gallery" aria-label="Story photos">
         {story.images.map(image => <figure key={image.id}>
-          <PostImage image={image} story={story} className="story-detail-post-image" sizes="(max-width: 720px) 100vw, 860px"/>
+          <PostImage image={image} story={story} className="story-detail-post-image" sizes="(max-width: 720px) 100vw, 860px" variant="full"/>
           <figcaption>{image.altText && <span>{image.altText}</span>}<span>{image.credit || 'Photo credit not provided'}{image.licence ? ` · ${image.licence}` : ''}</span></figcaption>
         </figure>)}
       </section>}

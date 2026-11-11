@@ -28,8 +28,10 @@ function fixtureStore() {
     rows,
     authMetadata,
     reports,
+    images,
+    publicListCalls: 0,
     profileBatchCalls: 0,
-    async listPublic() { return [...rows.values()].filter(row => row.status==='shared' && row.visibility==='public'); },
+    async listPublic() { this.publicListCalls++;return [...rows.values()].filter(row => row.status==='shared' && row.visibility==='public'); },
     async listMine(userId) { return [...rows.values()].filter(row => row.owner_user_id===userId); },
     async listPending() { return [...rows.values()].filter(row=>row.moderation_status==='pending_review'); },
     async get(id) { return rows.get(id) || null; },
@@ -42,7 +44,7 @@ function fixtureStore() {
     async actionReportsForPost(postId) { let changed=0;for(const report of reports.values())if(report.target_type==='post'&&report.target_id===postId&&report.status==='open'){report.status='actioned';changed++;}return changed; },
     async adminStats() { return{accounts:profiles.size,profilesCompleted:[...profiles.values()].filter(row=>row.display_name?.trim()).length,publicPosts:[...rows.values()].filter(row=>row.status==='shared'&&row.visibility==='public').length,pendingFirstPosts:[...rows.values()].filter(row=>row.first_post&&row.moderation_status==='pending_review').length,openReports:[...reports.values()].filter(row=>row.status==='open').length}; },
     async countMine(userId) { return [...rows.values()].filter(row=>row.owner_user_id===userId).length; },
-    async putPostImage(key,buffer){images.set(key,buffer);},async createPostMedia(list){media.push(...list);return list;},async listPostMedia(id){return media.filter(item=>item.post_id===id);},async getPostImage(key){return{buffer:images.get(key),mime:'image/webp'};},
+    async putPostImage(key,buffer){images.set(key,buffer);},async createPostMedia(list){media.push(...list);return list;},async listPostMedia(id){return media.filter(item=>item.post_id===id);},async getPostImage(key){const buffer=images.get(key);if(!buffer)throw new Error('missing-image');return{buffer,mime:'image/webp'};},
     async claimLegacy(ownerHash,userId) {
       let release; const prior=lock;lock=new Promise(resolve=>release=resolve);await prior;
       try { const matches=[...rows.values()].filter(row=>row.owner_user_id===null&&row.owner_hash===ownerHash);for(const row of matches){row.owner_user_id=userId;row.owner_hash=null;}return matches.length; }
@@ -262,7 +264,7 @@ test('post creation requires consent and image alt text, and first approved post
   const sharp=(await import('sharp')).default;const png=await sharp({create:{width:12,height:8,channels:3,background:'#3f7a5c'}}).png().toBuffer();
   const form=new FormData();for(const [key,value] of Object.entries({title:'A documented synthetic post',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'CC BY 4.0',region:'Synthetic region',people:'Synthetic community',tags:'memory,learning',sources:JSON.stringify([{label:'Synthetic source',url:'https://example.org/source'}]),access:'Public',consentConfirmed:'true',imageMetadata:JSON.stringify([{altText:'A green square fixture',credit:'Synthetic fixture'}])}))form.append(key,value);
   form.append('originalLanguage','Synthetic language');form.append('text','Synthetic post body.');form.append('images',new Blob([png],{type:'image/png'}),'untrusted-name.png');
-  const created=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('new-user'),body:form});assert.equal(created.status,201);const post=await created.json();assert.equal(post.title,'A documented synthetic post');assert.equal(post.consentConfirmed,true);assert.equal(post.images.length,1);assert.equal(post.images[0].altText,'A green square fixture');assert.match(post.images[0].sha256,/^[a-f0-9]{64}$/);assert.equal(store.rows.get(post.id).first_post,true);
+  const created=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('new-user'),body:form});assert.equal(created.status,201);const post=await created.json();assert.equal(post.title,'A documented synthetic post');assert.equal(post.consentConfirmed,true);assert.equal(post.images.length,1);assert.equal(post.images[0].altText,'A green square fixture');assert.match(post.images[0].sha256,/^[a-f0-9]{64}$/);assert.match(post.images[0].url,/\/[a-f0-9]{64}-[\da-f-]{36}$/);assert.match(post.images[0].thumbnailUrl,/\?variant=640$/);assert.equal(store.rows.get(post.id).first_post,true);
   const publish=await fetch(`${base}/api/stories/${post.id}`,{method:'PUT',headers:{...auth('new-user'),'content-type':'application/json'},body:JSON.stringify({visibility:'public',approve:true})});assert.equal(publish.status,200);const pending=await publish.json();assert.equal(pending.status,'draft');assert.equal(pending.visibility,'private');assert.equal(pending.moderationStatus,'pending_review');assert.deepEqual((await fetch(`${base}/api/stories`).then(r=>r.json())),[]);
   const secondForm=new FormData();for(const [key,value] of form.entries())secondForm.append(key,key==='title'?'Second synthetic post':key==='text'?'Also waits for the first moderation decision.':value);const secondCreated=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('new-user'),body:secondForm});assert.equal(secondCreated.status,201);const secondPost=await secondCreated.json();assert.equal(store.rows.get(secondPost.id).first_post,true);const secondPublish=await fetch(`${base}/api/stories/${secondPost.id}`,{method:'PUT',headers:{...auth('new-user'),'content-type':'application/json'},body:JSON.stringify({visibility:'public',approve:true})});assert.equal((await secondPublish.json()).moderationStatus,'pending_review');
   const notAdmin=await fetch(`${base}/api/admin/posts/pending`,{headers:auth('new-user')});assert.equal(notAdmin.status,403);
@@ -270,7 +272,8 @@ test('post creation requires consent and image alt text, and first approved post
   const approve=await fetch(`${base}/api/admin/posts/${post.id}/approve`,{method:'POST',headers:auth('admin-user')});assert.equal(approve.status,200);assert.equal((await approve.json()).status,'shared');
   const publicPosts=await fetch(`${base}/api/stories`).then(r=>r.json());assert.equal(publicPosts.length,1);assert.equal(publicPosts[0].title,'A documented synthetic post');
   const approveSecond=await fetch(`${base}/api/admin/posts/${secondPost.id}/approve`,{method:'POST',headers:auth('admin-user')});assert.equal(approveSecond.status,200);assert.equal((await fetch(`${base}/api/stories`).then(r=>r.json())).length,2);
-  const image=await fetch(`${base}${post.images[0].url}`);assert.equal(image.status,200);assert.match(image.headers.get('content-type'),/image\/webp/);assert.equal(image.headers.get('x-content-type-options'),'nosniff');
+  const image=await fetch(`${base}${post.images[0].url}`);assert.equal(image.status,200);assert.match(image.headers.get('content-type'),/image\/webp/);assert.equal(image.headers.get('cache-control'),'public, max-age=31536000, immutable');assert.equal(image.headers.get('x-content-type-options'),'nosniff');
+  const thumbnail=await fetch(`${base}${post.images[0].thumbnailUrl}`);assert.equal(thumbnail.status,200);const thumbnailMeta=await sharp(Buffer.from(await thumbnail.arrayBuffer())).metadata();assert.ok(thumbnailMeta.width<=640&&thumbnailMeta.height<=640);assert.equal(thumbnail.headers.get('cache-control'),'public, max-age=31536000, immutable');
   const noConsent=new FormData();noConsent.append('originalLanguage','Synthetic language');noConsent.append('title','No consent');const denied=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('other-user'),body:noConsent});assert.equal(denied.status,400);
   const noAlt=new FormData();for(const [key,value] of Object.entries({title:'Image without alt',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true',imageMetadata:'[{}]'}))noAlt.append(key,value);noAlt.append('originalLanguage','Synthetic language');noAlt.append('images',new Blob([png],{type:'image/png'}),'fixture.png');const altDenied=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('alt-user'),body:noAlt});assert.equal(altDenied.status,400);
 });
@@ -295,8 +298,43 @@ test('members-only post media requires a session and uses private caching; publi
   assert.equal((await fetch(`${base}/api/stories/${members.id}/audio`)).status,404);
   const memberAudio=await fetch(`${base}/api/stories/${members.id}/audio`,{headers:auth('signed-in-member')});assert.equal(memberAudio.status,200);assert.equal(memberAudio.headers.get('cache-control'),'no-store');
 
-  const publicImage=await fetch(`${base}/api/posts/${publicPost.id}/media/public-image`);assert.equal(publicImage.status,200);assert.equal(publicImage.headers.get('cache-control'),'public, max-age=300');
+  const publicImage=await fetch(`${base}/api/posts/${publicPost.id}/media/public-image`);assert.equal(publicImage.status,200);assert.equal(publicImage.headers.get('cache-control'),'public, max-age=31536000, immutable');
   const publicAudio=await fetch(`${base}/api/stories/${publicPost.id}/audio`);assert.equal(publicAudio.status,200);
+});
+
+test('legacy public images lazily backfill 640 WebP variants',async t=>{
+  const store=fixtureStore();
+  const original=await sharp({create:{width:1500,height:900,channels:3,background:'#37664f'}}).webp().toBuffer();
+  const story=storyRow('legacy-thumbnail','image-owner','shared','public');story.access='Public';story.moderation_status='approved';store.rows.set(story.id,story);
+  await store.putPostImage('legacy-image-key',original);
+  await store.createPostMedia([{id:'legacy-image-row',post_id:story.id,kind:'image',storage_key:'legacy-image-key',sha256:hash(original),width:1500,height:900,alt_text:'Fixture',credit:'Fixture'}]);
+  const {base,server}=await serverFor(store);t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const response=await fetch(`${base}/api/posts/${story.id}/media/legacy-image-key?variant=640`);
+  assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'public, max-age=31536000, immutable');
+  const variant=Buffer.from(await response.arrayBuffer()),metadata=await sharp(variant).metadata();
+  assert.equal(metadata.width,640);assert.ok(metadata.height<=640);
+  assert.ok(store.images.has(`${hash(original)}-legacy-image-key-640-v1`),'the generated variant is stored for later requests');
+  const medium=await fetch(`${base}/api/posts/${story.id}/media/legacy-image-key?variant=1280`);assert.equal(medium.status,200);
+  const mediumMetadata=await sharp(Buffer.from(await medium.arrayBuffer())).metadata();assert.equal(mediumMetadata.width,1280);
+  assert.ok(store.images.has(`${hash(original)}-legacy-image-key-1280-v1`),'the 1280w srcset variant is also backfilled lazily for older large images');
+});
+
+test('public stories are cached for 30 seconds, paged by cursor and return 304 for an unchanged page',async t=>{
+  const store=fixtureStore();
+  for(let index=0;index<12;index++){
+    const id=`page-${String(index).padStart(2,'0')}`;
+    const row=storyRow(id,`owner-${index}`,'shared','public');row.access='Public';row.created_at=new Date(Date.UTC(2026,0,1,0,0,index)).toISOString();
+    store.rows.set(id,row);
+  }
+  const {base,server}=await serverFor(store);t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const firstResponse=await fetch(`${base}/api/stories?limit=10`),first=await firstResponse.json();
+  assert.equal(first.length,10);assert.equal(first[0].id,'page-11');assert.ok(firstResponse.headers.get('etag'));
+  const cursor=firstResponse.headers.get('x-next-cursor');assert.ok(cursor);
+  const secondResponse=await fetch(`${base}/api/stories?limit=10&cursor=${encodeURIComponent(cursor)}`),second=await secondResponse.json();
+  assert.equal(second.length,2);assert.deepEqual(second.map(item=>item.id),['page-01','page-00']);assert.equal(secondResponse.headers.get('x-next-cursor'),null);
+  const unchanged=await fetch(`${base}/api/stories?limit=10`,{headers:{'if-none-match':firstResponse.headers.get('etag')}});
+  assert.equal(unchanged.status,304);assert.equal(store.publicListCalls,1,'public story rows are reused from the in-memory cache');
+  assert.equal((await fetch(`${base}/api/stories?cursor=not-a-valid-cursor`)).status,400);
 });
 
 test('admin post approval survives repeated and concurrent requests using file storage',async t=>{
@@ -439,7 +477,7 @@ test('public posts use current profile identity unless a community-member choice
   assert.doesNotMatch(JSON.stringify(publicStories),/user-a|dan@example\.test/);
 
   const photo=await fetch(`${base}${named.authorAvatarUrl}`);
-  assert.equal(photo.status,200);assert.match(photo.headers.get('content-type'),/image\/webp/);assert.match(photo.headers.get('cache-control'),/public, max-age=300/);assert.equal(photo.headers.get('x-content-type-options'),'nosniff');
+  assert.equal(photo.status,200);assert.match(photo.headers.get('content-type'),/image\/webp/);assert.equal(photo.headers.get('cache-control'),'public, max-age=86400');assert.equal(photo.headers.get('x-content-type-options'),'nosniff');
   assert.deepEqual(Buffer.from(await photo.arrayBuffer()),image);
   for(const id of ['explicit-community-public','community-public','restricted-object','private-story']) assert.equal((await fetch(`${base}/api/stories/${id}/author-avatar`)).status,404,id);
 
