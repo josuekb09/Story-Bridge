@@ -116,7 +116,7 @@ the chosen files in `src/data/showcase.js`.
 - [x] **5. Unknown routes, Zulu summary copy and brand translation guard:** commit `57da29f` keeps unrecognized paths on a simple 404 page with a Discover link and title. Live `/story/abc` preserved its URL; `/cultures/za-zulu-beadwork` showed “No summary yet — read the member stories below” and one public story. The live wordmark carries `translate="no"`; no console errors. Build and all 109 tests passed.
 - [x] **6. Demo video comparison and poster.**
 - [x] **7. README and fresh screenshot gallery:** commit `b392e95` replaced the old gallery with 40 public live captures at 1440×900 @2x and 390×844 @2x, including all eight posts and Nosihle's Read in control plus French/Tshiluba results. Every capture waited for decoded images; none includes a `Loading photo…` state. The README and submission notes now link the selected 5:00 video and poster and use `YOUTUBE_LINK_HERE`. Build, 110 tests, secret check and 83 local README links passed. Live Playwright saw 8 stories / 2 languages, 8 Discover cards, 0 placeholders, both labelled translations and 0 browser errors. GitHub README and raw poster/video links returned 200. The screenshot/report-menu styling fix is `0b963f2`.
-- [ ] **8. Final build, test, secret check and live smoke matrix.**
+- [x] **8. Final build, test, secret check and live smoke matrix:** at `main` commit `260c94b`, `npm run build`, `npm test` (110/110) and `npm run check:dist-secrets` passed. Playwright checked desktop and 375×844: home showed 8 stories / 2 languages; Discover had 8 loaded cards and no loading-photo placeholders; all eight public story details loaded at both widths; Nosihle's reader returned labelled French, Kiswahili and Tshiluba; Cultures and Zulu, Berlin object, direct Zulu search, signed-out Share, Terms, Privacy and Guidelines worked. The interface switched Kiswahili → English. The reader control cleared mobile navigation, all measured routes stayed within 375px, and there were 0 console errors. GitHub README rendered; poster and selected MP4 raw links returned 200. This is the control gate before polishing the same owner-selected video.
 
 ## Final submission run — 11 November 2026
 
@@ -129,5 +129,5 @@ the chosen files in `src/data/showcase.js`.
 
 ### Sections 7–8 and final video
 - [x] Capture fresh screenshots and update README and submission notes — `b392e95` (with the deployed compact report-menu fix `0b963f2`).
-- [ ] Run the final desktop/mobile live route matrix and record the control-gate result.
+- [x] Run the final desktop/mobile live route matrix and record the control-gate result — see section 8 above; 110 tests passed and the live matrix had 0 console errors.
 - [ ] Polish the selected video, captions and poster; publish the README demo link.
