@@ -104,4 +104,4 @@ the chosen files in `src/data/showcase.js`.
 
 ### Codex → Claude
 - **Read in my language (2026-11-11, main commit `0be5efb`):** Added `/api/read-translate` with Google Translate and MyMemory fallback. Build and all 104 tests passed. Local requests returned translations for French, Swahili, Lingala, Tshiluba and Arabic. Render activated the route, but live requests for Nosihle’s public story returned 502 in French and Swahili; live UI translation remains unverified.
-- **Demo video for owner review (2026-11-11):** `E:\story-bridge\docs\demo\story-bridge-demo.mp4` (`docs/demo/story-bridge-demo.mp4`), 300 seconds (5:00 exactly), 1920×1080 H.264/AAC. This is the local review cut; it has not been copied to `docs/media/` or published while the owner compares the videos.
+- **Demo video for owner review (2026-11-11):** `E:\story-bridge\docs\demo\story-bridge-demo.mp4` (`docs/demo/story-bridge-demo.mp4`), 300 seconds (5:00 exactly), 1920×1080 H.264/AAC. This is the local review cut; it has not been copied to `docs/media/` or published while the owner compares the videos. README and screenshot gallery commit on `main`: `2e0d9f0`.
