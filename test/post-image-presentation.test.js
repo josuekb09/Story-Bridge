@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { getPostImagePresentation } from '../src/lib/post-image-presentation.js';
+import { getPostImagePresentation, isPostImageLoaded } from '../src/lib/post-image-presentation.js';
 
 test('small culture and search thumbnails stay square without a loading label', () => {
   assert.deepEqual(getPostImagePresentation('thumbnail', { width: 1600, height: 900 }), {
@@ -23,4 +23,12 @@ test('full and feed images retain photo dimensions and their loading labels', ()
   assert.deepEqual(getPostImagePresentation('feed', { width: 800, height: 600 }), {
     aspectRatio: '800 / 600', showLoadingLabel: true, showUnavailableText: true,
   });
+});
+
+test('completed cached post images leave the loading state', () => {
+  assert.equal(isPostImageLoaded({ complete: true, naturalWidth: 640 }), true);
+  assert.equal(isPostImageLoaded({ complete: false, naturalWidth: 640 }), false);
+  assert.equal(isPostImageLoaded({ complete: true, naturalWidth: 0 }), false);
+  const component = fs.readFileSync(new URL('../src/components/PostImage.jsx', import.meta.url), 'utf8');
+  assert.match(component, /isPostImageLoaded\(imageRef\.current\)/);
 });

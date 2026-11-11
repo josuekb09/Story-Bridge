@@ -9,3 +9,7 @@ export function getPostImagePresentation(variant, image = {}) {
     showUnavailableText: !smallThumbnail,
   };
 }
+
+export function isPostImageLoaded(image) {
+  return image?.complete === true && Number.isFinite(image.naturalWidth) && image.naturalWidth > 0;
+}
