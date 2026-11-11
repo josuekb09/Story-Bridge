@@ -6,24 +6,39 @@ import { SHOWCASE, REGIONS } from '../src/data/showcase.js';
 
 const readLocale = code => JSON.parse(fs.readFileSync(new URL(`../src/locales/${code}.json`, import.meta.url), 'utf8'));
 
-test('language codes are unique and every UI language has a complete locale or English fallback', () => {
+const machineDraftKeys = [
+  'nav.discover', 'nav.share', 'nav.search', 'nav.profile', 'nav.signOut', 'nav.profileSettings', 'nav.myStories', 'nav.admin', 'nav.workspace',
+  'nav.primaryNavigation', 'nav.mainNavigation', 'nav.openProfileMenu', 'nav.openAccountMenu',
+  'readInMyLanguage', 'translating', 'downloadingLanguagePack', 'machineTranslationLabel', 'showOriginal', 'openInGoogleTranslate',
+  'feed.listen', 'feed.composerPlaceholder', 'feed.post', 'feed.allLanguages', 'feed.withAudio', 'feed.region', 'feed.allRegions', 'feed.seeMore',
+  'feed.seeLess', 'feed.read', 'feed.share', 'feed.shareStory', 'feed.original', 'feed.translation', 'feed.translationByAuthor',
+  'feed.translationByAuthorNoLanguage', 'feed.originalStory', 'feed.exploreCultures', 'feed.collections', 'feed.browseObjects', 'feed.joinStoryBridge',
+  'policy.navLabel', 'policy.guidelines', 'policy.terms', 'policy.privacy',
+  'audience.public', 'audience.publicDescription', 'audience.members', 'audience.membersDescription', 'audience.private', 'audience.privateDescription',
+  'audience.heading', 'audience.whoCanSee', 'audience.pending', 'audience.aiUnavailable',
+];
+
+test('language codes are unique and machine locales draft all current UI keys', () => {
   const codes = LANGUAGES.map(language => language.code);
   assert.equal(new Set(codes).size, codes.length);
   const english = readLocale('en');
-  const englishFallbackKeys = [
-    'readInMyLanguage', 'translating', 'downloadingLanguagePack', 'machineTranslationLabel', 'showOriginal', 'openInGoogleTranslate',
-    'feed.listen', 'feed.composerPlaceholder', 'feed.post', 'feed.allLanguages', 'feed.withAudio', 'feed.region', 'feed.allRegions',
-    'feed.seeMore', 'feed.seeLess', 'feed.read', 'feed.share', 'feed.shareStory', 'feed.original', 'feed.translation',
-    'feed.translationByAuthor', 'feed.translationByAuthorNoLanguage', 'feed.originalStory', 'feed.exploreCultures',
-    'feed.collections', 'feed.browseObjects', 'feed.joinStoryBridge', 'policy.navLabel', 'policy.guidelines', 'policy.terms', 'policy.privacy',
-    'audience.public', 'audience.publicDescription', 'audience.members', 'audience.membersDescription', 'audience.private', 'audience.privateDescription',
-    'audience.heading', 'audience.whoCanSee', 'audience.pending', 'audience.aiUnavailable',
-  ];
   for (const language of UI_LANGUAGES) {
     const locale = readLocale(language.code);
-    const expectedKeys = Object.keys(english).filter(key => language.code === 'en' || language.code === 'fr' || !englishFallbackKeys.includes(key));
-    assert.deepEqual(Object.keys(locale).sort(), expectedKeys.sort(), `${language.code} keys`);
+    assert.deepEqual(Object.keys(locale).sort(), Object.keys(english).sort(), `${language.code} keys`);
     for (const [key, value] of Object.entries(locale)) assert.ok(String(value).trim(), `${language.code}.${key} is empty`);
+    if (language.uiStatus === 'machine') {
+      for (const key of machineDraftKeys) {
+        assert.ok(String(locale[key]).trim(), `${language.code}.${key} is missing its machine draft`);
+        assert.notEqual(locale[key], english[key], `${language.code}.${key} still falls back to English`);
+        assert.doesNotMatch(locale[key], /§[KP]\d{2,3}§?|P\d{2}§/, `${language.code}.${key} has an untranslated token`);
+      }
+      for (const key of ['readInMyLanguage', 'downloadingLanguagePack', 'openInGoogleTranslate', 'feed.original', 'feed.translationByAuthor']) {
+        assert.ok(locale[key].includes('{language}'), `${language.code}.${key} lost its language placeholder`);
+      }
+      assert.ok(locale['audience.whoCanSee'].includes('{choice}'), `${language.code}.audience.whoCanSee lost its choice placeholder`);
+      assert.ok(locale['audience.pending'].includes('{choice}'), `${language.code}.audience.pending lost its choice placeholder`);
+      assert.notEqual(locale['machine.notice'], english['machine.notice'], `${language.code} machine translation notice`);
+    }
   }
 });
 

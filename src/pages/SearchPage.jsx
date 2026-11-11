@@ -63,7 +63,7 @@ export default function SearchPage({ stories = [], showStory = () => {} }) {
     {results.stories.length > 0 && <section aria-labelledby="search-stories" className="culture-section">
       <h2 id="search-stories">Stories</h2>
       <ul className="culture-stories">{results.stories.map(story => <li key={story.id}><button type="button" onClick={() => showStory(story)}>
-        {story.images?.[0]?.url && <PostImage className="culture-story-thumb" image={story.images[0]} story={story}/>}<span className="culture-story-author"><AuthorAvatar story={story} size="small"/><span>{authorName(story)}</span></span><span className="culture-story-lang">{story.originalLanguage}</span>
+        {story.images?.[0]?.url && <PostImage className="culture-story-thumb" image={story.images[0]} story={story} variant="thumbnail" sizes="56px"/>}<span className="culture-story-author"><AuthorAvatar story={story} size="small"/><span>{authorName(story)}</span></span><span className="culture-story-lang">{story.originalLanguage}</span>
         <span className="culture-story-title">{story.title || String(story.text || '').slice(0, 90)}</span>
         {story.region && <small>{story.region}</small>}
       </button></li>)}</ul>
