@@ -110,7 +110,7 @@ the chosen files in `src/data/showcase.js`.
 ## Codex FINAL run — 11 November 2026
 
 - [x] **1. Reader translation:** implementation commit `bb74ebd` added reviewed EN/FR reader controls and corrected the post-translation toggle. The browser-first translation and CSP allowance were already in `b765034`. Live Playwright verified Nosihle's post in French, Kiswahili, Tshiluba, Lingála and Arabic (RTL), and Jenovic's French post in English; all had the machine-translation label and zero console errors. The live server fallback still returns HTTP 502. The Render CLI is not installed, so I could not inspect Render logs for the provider-specific reason; no dashboard was opened.
-- [ ] **2. Home counters.**
+- [x] **2. Home counters:** already computed on `LandingPage` from `GET /api/stories` (source commit `f5c54d0`); no code change or new endpoint was needed. Live home shows **8 stories / 2 languages** with no console errors. `GET /api/stats` still returns 503, but the page does not call it. `npm run build` and all 105 tests passed for this section.
 - [ ] **3. Mobile overflow and bottom navigation clearance.**
 - [ ] **4. Direct search load.**
 - [ ] **5. Unknown routes, Zulu summary copy and brand translation guard.**
