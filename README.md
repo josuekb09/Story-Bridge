@@ -11,7 +11,7 @@ Built for the Andela × OpenAI capstone *Telling African Stories*, and to be pre
 ## What you can do
 
 - **Discover** a feed of public stories: author, region, time, original language, preserved paragraph breaks in previews, "See more", photos, audio, the storyteller's translation, and sharing.
-- **Share** a post in four steps — language → tell → translate → review. A post can hold text, a voice recording or audio file, up to six photos, and documentation: post type and section, region, people, tags, sources, a trust label (*Told by a community member*, *Research note*, *Museum record*) and a licence.
+- **Share** a post in four steps — language → tell → translate → review. A post can hold text, a voice recording or audio file, up to six photos, and documentation: post type and section, region, people, tags, sources, a trust label (*Told by a community member*, *Research note*, *Museum record*) and a licence. Photo credits start with the storyteller's profile name, alt text can be left blank and is filled from the post title, and validation guides the author to the field that needs attention.
 - **Translate with AI** (optional): *Draft with AI* asks OpenAI for a first translation. It is marked unapproved until the storyteller approves it, and editing it clears the approval. An empty `OPENAI_TRANSLATION_MODEL` uses `gpt-6-luna`; an optional fallback model is tried once if the provider reports the primary model is missing or access is denied.
 - **Read in my language** — on-device translation in Chrome, Google Translate fallback; AI drafts via OpenAI when configured.
 - **Stay in control**: every story starts as a private draft. The storyteller approves sharing, can withdraw it, or **delete it permanently** (text, audio, photos and translations).

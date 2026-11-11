@@ -685,12 +685,38 @@ try {
 
   await record('Listen, Share, and My stories render at 1280px and 375px', async () => {
     await clickAppNavigation(pageA, 'Share'); await pageA.getByRole('heading', { name: 'Share a story' }).waitFor();
+    await pageA.setViewportSize({ width: 390, height: 844 });
+    await pageA.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await pageA.getByRole('button',{name:'Continue to your story'}).click();
+    await pageA.getByText('Choose or enter a language.').waitFor();
+    await pageA.waitForFunction(() => {
+      const input = document.getElementById('share-language');
+      const rect = input?.getBoundingClientRect();
+      return document.activeElement === input && rect?.top >= 0 && rect.bottom <= window.innerHeight;
+    });
+    ensure(await pageA.evaluate(() => document.activeElement?.id) === 'share-language', 'Missing language did not receive focus.');
     await pageA.getByLabel('Language told in').fill('Synthetic display language'); await pageA.getByRole('button',{name:'Continue to your story'}).click();
     ensure(await pageA.getByRole('button', { name: 'Record voice' }).isVisible(), 'Record voice control is missing.');
     ensure((await pageA.getByLabel(/Or choose an audio file/).getAttribute('accept'))?.includes('audio/'), 'Audio file upload control is missing.');
+    await pageA.getByRole('button',{name:'Continue to translation'}).click();
+    await pageA.getByText('Enter a title before continuing.').waitFor();
+    await pageA.waitForFunction(() => document.activeElement?.id === 'share-title');
+    ensure(await pageA.evaluate(() => document.activeElement?.id) === 'share-title', 'Missing title did not receive focus.');
+    await pageA.getByLabel('Post title').fill('Synthetic display story');
+    await pageA.getByRole('button',{name:'Continue to translation'}).click();
+    await pageA.getByText('Write your story or add an audio recording.').waitFor();
+    await pageA.waitForFunction(() => document.activeElement?.id === 'share-text');
+    ensure(await pageA.evaluate(() => document.activeElement?.id) === 'share-text', 'Missing story text did not receive focus.');
+    await pageA.getByLabel('Your story').fill('A synthetic story for checking field-level validation.');
+    await pageA.getByRole('button',{name:'Continue to translation'}).click();
     for (const width of [1280, 375]) {
       const shot = await captureScreen(pageA, 'share', width); results.push({ name: `Share screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
     }
+    await pageA.getByRole('button',{name:'Continue to review'}).click();
+    await pageA.getByRole('button',{name:'Save draft and open review'}).click();
+    await pageA.getByText('Confirm that this story is yours or that you have permission.').waitFor();
+    await pageA.waitForFunction(() => document.activeElement?.id === 'share-consent');
+    ensure(await pageA.evaluate(() => document.activeElement?.id) === 'share-consent', 'Missing consent did not receive focus.');
     await confirmHeaderMenuAction(pageA,'My stories',true); await pageA.getByRole('heading', { name: 'My stories' }).waitFor();
     for (const width of [1280, 375]) {
       const shot = await captureScreen(pageA, 'my-stories-empty', width); results.push({ name: `My stories screenshot ${width}px`, status: 'PASS', evidence: path.relative(root, shot.file), bottomEvidence: path.relative(root, shot.bottomFile), detail: JSON.stringify(shot.metrics) });
@@ -723,13 +749,16 @@ try {
     ensure(!(await pageA.locator('[role="alert"]').innerText()).includes('502'), 'The AI draft error exposed a provider status code.');
     await retryDraftButton.click();
     await pageA.getByText('AI draft: not yet approved by you').waitFor();
-    ensure(await pageA.getByRole('button', { name: 'Continue to review' }).isDisabled(), 'Unapproved AI translation could continue to review.');
+    ensure(await pageA.getByRole('button', { name: 'Continue to review' }).isEnabled(), 'The review action did not explain the unapproved translation inline.');
+    await pageA.getByRole('button', { name: 'Continue to review' }).click();
+    await pageA.getByText('Approve the AI translation before continuing.').waitFor();
     await pageA.getByRole('button', { name: 'Approve translation' }).click();
     await pageA.getByText('AI draft: approved by you').waitFor();
     ensure(await pageA.getByRole('button', { name: 'Continue to review' }).isEnabled(), 'Explicit approval did not enable the review step.');
     await pageA.getByLabel('Your translation or AI draft').fill('Storyteller edited mock translation.');
     await pageA.getByText('AI draft: not yet approved by you').waitFor();
-    ensure(await pageA.getByRole('button', { name: 'Continue to review' }).isDisabled(), 'Editing the AI draft retained approval.');
+    await pageA.getByRole('button', { name: 'Continue to review' }).click();
+    await pageA.getByText('Approve the AI translation before continuing.').waitFor();
     await pageA.getByRole('button', { name: 'Approve translation' }).click();
     await confirmAction(pageA, await appNavigationLocator(pageA, 'Discover'), true);
     await pageA.getByRole('heading', { name: 'Listen' }).waitFor();
@@ -738,15 +767,16 @@ try {
     ensure((await direct(ownerA, '/api/mine')).body.length === before, 'Requesting and approving an AI draft saved the story before the explicit save action.');
   }, browserReady);
 
-  await record('Empty required language input is blocked in UI and rejected by API', async () => {
+  await record('Empty language shows an inline error and is rejected by the API', async () => {
     await clickAppNavigation(pageA, 'Share');
-    const input = pageA.getByLabel('Language told in');
-    ensure(await input.evaluate(el => el.required && el.validity.valueMissing), 'Empty language is not marked required.');
+    await pageA.getByRole('button',{name:'Continue to your story'}).click();
+    await pageA.getByText('Choose or enter a language.').waitFor();
+    await pageA.waitForFunction(() => document.activeElement?.id === 'share-language');
     const fd = new FormData(); fd.append('originalLanguage', ''); fd.append('text', '');
     const r = await direct(ownerA, '/api/stories', 'POST', fd); ensure(r.status === 400, 'API accepted empty language.');
   }, browserReady);
 
-  await record('Create a draft as A with hidden name, manual translation, script-like text, and synthetic audio', async () => {
+  await record('Create a draft as A without a free-text author name, with manual translation and synthetic audio', async () => {
     const text = "Synthetic test story.\n<script>window.__storyBridgeInjected=true</script>\nLiteral text remains text.";
     const languageField=pageA.getByLabel('Language told in');
     ensure(await pageA.locator('#story-language-options option[value="Kiswahili"]').count()===1&&await pageA.locator('#story-language-options option[value="Other"]').count()===1,'Language suggestions omitted a native-name entry or the Other option.');
@@ -762,8 +792,6 @@ try {
     await pageA.getByLabel('Your translation or AI draft').fill('Manual test translation.');
     await pageA.getByRole('button',{name:'Continue to review'}).click();
     await pageA.getByLabel('This is mine, or I have permission from the person telling it.').check();
-    await pageA.getByLabel('Your name (optional)').fill('Synthetic Hidden Author');
-    ensure(!(await pageA.getByLabel('Show my name on this story').isChecked()), 'Show-name default should be off.');
     const createResponsePromise = pageA.waitForResponse(response => response.url() === `${webOrigin}/api/stories` && response.request().method() === 'POST');
     await pageA.getByRole('button', { name: 'Save draft and open review' }).click();
     const createResponse = await createResponsePromise;
@@ -773,6 +801,7 @@ try {
     ensure(storyId && mine.status === 200, 'Draft was not saved for A.');
     const own = await direct(ownerA, `/api/stories/${storyId}`);
     ensure(own.status === 200 && own.body.status === 'draft', 'A could not read the new draft.');
+    ensure(!own.body.storytellerName, 'The Share flow unexpectedly saved a free-text author name.');
     ensure(own.body.text.replace(/\r\n/g, '\n') === text && own.body.translation === 'Manual test translation.', 'Original text or translation did not persist.');
     ensure(own.body.audio === true && own.body.translationChecked === false, 'Draft audio or unchecked state missing.');
     ensure(await pageA.evaluate(() => window.__storyBridgeInjected === undefined), 'Script-like story content executed.');
@@ -1186,8 +1215,8 @@ try {
     avatarStoryEnabled=true;
     await profilePage.goto(`${webOrigin}/discover`,{waitUntil:'domcontentloaded'});
     await profilePage.getByRole('heading',{name:'Discover'}).waitFor();
-    await profilePage.locator('.post-avatar-image').waitFor();
-    ensure(await profilePage.locator('.post-avatar-image').first().evaluate(image=>image.complete&&image.naturalWidth>0),'Discover did not render the public author photo.');
+    await profilePage.locator('img.post-avatar.author-avatar-image').waitFor();
+    ensure(await profilePage.locator('img.post-avatar.author-avatar-image').first().evaluate(image=>image.complete&&image.naturalWidth>0),'Discover did not render the public author photo.');
     ensure(await profilePage.locator('.post-avatar:not(img)').count()>0,'Discover did not retain initials for the author with no photo.');
     const discoverAvatarFile=path.join(evidenceDir,'discover-author-avatar.png');await profilePage.screenshot({path:discoverAvatarFile,fullPage:true});
     await clickHeaderMenu(profilePage,'My stories');await profilePage.getByRole('heading',{name:'My stories'}).waitFor();
@@ -1294,7 +1323,10 @@ try {
     await livePage.getByLabel('Post title').fill('Synthetic policy check');
     await livePage.getByRole('button',{name:'Continue to translation'}).click();
     await livePage.getByRole('button',{name:'Continue to review'}).click();
-    ensure(await livePage.locator('input[type="checkbox"][required]').count()===1,'The review step must keep a single required consent checkbox.');
+    ensure(await livePage.locator('input[type="checkbox"][required]').count()===0,'Share validation should be handled inline instead of by browser banners.');
+    await livePage.getByRole('button',{name:'Save draft and open review'}).click();
+    await livePage.getByText('Confirm that this story is yours or that you have permission.').waitFor();
+    await livePage.waitForFunction(() => document.activeElement?.id === 'share-consent');
     ensure(await livePage.getByRole('link',{name:'community guidelines',exact:true}).getAttribute('href')==='/guidelines','The consent checkbox label must link to community guidelines.');
     pass('Share review consent links to community guidelines without another required checkbox');
     for (const [route, heading] of [['terms','Terms of use'],['privacy','Privacy notice'],['guidelines','Community guidelines']]) {

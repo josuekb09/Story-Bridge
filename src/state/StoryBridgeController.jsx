@@ -4,6 +4,7 @@ import { AppHeader, AppMobileNav } from '../components/AppHeader.jsx';
 import { api, ownerToken, setAccountSessionToken, authorizedObjectUrl } from '../lib/api.js';
 import { editAiTranslationDraft, translationApprovalCanContinue } from '../translation-draft.js';
 import { OBJECT_RECORDS, CULTURAL_GROUP_RECORD, OBJECT_IDS, objectRecordView } from '../object-records.js';
+import { prepareImageMetadata } from '../share-validation.js';
 
 const Landing = lazy(() => import('../pages/LandingPage.jsx'));
 const SignInPage = lazy(() => import('../pages/SignInPage.jsx'));
@@ -103,6 +104,7 @@ export default function App() {
   const [regionFilter, setRegionFilter] = useState('all');
   const [audioOnly, setAudioOnly] = useState(false);
   const [shareStep,setShareStep]=useState(1);
+  const [shareSubmitError,setShareSubmitError]=useState('');
   const [postMeta,setPostMeta]=useState(EMPTY_POST_META);
   const [postImages,setPostImages]=useState([]);
   const [imageDetails,setImageDetails]=useState([]);
@@ -209,7 +211,7 @@ export default function App() {
     setForm(emptyForm); setFile(null); setFileKind(''); setAudioSaved(false); setCaptureBusy(false);
     setReviewVisibility('private'); setCheckedBy(''); setWithdrawConfirmationId('');
     setProfileName(''); setSavedProfileName(''); setProfileState('idle'); setProfileError(''); setProfileNotice('');
-    setError(''); setSaving(false);
+    setError(''); setShareSubmitError(''); setSaving(false);
     transitionTo(nextPage);
   }
 
@@ -436,7 +438,7 @@ export default function App() {
           ? 'You have unsaved audio and story changes. Leaving this screen will discard it and those changes. Continue?'
           : 'You have unsaved changes. Leaving this screen will discard them. Continue?';
       if (!window.confirm(message)) return;
-      if (page === 'share') { setForm(emptyForm); setFile(null); setFileKind(''); setAudioSaved(false); setShareStep(1);setPostMeta(EMPTY_POST_META);setPostImages([]);setImageDetails([]); }
+      if (page === 'share') { setForm(emptyForm); setFile(null); setFileKind(''); setAudioSaved(false); setShareStep(1);setPostMeta(EMPTY_POST_META);setPostImages([]);setImageDetails([]);setShareSubmitError(''); }
       if (page === 'review') setReviewBaseline({ text: review?.text || '', translation: review?.translation || '', visibility: reviewVisibility });
       if (page === 'profile') setProfileName(savedProfileName);
     }
@@ -444,6 +446,7 @@ export default function App() {
     if (page === 'profile' && nextPage !== 'profile' && profileState === 'loading') { profileRequest.current += 1; setProfileState('idle'); }
     transitionTo(nextPage);
     setError('');
+    if (nextPage !== 'share') setShareSubmitError('');
     if (nextPage === 'listen' || nextPage === 'discover' || nextPage === 'mine' || nextPage === 'workspace' || nextPage === 'cultures' || nextPage === 'search') refresh();
     if (nextPage === 'profile' && profileState === 'idle') loadProfile(currentSession.current, identityEpoch.current, true);
   }
@@ -523,8 +526,9 @@ export default function App() {
     const scope = captureScope(); const requestId = ++mutationRequest.current;
     mutationBusyRef.current = true;
     setError('');
+    setShareSubmitError('');
     setSaving(true);
-    if (form.translationOrigin === 'ai_draft' && !form.translationApproved) { setError('Approve the AI draft before saving it.'); mutationBusyRef.current = false; setSaving(false); return; }
+    if (form.translationOrigin === 'ai_draft' && !form.translationApproved) { setShareSubmitError('Approve the AI draft before saving it.'); mutationBusyRef.current = false; setSaving(false); return; }
     const formData = new FormData();
     Object.entries(form).filter(([key]) => !['translationOrigin','translationApproved'].includes(key)).forEach(([key, value]) => formData.append(key, String(value)));
     formData.append('translationOrigin', form.translationOrigin === 'ai_draft' ? 'ai_approved' : 'storyteller');
@@ -532,7 +536,7 @@ export default function App() {
     Object.entries(postMeta).filter(([key])=>key!=='sources').forEach(([key,value])=>formData.append(key,String(value)));
     const sources=postMeta.sources.split('\n').map(line=>line.trim()).filter(Boolean).map(line=>{const split=line.indexOf('|');return split<0?{label:line,url:line}:{label:line.slice(0,split).trim(),url:line.slice(split+1).trim()};});
     formData.append('sources',JSON.stringify(sources));
-    formData.append('imageMetadata',JSON.stringify(imageDetails));
+    formData.append('imageMetadata',JSON.stringify(prepareImageMetadata(imageDetails, postMeta.title)));
     postImages.forEach(image=>formData.append('images',image));
     if (objectContext && OBJECT_IDS.includes(objectContext.id)) formData.append('objectId', objectContext.id);
     if (file) formData.append('audio', file);
@@ -540,7 +544,7 @@ export default function App() {
       const story = await api('/api/stories', { method: 'POST', body: formData });
       if (!scopeIsCurrent(scope) || mutationRequest.current !== requestId) return;
       const savedAudio = !!file && !!story.audio;
-      setForm(emptyForm); setFile(null); setFileKind(''); setPostImages([]); setImageDetails([]);setPostMeta(EMPTY_POST_META);setShareStep(1);
+      setForm(emptyForm); setFile(null); setFileKind(''); setPostImages([]); setImageDetails([]);setPostMeta(EMPTY_POST_META);setShareStep(1);setShareSubmitError('');
       setAudioSaved(savedAudio);
       setReview({ ...story, audioSaved: savedAudio });
       setReviewBaseline({ text: story.text || '', translation: story.translation || '', visibility: story.visibility || 'private' });
@@ -551,7 +555,7 @@ export default function App() {
       setToast('Draft saved');
       refresh().catch(() => {});
     } catch (cause) {
-      if (scopeIsCurrent(scope) && mutationRequest.current === requestId) setError(cause.message);
+      if (scopeIsCurrent(scope) && mutationRequest.current === requestId) setShareSubmitError(cause.message || 'Your story could not be saved. Try again.');
     } finally {
       if (identityEpoch.current === scope.epoch && currentSession.current === scope.identity && mutationRequest.current === requestId) {
         mutationBusyRef.current = false; setSaving(false);
@@ -676,7 +680,7 @@ export default function App() {
     : <div className="app">
       {appHeader}
       {!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}
-      {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">Dismiss</button></div>}
+      {error && page !== 'share' && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">Dismiss</button></div>}
 
       <Suspense fallback={pageLoading}>
       {page === 'workspace' && accountConfig.account && <WorkspacePage savedProfileName={savedProfileName} profileState={profileState} navigate={navigate} listState={listState} listErrors={listErrors} retryList={retryList} counts={counts} setCollectionFilter={setCollectionFilter} draftStories={draftStories} startReview={startReview}/>}
@@ -687,7 +691,7 @@ export default function App() {
       {page === 'objects' && <ObjectsPage objectSettings={objectSettings} visibleObjects={visibleObjects} museumFilter={museumFilter} setMuseumFilter={setMuseumFilter} museumChoices={museumChoices} objectTypeFilter={objectTypeFilter} setObjectTypeFilter={setObjectTypeFilter} typeChoices={typeChoices} transitionTo={transitionTo} retry={() => setObjectSettings(null)}/>}
       {page === 'group-record' && <CulturalGroupPage record={CULTURAL_GROUP_RECORD} navigate={navigate} onAddVoice={addVoiceToObject}/>}
       {page.startsWith('object:') && <ObjectRecordPage source={OBJECT_RECORDS.find(item => item.id === page.slice(7))} objectSettings={objectSettings} session={session} objectAccessSaving={objectAccessSaving} objectAccessError={objectAccessError} saveObjectAccess={saveObjectAccess} linkedStories={objectStories(page.slice(7))} showStory={showStory} addVoiceToObject={addVoiceToObject} navigate={navigate}/>}
-      {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onEditProfile={()=>navigate('profile')}/>}
+      {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} submissionError={shareSubmitError} clearSubmissionError={()=>setShareSubmitError('')} onEditProfile={()=>navigate('profile')}/>}
       {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
       {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} onChangeAuthorVisibility={changeAuthorVisibility} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId} profileAvatar={profileAvatar}/>}
       {page === 'cultures' && <CulturesPage stories={publicStories} showStory={showStory} navigate={navigate}/>}
