@@ -1,7 +1,7 @@
 // Landing page. Owner: Claude (see docs/COLLAB.md).
 // Props contract with StoryBridgeController (do not rename without updating both):
 //   onListen, onShare, onObjects, onSignIn, showSignIn, repoUrl
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BridgeMark, Wordmark } from '../Brand.jsx';
 import { OBJECT_RECORDS } from '../object-records.js';
 import { SHOWCASE, REGIONS } from '../data/showcase.js';
@@ -10,6 +10,7 @@ import { LANGUAGES, UI_LANGUAGES } from '../lib/languages.js';
 import { useUiLanguage } from '../lib/i18n.js';
 import AuthorAvatar, { authorName } from '../components/AuthorAvatar.jsx';
 import PostImage from '../components/PostImage.jsx';
+import { preloadImage } from '../lib/preload-image.js';
 import '../styles/components/home.css';
 
 const SLIDE_MS = 7000;
@@ -55,19 +56,33 @@ function CountUp({ value, reduced }) {
 function Hero({ t, onListen, onShare, reduced }) {
   const slides = useMemo(() => SHOWCASE.filter(item => item.hero).map(item => ({ item, image: imageFor(item) })).filter(slide => slide.image), []);
   const [index, setIndex] = useState(0);
+  const [loadedSlides, setLoadedSlides] = useState(() => new Set());
+  const slideRequest = useRef(0);
   const [paused, setPaused] = useState(false);
   const [hovering, setHovering] = useState(false);
   const running = !paused && !hovering && !reduced && slides.length > 1;
+  const selectSlide = useCallback(nextIndex => {
+    const request = ++slideRequest.current;
+    const slide = slides[nextIndex];
+    if (!slide || nextIndex === index) return;
+    preloadImage({ src: slide.image.src, srcset: slide.image.srcset, sizes: '100vw' })
+      .then(() => {
+        if (request !== slideRequest.current) return;
+        setLoadedSlides(current => current.has(nextIndex) ? current : new Set(current).add(nextIndex));
+        setIndex(nextIndex);
+      })
+      .catch(() => { /* Keep the current photo and its matching caption if a slide cannot load. */ });
+  }, [index, slides]);
   useEffect(() => {
     if (!running) return undefined;
-    const timer = setTimeout(() => setIndex(value => (value + 1) % slides.length), index === 0 ? FIRST_SLIDE_MS : SLIDE_MS);
+    const timer = setTimeout(() => selectSlide((index + 1) % slides.length), index === 0 ? FIRST_SLIDE_MS : SLIDE_MS);
     return () => clearTimeout(timer);
-  }, [running, slides.length, index]);
-  const current = slides[index];
+  }, [running, slides.length, index, selectSlide]);
+  const current = loadedSlides.has(index) ? slides[index] : null;
   return <section className="home-hero" aria-labelledby="home-hero-title" onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)} onFocus={() => setHovering(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHovering(false); }}>
     <div className="home-hero-media" aria-hidden="true">
       {slides.length === 0 && <div className="home-hero-fallback"/>}
-      {slides.map((slide, slideIndex) => <img key={slide.item.id} className={slideIndex === index ? 'is-active' : ''} src={slide.image.src} srcSet={slide.image.srcset || undefined} sizes="100vw" width={slide.image.width} height={slide.image.height} alt="" loading={slideIndex === 0 ? 'eager' : 'lazy'} fetchPriority={slideIndex === 0 ? 'high' : undefined} decoding="async"/>)}
+      {slides.map((slide, slideIndex) => <img key={slide.item.id} className={slideIndex === index ? 'is-active' : ''} src={slide.image.src} srcSet={slide.image.srcset || undefined} sizes="100vw" width={slide.image.width} height={slide.image.height} alt="" loading={slideIndex === 0 ? 'eager' : 'lazy'} fetchPriority={slideIndex === 0 ? 'high' : undefined} decoding="async" onLoad={() => setLoadedSlides(current => current.has(slideIndex) ? current : new Set(current).add(slideIndex))}/>)}
     </div>
     <div className="home-hero-shade" aria-hidden="true"/>
     <div className="home-hero-inner">
@@ -85,7 +100,7 @@ function Hero({ t, onListen, onShare, reduced }) {
       {slides.length > 1 && <div className="home-hero-controls">
         {!reduced && <button type="button" className="home-icon-btn" onClick={() => setPaused(value => !value)} aria-pressed={paused} aria-label={paused ? t('hero.play') : t('hero.pause')}>{paused ? '▶' : '❚❚'}</button>}
         <div className="home-dots" role="group" aria-label={t('photo')}>
-          {slides.map((slide, slideIndex) => <button type="button" key={slide.item.id} className={slideIndex === index ? 'is-active' : ''} aria-label={`${slide.item.subject}, ${slide.item.country}`} aria-current={slideIndex === index} onClick={() => setIndex(slideIndex)}/>)}
+          {slides.map((slide, slideIndex) => <button type="button" key={slide.item.id} className={slideIndex === index ? 'is-active' : ''} aria-label={`${slide.item.subject}, ${slide.item.country}`} aria-current={slideIndex === index} onClick={() => selectSlide(slideIndex)}/>)}
         </div>
       </div>}
     </div>}

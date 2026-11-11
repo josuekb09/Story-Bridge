@@ -108,6 +108,7 @@
 .app .profile-avatar-wrap input[type=file]{display:none!important}
 /* Bottom navigation: keep words whole on small phones. */
 @media (max-width:520px){
+  .feed-list>.post{animation:none;opacity:1;transform:none}
   .app .bottom-nav{flex-wrap:nowrap;overflow-wrap:normal;gap:2px;padding-inline:4px}
   .app .bottom-nav button{flex:1 1 0;min-width:0;padding:8px 2px;font-size:.74rem;line-height:1.15;overflow-wrap:normal;word-break:keep-all;hyphens:none;white-space:normal}
 }

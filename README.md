@@ -72,6 +72,8 @@ The app shell and static interface files can be installed as a PWA. Its service 
 | Responsive and loading review | Lazy-loaded page routes; initial JavaScript is about 158 kB gzip. Twenty screens were captured at 375, 768 and 1280 px with no horizontal overflow, clipped text, undersized controls or browser console issues in the synthetic review. |
 | Phase L1 social schema | Migration `202611090007_social_layer.sql` is applied in production |
 
+On phones, feed cards appear at full contrast immediately. Named authors keep initials visible while profile photos load or when a photo is unavailable, and the landing hero updates its caption only after the matching photo is ready.
+
 This is a demonstration build, not a production service for sensitive stories or recordings.
 
 ## Safety and moderation
