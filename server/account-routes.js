@@ -265,10 +265,11 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const access = await objectAccessList();
     const restricted = new Set(access.filter(item=>item.access==='Community only').map(item=>item.id));
     const rows = (await store.listPublic()).filter(row => (!!req.account||row.access!=='Community only')&&(!row.object_id || !restricted.has(row.object_id) || !!req.account)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));
-    res.json(await cleanPosts(rows,false,store,
-      row => row.moderation_status!=='pending_review' && row.access!=='Community only' && (!row.object_id || !restricted.has(row.object_id))));
+    const posts = await cleanPosts(rows,false,store,
+      row => row.moderation_status!=='pending_review' && row.access!=='Community only' && (!row.object_id || !restricted.has(row.object_id)));
+    res.json(posts.map(post => post.objectId && restricted.has(post.objectId) ? { ...post, mediaRequiresSession: true } : post));
   } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
-  app.get('/api/mine', session, async (req, res) => { try { const rows=(await store.listMine(req.account.id)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));res.json(await cleanPosts(rows,true,store)); } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
+  app.get('/api/mine', session, async (req, res) => { try { const rows=(await store.listMine(req.account.id)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));const restricted=new Set((await objectAccessList()).filter(item=>item.access==='Community only').map(item=>item.id));const posts=await cleanPosts(rows,true,store);res.json(posts.map(post=>post.objectId&&restricted.has(post.objectId)?{...post,mediaRequiresSession:true}:post)); } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
   app.post('/api/stories', session, rateLimit, limitPostBody, parsePostUpload, async (req, res) => {
     const b = req.body || {};
     if (b.requestedVisibility !== undefined && !['private','public'].includes(b.requestedVisibility)) return res.status(400).json({error:'Choose a valid audience.'});
@@ -303,7 +304,27 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       res.status(201).json(await cleanSinglePost(row,true,store));
     } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); }
   });
-  app.get('/api/posts/:id/media/:key',optionalSession,async(req,res)=>{try{const row=await store.get(req.params.id);if(!row)return res.sendStatus(404);const isOwner=!!req.account&&row.owner_user_id===req.account.id;const isAdmin=!!req.account&&!!objectAdminId&&req.account.id===objectAdminId;const isPublic=row.status==='shared'&&row.visibility==='public'&&row.moderation_status!=='pending_review';if(!isOwner&&!isAdmin&&!isPublic)return res.sendStatus(404);const access=await objectAccessList();if(!req.account&&row.access==='Community only')return res.sendStatus(404);if(!req.account&&row.object_id&&access.some(item=>item.id===row.object_id&&item.access==='Community only'))return res.sendStatus(404);const item=(await store.listPostMedia(row.id)).find(media=>media.storage_key===req.params.key);if(!item)return res.sendStatus(404);const image=await store.getPostImage(item.storage_key);res.set('X-Content-Type-Options','nosniff').set('Cache-Control',isPublic?'public, max-age=300':'private, no-store').type(image.mime).send(image.buffer)}catch{return res.status(503).json({error:'Post media is unavailable.'})}});
+  app.get('/api/posts/:id/media/:key', optionalSession, async (req, res) => {
+    try {
+      const row = await store.get(req.params.id);
+      if (!row) return res.sendStatus(404);
+      const isOwner = !!req.account && row.owner_user_id === req.account.id;
+      const isAdmin = !!req.account && !!objectAdminId && req.account.id === objectAdminId;
+      const isShared = row.status === 'shared' && row.visibility === 'public' && row.moderation_status !== 'pending_review';
+      const access = await objectAccessList();
+      const restrictedObject = !!row.object_id && access.some(item => item.id === row.object_id && item.access === 'Community only');
+      const isPublic = isShared && (row.access || 'Public') === 'Public' && !restrictedObject;
+      const isMemberOnly = isShared && !!req.account && ((row.access || 'Public') === 'Community only' || restrictedObject);
+      if (!isOwner && !isAdmin && !isPublic && !isMemberOnly) return res.sendStatus(404);
+      const item = (await store.listPostMedia(row.id)).find(media => media.storage_key === req.params.key);
+      if (!item) return res.sendStatus(404);
+      const image = await store.getPostImage(item.storage_key);
+      res.set('X-Content-Type-Options', 'nosniff')
+        .set('Cache-Control', isPublic ? 'public, max-age=300' : 'private, no-store')
+        .type(image.mime)
+        .send(image.buffer);
+    } catch { return res.status(503).json({ error: 'Post media is unavailable.' }); }
+  });
   app.get('/api/stories/:id', optionalSession, ownerOnly, async (req, res) => {
     if(req.story.access==='Community only'&&!req.account)return res.sendStatus(404);
     let objectIsRestricted=false;
@@ -314,6 +335,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     }
     const includeAvatar=req.story.status==='shared'&&req.story.visibility==='public'&&req.story.moderation_status!=='pending_review'&&req.story.access!=='Community only'&&!objectIsRestricted;
     const payload=await cleanSinglePost(req.story, req.isStoryOwner,store,includeAvatar);
+    if(objectIsRestricted)payload.mediaRequiresSession=true;
     if(req.isStoryOwner)payload.isOwner=true;
     res.json(payload);
   });
@@ -397,6 +419,14 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   });
   app.get('/api/stories/:id/audio', optionalSession, ownerOnly, async (req, res) => {
     if (!req.story.audio_key) return res.sendStatus(404);
+    if (!req.account) {
+      if (req.story.access === 'Community only') return res.sendStatus(404);
+      if (req.story.object_id) {
+        try {
+          if ((await objectAccessList()).some(item => item.id === req.story.object_id && item.access === 'Community only')) return res.sendStatus(404);
+        } catch { return res.status(503).json({ error: 'Story access is unavailable.' }); }
+      }
+    }
     try {
       const upstream = await store.audioResponse(req.story.audio_key,req.story.audio_mime);
       res.status(upstream.status).set('Cache-Control','no-store').type(upstream.headers.get('content-type') || 'application/octet-stream');

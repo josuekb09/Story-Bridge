@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, authorizedObjectUrl } from '../lib/api.js';
+import { api } from '../lib/api.js';
+import PostImage from '../components/PostImage.jsx';
 import '../styles/components/admin.css';
 
 function dateLabel(value) {
@@ -11,17 +12,6 @@ function dateLabel(value) {
 function excerpt(text) {
   const value = String(text || '').trim();
   return value.length > 280 ? `${value.slice(0, 280).trimEnd()}…` : value || 'No written excerpt.';
-}
-
-function ProtectedImage({ image }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    let live = true;
-    let objectUrl = '';
-    authorizedObjectUrl(image.url).then(url => { objectUrl = url; if (live) setSrc(url); else URL.revokeObjectURL(url); }).catch(() => {});
-    return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [image.url]);
-  return src ? <img src={src} alt={image.altText || ''} width={image.width || 160} height={image.height || 120} loading="lazy" decoding="async"/> : <span className="admin-photo-loading" role="status">Loading photo…</span>;
 }
 
 export default function AdminPostsPage({ posts = [], error = '', busyId = '', onAction = () => {}, onRetry = () => {} }) {
@@ -85,7 +75,7 @@ export default function AdminPostsPage({ posts = [], error = '', busyId = '', on
         </div>
         <p className="admin-excerpt">{excerpt(post.text)}</p>
         {post.images?.length > 0 && <ul className="admin-photos" aria-label="Post photos">{post.images.map(image => <li key={image.id}>
-          <ProtectedImage image={image}/>
+          <PostImage image={image} story={post} className="admin-post-image"/>
           <small>{image.credit || 'Photo credit unavailable'}</small>
         </li>)}</ul>}
         <div className="admin-actions">

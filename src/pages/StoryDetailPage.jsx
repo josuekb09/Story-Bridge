@@ -3,7 +3,7 @@ import AudioPlayer from '../components/AudioPlayer.jsx';
 import AuthorAvatar, { authorName } from '../components/AuthorAvatar.jsx';
 import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
 import ReportPostAction from '../components/ReportPostAction.jsx';
-import { authorizedObjectUrl } from '../lib/api.js';
+import PostImage from '../components/PostImage.jsx';
 import { translationOriginLabel, useUiLanguage } from '../lib/i18n.js';
 import { shouldShowMachineTranslation } from '../share-validation.js';
 import { audienceLine } from '../audience.js';
@@ -37,17 +37,6 @@ function setMeta(selector, attribute, key, content) {
     document.head.appendChild(element);
   }
   element.setAttribute('content', content);
-}
-
-function StoryImage({ image, protectedFile }) {
-  const [src, setSrc] = useState(protectedFile ? '' : image.url);
-  useEffect(() => {
-    if (!protectedFile) { setSrc(image.url); return undefined; }
-    let live = true; let objectUrl = '';
-    authorizedObjectUrl(image.url).then(url => { objectUrl = url; if (live) setSrc(url); else URL.revokeObjectURL(url); }).catch(() => {});
-    return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [image.url, protectedFile]);
-  return src ? <img src={src} alt={image.altText || ''} width={image.width || 640} height={image.height || 480} sizes="(max-width: 720px) 100vw, 860px" loading="lazy" decoding="async"/> : <div className="story-photo-loading" role="status">Loading photo…</div>;
 }
 
 export default function StoryDetailPage({ story, navigate, backPage = 'discover', signedIn = false, isAuthor = !!story._own, profileAvatar = '', onChangeAuthorVisibility = () => {}, saving = false, onReportSignIn = () => {}, onReported = () => {} }) {
@@ -121,7 +110,7 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
 
       {story.images?.length > 0 && <section className="post-gallery" aria-label="Story photos">
         {story.images.map(image => <figure key={image.id}>
-          <StoryImage image={image} protectedFile={privateAudio}/>
+          <PostImage image={image} story={story} className="story-detail-post-image" sizes="(max-width: 720px) 100vw, 860px"/>
           <figcaption>{image.altText && <span>{image.altText}</span>}<span>{image.credit || 'Photo credit not provided'}{image.licence ? ` · ${image.licence}` : ''}</span></figcaption>
         </figure>)}
       </section>}

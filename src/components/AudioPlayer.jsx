@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { headers } from '../lib/api.js';
+import { authorizedObjectUrl } from '../lib/api.js';
+import { isPublicPostMedia } from '../lib/post-media.js';
 
 export default function AudioPlayer({ story, privateAudio = false }) {
   const [src, setSrc] = useState('');
@@ -9,27 +10,23 @@ export default function AudioPlayer({ story, privateAudio = false }) {
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(0);
   const [rate, setRate] = useState(1);
+  const protectedAudio = privateAudio || !isPublicPostMedia(story);
   useEffect(() => {
     let objectUrl = '';
     let alive = true;
-    const controller = new AbortController();
     if (!story?.audio) {
       setSrc('');
       setStatus('absent');
-      return () => controller.abort();
+      return undefined;
     }
     setStatus('loading');
     setSrc('');
-    if (privateAudio) {
-      fetch(`/api/stories/${story.id}/audio`, { headers: headers(), signal: controller.signal })
-        .then(response => {
-          if (!response.ok) throw Error('Audio unavailable');
-          return response.blob();
-        })
-        .then(blob => {
-          if (!alive) return;
-          objectUrl = URL.createObjectURL(blob);
-          setSrc(objectUrl);
+    if (protectedAudio) {
+      authorizedObjectUrl(`/api/stories/${story.id}/audio`)
+        .then(url => {
+          objectUrl = url;
+          if (alive) setSrc(url);
+          else URL.revokeObjectURL(url);
         })
         .catch(() => { if (alive) { setSrc(''); setStatus('error'); } });
     } else {
@@ -37,10 +34,9 @@ export default function AudioPlayer({ story, privateAudio = false }) {
     }
     return () => {
       alive = false;
-      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [story?.id, story?.audio, privateAudio, attempt]);
+  }, [story?.id, story?.audio, protectedAudio, attempt]);
   useEffect(() => { if (player.current) player.current.playbackRate = rate; }, [rate, src]);
   if (!story?.audio) return <p className="muted" role="status">No recording attached.</p>;
   return <div className="audio-player">

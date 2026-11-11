@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import AudioPlayer from '../components/AudioPlayer.jsx';
 import AuthorAvatar, { authorName } from '../components/AuthorAvatar.jsx';
+import PostImage from '../components/PostImage.jsx';
 import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
 import ReportPostAction from '../components/ReportPostAction.jsx';
 import { translationOriginLabel, useUiLanguage } from '../lib/i18n.js';
@@ -66,7 +67,7 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId,
     {!text && !story.audio && !images.length && <p className="post-text muted">No written text.</p>}
 
       {images.length > 0 && <div className={`post-images count-${Math.min(images.length, 4)}`}>
-      {images.slice(0, 4).map(image => <figure key={image.id}><img src={image.url} alt={image.altText || ''} loading="lazy" decoding="async" width={image.width || 640} height={image.height || 480}/></figure>)}
+      {images.slice(0, 4).map(image => <figure key={image.id}><PostImage image={image} story={story}/></figure>)}
     </div>}
 
     {story.audio && <div className="post-audio"><AudioPlayer story={story}/></div>}

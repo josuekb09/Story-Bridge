@@ -1,25 +1,14 @@
-import { useEffect, useState } from 'react';
 import AudioPlayer from '../components/AudioPlayer.jsx';
-import { authorizedObjectUrl } from '../lib/api.js';
+import PostImage from '../components/PostImage.jsx';
 import { translationOriginLabel, useUiLanguage } from '../lib/i18n.js';
 import { AUDIENCE_CHOICES, audienceLabelKey } from '../audience.js';
 import { validateTranslationEntry } from '../share-validation.js';
-
-function ReviewPhoto({ image }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    let live = true; let objectUrl = '';
-    authorizedObjectUrl(image.url).then(url => { objectUrl = url; if (live) setSrc(url); else URL.revokeObjectURL(url); }).catch(() => {});
-    return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [image.url]);
-  return src ? <img src={src} alt={image.altText || ''} width={image.width || 640} height={image.height || 480} loading="lazy" decoding="async"/> : <p className="muted" role="status">Loading photo…</p>;
-}
 
 export default function ReviewPage({ review, setReview, saving, saveReviewEdits, checkedBy, setCheckedBy, reviewAudience, setReviewAudience, saveReview, objectContext, transitionTo, navigate }) {
   const { t } = useUiLanguage();
   const translationError = validateTranslationEntry({ originalText: review.text, originalLanguage: review.originalLanguage, translation: review.translation, translationLanguage: review.translationLanguage });
   return <main aria-busy={saving}>
-    <button className="back" onClick={() => navigate('mine')}>← My stories</button><h1>Review your story</h1><section className="panel post-review-record"><h2>{review.title || 'Untitled post'}</h2><p className="trust-label">{review.trustLabel || 'Told by a community member'}</p><p>{review.kind} · {review.section} · {review.licence}</p>{review.moderationStatus === 'pending_review' && <p className="notice" role="status">Pending review by an administrator. This post remains private until approved.</p>}{review.images?.map(image => <figure key={image.id}><ReviewPhoto image={image}/><figcaption>{image.altText} · {image.credit}</figcaption></figure>)}{review.sources?.length > 0 && <><h3>Sources</h3><ul>{review.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></li>)}</ul></>}</section>
+    <button className="back" onClick={() => navigate('mine')}>← My stories</button><h1>Review your story</h1><section className="panel post-review-record"><h2>{review.title || 'Untitled post'}</h2><p className="trust-label">{review.trustLabel || 'Told by a community member'}</p><p>{review.kind} · {review.section} · {review.licence}</p>{review.moderationStatus === 'pending_review' && <p className="notice" role="status">Pending review by an administrator. This post remains private until approved.</p>}{review.images?.map(image => <figure key={image.id}><PostImage image={image} story={review} className="story-detail-post-image"/><figcaption>{image.altText} · {image.credit}</figcaption></figure>)}{review.sources?.length > 0 && <><h3>Sources</h3><ul>{review.sources.map(source => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></li>)}</ul></>}</section>
     <section className="panel"><h2>Original story</h2><p>The original recording and text stay the main version.</p><AudioPlayer story={review} privateAudio/>{review.audio && <p className="recording-saved" role="status" aria-live="polite">Saved with your story.</p>}<label>Original text<textarea aria-label="Original text" rows="6" maxLength="12000" value={review.text} onChange={event => setReview(previous => ({ ...previous, text:event.target.value }))}/></label><button className="secondary" disabled={saving || !!translationError} onClick={() => saveReviewEdits()}>{saving ? 'Saving…' : 'Save original edit'}</button></section>
     <section className="panel"><h2>Translation</h2>
       <label>Translation language<input aria-label="Translation language" maxLength="80" value={review.translationLanguage || ''} onChange={event => setReview(previous => ({ ...previous, translationLanguage:event.target.value }))}/></label>

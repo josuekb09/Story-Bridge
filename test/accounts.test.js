@@ -275,6 +275,30 @@ test('post creation requires consent and image alt text, and first approved post
   const noAlt=new FormData();for(const [key,value] of Object.entries({title:'Image without alt',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true',imageMetadata:'[{}]'}))noAlt.append(key,value);noAlt.append('originalLanguage','Synthetic language');noAlt.append('images',new Blob([png],{type:'image/png'}),'fixture.png');const altDenied=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('alt-user'),body:noAlt});assert.equal(altDenied.status,400);
 });
 
+test('members-only post media requires a session and uses private caching; public media remains public',async t=>{
+  const store=fixtureStore();
+  const members=storyRow('members-media','post-owner','shared','public','members-audio');
+  members.access='Community only';members.moderation_status='approved';
+  store.rows.set(members.id,members);
+  await store.putPostImage('members-image',Buffer.from('synthetic image bytes'));
+  await store.createPostMedia([{id:'members-media-row',post_id:members.id,kind:'image',storage_key:'members-image'}]);
+  const publicPost=storyRow('public-media','post-owner','shared','public','public-audio');
+  publicPost.access='Public';publicPost.moderation_status='approved';
+  store.rows.set(publicPost.id,publicPost);
+  await store.putPostImage('public-image',Buffer.from('synthetic public image bytes'));
+  await store.createPostMedia([{id:'public-media-row',post_id:publicPost.id,kind:'image',storage_key:'public-image'}]);
+  const {base,server}=await serverFor(store);t.after(()=>new Promise(resolve=>server.close(resolve)));
+
+  const membersImagePath=`/api/posts/${members.id}/media/members-image`;
+  const anonymousImage=await fetch(`${base}${membersImagePath}`);assert.equal(anonymousImage.status,404);
+  const memberImage=await fetch(`${base}${membersImagePath}`,{headers:auth('signed-in-member')});assert.equal(memberImage.status,200);assert.equal(memberImage.headers.get('cache-control'),'private, no-store');
+  assert.equal((await fetch(`${base}/api/stories/${members.id}/audio`)).status,404);
+  const memberAudio=await fetch(`${base}/api/stories/${members.id}/audio`,{headers:auth('signed-in-member')});assert.equal(memberAudio.status,200);assert.equal(memberAudio.headers.get('cache-control'),'no-store');
+
+  const publicImage=await fetch(`${base}/api/posts/${publicPost.id}/media/public-image`);assert.equal(publicImage.status,200);assert.equal(publicImage.headers.get('cache-control'),'public, max-age=300');
+  const publicAudio=await fetch(`${base}/api/stories/${publicPost.id}/audio`);assert.equal(publicAudio.status,200);
+});
+
 test('admin post approval survives repeated and concurrent requests using file storage',async t=>{
   const tempDir=path.join(process.cwd(),'_tmp',`admin-approval-${crypto.randomUUID()}`);fs.mkdirSync(tempDir,{recursive:true});
   const store=createFileAccountStore(tempDir);const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});
