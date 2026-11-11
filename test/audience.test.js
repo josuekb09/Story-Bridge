@@ -7,6 +7,7 @@ const en = JSON.parse(readFileSync(new URL('../src/locales/en.json', import.meta
 const fr = JSON.parse(readFileSync(new URL('../src/locales/fr.json', import.meta.url), 'utf8'));
 const translate = locale => key => locale[key] ?? en[key] ?? key;
 const socialCss = readFileSync(new URL('../src/styles/components/social.css', import.meta.url), 'utf8');
+const appCss = readFileSync(new URL('../src/styles/components/app.css', import.meta.url), 'utf8');
 const landingCss = readFileSync(new URL('../src/styles/components/landing.css', import.meta.url), 'utf8');
 const homeCss = readFileSync(new URL('../src/styles/components/home.css', import.meta.url), 'utf8');
 const tokensCss = readFileSync(new URL('../src/styles/tokens.css', import.meta.url), 'utf8');
@@ -34,6 +35,14 @@ test('audience summaries distinguish actual visibility from a first post awaitin
   assert.equal(audienceLine(pending, translate(en)), 'Who can see this: Only me (until a moderator approves it as Members only)');
   assert.equal(audienceLine({ visibility:'private' }, translate(en)), 'Who can see this: Only me');
   assert.equal(audienceLine({ visibility:'public', access:'Public' }, translate(fr)), 'Qui peut voir cette histoire : Public');
+});
+
+test('mobile feed widths are constrained and main clears the fixed navigation', () => {
+  assert.ok(socialCss.includes('.feed-layout,.feed-column,.feed-list,.post,.post-images,.post-images figure{box-sizing:border-box;min-width:0;max-width:100%}'));
+  assert.ok(socialCss.includes('.feed-region{display:block;width:100%;min-width:0;max-width:100%}'));
+  assert.ok(socialCss.includes('.feed-region select{display:block;width:100%;min-width:0;max-width:100%}'));
+  assert.ok(appCss.includes('.app>main{padding-bottom:calc(74px + env(safe-area-inset-bottom))}'));
+  assert.ok(appCss.includes('padding:4px 5px calc(4px + env(safe-area-inset-bottom))'));
 });
 
 test('mobile region selector has an inset visible caret and footers meet AA contrast', () => {

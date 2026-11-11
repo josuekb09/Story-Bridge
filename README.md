@@ -31,7 +31,7 @@ Posts can include people, region, tags, sources, photo credits, licence and a tr
 
 ### Discovery & Audience
 
-Discover has language and audio filters. Search brings public stories and culture entries together; culture pages show related stories and country languages. Museum object records stay separate from community stories and identify what is known, what is uncertain and what sources support the record.
+Discover has language and audio filters. Search brings public stories and culture entries together; culture pages show related stories and country languages. Museum object records stay separate from community stories and identify what is known, what is uncertain and what sources support the record. The phone layout keeps feed cards within the viewport and reader controls clear of the fixed navigation.
 
 ### Consent & Community Safety
 

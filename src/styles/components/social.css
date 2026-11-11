@@ -18,7 +18,7 @@
 .feed-chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 2px 10px;margin-bottom:6px;max-width:100%}
 .feed-chips button{flex:none;border:1px solid var(--line);background:#fff;color:var(--forest);padding:7px 14px;border-radius:999px;font-weight:600;cursor:pointer;white-space:nowrap}
 .feed-chips button[aria-pressed="true"]{background:var(--forest);border-color:var(--forest);color:#fff}
-.feed-region select{appearance:none;-webkit-appearance:none;border:1px solid var(--line);border-radius:999px;padding:7px 42px 7px 14px;background-color:#fff;background-image:linear-gradient(45deg,transparent 50%,var(--forest) 50%),linear-gradient(135deg,var(--forest) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 12px) 50%;background-size:6px 6px;background-repeat:no-repeat;color:var(--forest);font-weight:600}
+.feed-region select{box-sizing:border-box;min-width:0;max-width:100%;appearance:none;-webkit-appearance:none;border:1px solid var(--line);border-radius:999px;padding:7px 42px 7px 14px;background-color:#fff;background-image:linear-gradient(45deg,transparent 50%,var(--forest) 50%),linear-gradient(135deg,var(--forest) 50%,transparent 50%);background-position:calc(100% - 18px) 50%,calc(100% - 12px) 50%;background-size:6px 6px;background-repeat:no-repeat;color:var(--forest);font-weight:600}
 
 /* Post card */
 .feed-list{display:grid;gap:14px}
@@ -114,3 +114,9 @@
 }
 /* Mobile tab labels stay on one line (e.g. "Notifications" at 360–390 px). */
 .app-mobile-nav button span{white-space:nowrap;overflow-wrap:normal;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-size:12px;letter-spacing:-.01em}
+@media(max-width:520px){
+  .feed-layout,.feed-column,.feed-list,.post,.post-images,.post-images figure{box-sizing:border-box;min-width:0;max-width:100%}
+  .feed-layout,.feed-column,.feed-list,.post{width:100%}
+  .feed-region{display:block;width:100%;min-width:0;max-width:100%}
+  .feed-region select{display:block;width:100%;min-width:0;max-width:100%}
+}
