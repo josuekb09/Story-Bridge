@@ -1,8 +1,8 @@
 # Story Bridge — English narration script
 
 **Target runtime:** 5:00  
-**Footage:** screenshots of the live public site and its public stories. No generated images are used.  
-**Narration:** English voice synthesized locally with the installed Microsoft Mark voice; no external audio service is used.
+**Footage:** fresh screenshots of the live public site and public stories. The montage shows the live home totals (8 stories / 2 languages) and Nosihle's reader-side French and Tshiluba results. No generated images are used.
+**Narration:** the owner-selected English track is retained from the earlier cut. It was synthesized locally with Microsoft Mark; no new voice track or external audio service is used. One existing sentence refers to Chrome's on-device translator. The current live reader instead requests Google Translate from the browser and falls back to the server; the actual live controls and machine-translation labels are shown.
 
 ## Opening — 0:00
 
@@ -18,7 +18,7 @@ Opening a story gives the full account more room. Here, Josue's Ndebele research
 
 ## Read across languages — 2:06
 
-Readers can choose between an author-written translation and machine translation. The French version here is the author's work, marked as not yet checked by a speaker. For other languages, Read in my language uses Chrome's on-device translator when available, or opens Google Translate. The control is labelled machine translation, and the original text remains available. Readers can return to the original and compare versions whenever they need to. The translation remains clearly identified.
+Readers can choose between an author-written translation and machine translation. The French version on Josue's Ndebele research note is his work, marked as not yet checked by a speaker. We then open Nosihle's Zulu post and use the real Read in control: Français, then Tshiluba. Both outputs are labelled machine translation, not checked by a speaker. The original remains available for comparison. The retained narration includes an older reference to Chrome's on-device translator; the live UI shown here uses Google's browser-accessible translation endpoint with the server as fallback.
 
 ## Cultures and search — 2:39
 
