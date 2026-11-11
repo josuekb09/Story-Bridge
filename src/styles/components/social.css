@@ -32,7 +32,7 @@
 .post-trust{margin:10px 0 2px;font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--clay)}
 .post-title{font-family:Fraunces,Georgia,serif;font-size:1.3rem;line-height:1.2;margin:2px 0 6px;color:var(--forest-deep)}
 .post-text{margin:4px 0;white-space:pre-line;line-height:1.6}
-.post-text.is-clamped{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.post-text.is-clamped{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .post-more{border:0;background:none;padding:0;color:var(--ink-soft);font-weight:700;cursor:pointer}
 .post-more:hover{color:var(--forest);text-decoration:underline}
 .post-images{display:grid;gap:4px;margin:12px -18px 4px;overflow:hidden}

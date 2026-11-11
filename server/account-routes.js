@@ -8,6 +8,7 @@ import { isTranslationApproved, translationDraftHandler } from './translation-dr
 import { OBJECT_IDS } from '../src/object-records.js';
 import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
 import { sendSitemap } from './sitemap.js';
+import { createAdminEmail, isAdminNotifyConfigured, notifyAdmin, scheduleAdminNotification } from './admin-notify.js';
 
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 // Busboy uses defCharset for text field values and defParamCharset for part-header parameters.
@@ -52,7 +53,7 @@ const cleanSinglePost = async (row, owner, store, includeAvatar = false) => {
   return cleanPost(row, owner, store, profile, includeAvatar);
 };
 
-export function mountAccountRoutes(app, config, { store = createSupabaseStore(config), verify = createTokenVerifier(config), rateLimit = (_req, _res, next) => next(), draftTranslation = async () => { throw new Error('translation-service-unavailable'); }, objectAdminId = process.env.STORY_BRIDGE_OBJECT_ADMIN_ID || '' } = {}) {
+export function mountAccountRoutes(app, config, { store = createSupabaseStore(config), verify = createTokenVerifier(config), rateLimit = (_req, _res, next) => next(), draftTranslation = async () => { throw new Error('translation-service-unavailable'); }, objectAdminId = process.env.STORY_BRIDGE_OBJECT_ADMIN_ID || '', adminNotify: sendAdminEmail = notifyAdmin, scheduleAdminNotify = scheduleAdminNotification, adminNotifyConfigured = isAdminNotifyConfigured } = {}) {
   const audioUpload = multer({ ...UTF8_MULTIPART, storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^audio\/[a-z0-9.+-]+$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid audio'), { code: 'INVALID_AUDIO' })) });
   const avatarUpload = multer({ ...UTF8_MULTIPART, storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^image\/(jpeg|png|webp)$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid image'), { code: 'INVALID_IMAGE' })) });
   const postUpload = multer({ ...UTF8_MULTIPART, storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024,files:7},fileFilter:(_req,file,cb)=>/^(audio\/[a-z0-9.+-]+|image\/(jpeg|png|webp))$/i.test(file.mimetype)?cb(null,true):cb(Object.assign(new Error('invalid media'),{code:'INVALID_MEDIA'})) });
@@ -92,6 +93,13 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const languages=req.body?.languages;
     if(country.length>100||languages!==undefined&&(!Array.isArray(languages)||languages.length>12||languages.some(item=>typeof item!=='string'||item.trim().length>60)))return res.status(400).json({error:'Check the country and language fields.'});
     try { const saved=await store.saveProfile(req.account.id,{display_name:name,country,languages:languages||[]});const {avatar_key,...safe}=saved;res.json(safe); } catch { res.status(503).json({ error: 'Profile storage is unavailable.' }); }
+  });
+  app.post('/api/account/welcome-complete',session,rateLimit,async(req,res)=>{
+    try {
+      const profile=await store.profile(req.account.id);
+      if(profile)scheduleAdminNotify(`welcome:${req.account.id}`,()=>createAdminEmail({subject:'Story Bridge — new member joined',lines:[`Name: ${profile.display_name||'Not provided'}`,`Country: ${profile.country||'Not provided'}`],actionLabel:'Open admin'}));
+    } catch { /* welcome has already been saved; an alert must not block the member */ }
+    return res.sendStatus(204);
   });
   app.post('/api/account/profile/avatar',session,rateLimit,(req,res)=>avatarUpload.single('avatar')(req,res,async error=>{
     if(error)return res.status(error.code==='LIMIT_FILE_SIZE'?413:400).json({error:'Choose a JPEG, PNG or WebP photo up to 2 MB.'});
@@ -157,6 +165,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       if(post.owner_user_id===req.account.id)return res.sendStatus(403);
       if(post.status!=='shared'||post.visibility!=='public')return res.sendStatus(404);
       const result=await store.createPostReport({reporter_id:req.account.id,target_type:'post',target_id:post.id,reason,details:typeof details==='string'&&details.trim()?details.trim():null,status:'open'});
+      if(result.created)scheduleAdminNotify(`report:${post.id}`,()=>createAdminEmail({subject:'Story Bridge — a post was reported',lines:[`Post: ${post.title||'Untitled post'}`,`Reason: ${({wrong_or_harmful_information:'Wrong or harmful information',disrespectful:'Disrespectful',sacred_or_restricted:'Sacred or restricted knowledge',privacy:'Private information',spam:'Spam',other:'Other'})[reason]}`]}));
       return res.status(result.created?201:200).json({ok:true});
     }catch{return res.status(503).json({error:'Reports are temporarily unavailable. Please try again later.'})}
   });
@@ -172,6 +181,13 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   app.get('/api/admin/stats',session,async(req,res)=>{
     if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
     try{return res.json(await store.adminStats())}catch{return res.status(503).json({error:'Admin statistics are temporarily unavailable.'})}
+  });
+  app.post('/api/admin/notify-test',session,rateLimit,async(req,res)=>{
+    if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
+    if(!adminNotifyConfigured())return res.json({configured:false});
+    try { void Promise.resolve(sendAdminEmail(createAdminEmail({subject:'Story Bridge — test alert',lines:['This is a test alert for your Story Bridge admin email notifications.'],actionLabel:'Open admin'}))).catch(()=>{}); }
+    catch { /* notification delivery must never affect the admin page */ }
+    return res.json({configured:true});
   });
   app.post('/api/admin/posts/:id/hide',session,rateLimit,async(req,res)=>{
     if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
@@ -337,7 +353,17 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const hasCommunityChoice=storyRecord(req.story).some(version=>version.change==='Posted as Community member');
     if(b.showName===false&&!hasCommunityChoice)nextVersions=appendStoryVersion({...after,version_log:nextVersions},'Posted as Community member');
     if(labels.length||b.showName===false&&!hasCommunityChoice)changes.version_log=nextVersions;
-    try { const row = await store.update(req.params.id, req.account.id, changes); row ? res.json(await cleanSinglePost(row,true,store)) : res.sendStatus(409); }
+    const enteredPendingReview=changes.moderation_status==='pending_review'&&req.story.moderation_status!=='pending_review';
+    try {
+      const row = await store.update(req.params.id, req.account.id, changes);
+      if(!row)return res.sendStatus(409);
+      if(enteredPendingReview)scheduleAdminNotify(`pending-review:${row.id}`,async()=>{
+        const profile=await store.profile(row.owner_user_id).catch(()=>null);
+        const createdAt=Date.parse(row.created_at||'');
+        return createAdminEmail({subject:'Story Bridge — a first post awaits your approval',lines:[`Post: ${row.title||'Untitled post'}`,`Language: ${row.original_language||'Not provided'}`,`Author: ${profile?.display_name||'Community member'}`,`Time: ${Number.isFinite(createdAt)?new Date(createdAt).toISOString():new Date().toISOString()}`]});
+      });
+      return res.json(await cleanSinglePost(row,true,store));
+    }
     catch { res.status(503).json({ error: 'Story storage is unavailable.' }); }
   });
   app.get('/api/stories/:id/audio', optionalSession, ownerOnly, async (req, res) => {

@@ -10,7 +10,7 @@ Built for the Andela × OpenAI capstone *Telling African Stories*, and to be pre
 
 ## What you can do
 
-- **Discover** a feed of public stories: author, region, time, original language, "See more", photos, audio, the storyteller's translation, and sharing.
+- **Discover** a feed of public stories: author, region, time, original language, preserved paragraph breaks in previews, "See more", photos, audio, the storyteller's translation, and sharing.
 - **Share** a post in four steps — language → tell → translate → review. A post can hold text, a voice recording or audio file, up to six photos, and documentation: post type and section, region, people, tags, sources, a trust label (*Told by a community member*, *Research note*, *Museum record*) and a licence.
 - **Translate with AI** (optional): *Draft with AI* asks OpenAI for a first translation. It is marked unapproved until the storyteller approves it, and editing it clears the approval. An empty `OPENAI_TRANSLATION_MODEL` uses `gpt-6-luna`; an optional fallback model is tried once if the provider reports the primary model is missing or access is denied.
 - **Read in my language** — on-device translation in Chrome, Google Translate fallback; AI drafts via OpenAI when configured.
@@ -118,9 +118,18 @@ OPENAI_API_KEY=             # optional, server-only, never prefix with VITE_
 OPENAI_TRANSLATION_MODEL=   # optional, defaults to gpt-6-luna
 OPENAI_TRANSLATION_FALLBACK_MODEL= # optional, server-only; retry once on missing model/access denial
 STORY_BRIDGE_OBJECT_ADMIN_ID= # Supabase user id allowed to approve first posts
+RESEND_API_KEY=                # optional, server-only; Resend API key for admin alerts
+NOTIFY_FROM=                   # optional, server-only; verified Story Bridge sender
+ADMIN_NOTIFY_EMAIL=            # optional, server-only; admin alert recipient
 ```
 
-`SUPABASE_URL` and the publishable key are browser-safe. `SUPABASE_SECRET_KEY` and `OPENAI_API_KEY` are server-only: never commit them or expose them to the frontend.
+| Variable | Required | Scope | Purpose |
+|---|---|---|---|
+| `RESEND_API_KEY` | Optional; all three alert values are required together | Server only | Authenticates admin alert requests to Resend |
+| `NOTIFY_FROM` | Optional | Server only | Verified Story Bridge sender address |
+| `ADMIN_NOTIFY_EMAIL` | Optional | Server only | Receives first-post, report, welcome and test alerts |
+
+`SUPABASE_URL` and the publishable key are browser-safe. `SUPABASE_SECRET_KEY`, `OPENAI_API_KEY`, and the Resend alert settings are server-only: never commit their values or expose them to the frontend. Admin alerts are silently disabled unless all three Resend settings are present.
 
 For a new Supabase project:
 

@@ -12,6 +12,7 @@ import { mountAccountRoutes } from '../server/account-routes.js';
 import { createFileAccountStore } from '../server/file-account-store.js';
 import { createSupabaseStore } from '../server/supabase-store.js';
 import { contentSecurityPolicy } from '../server/csp.js';
+import { notifyAdmin, scheduleAdminNotification } from '../server/admin-notify.js';
 import { OBJECT_IDS } from '../src/object-records.js';
 
 const pair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -56,7 +57,7 @@ function fixtureStore() {
   return store;
 }
 async function serverFor(store=fixtureStore(),draftTranslation=async()=> 'Synthetic mock translation',options={}) {
-  const app=express();app.use(express.json());mountAccountRoutes(app,config,{store,verify:createTokenVerifier(config),draftTranslation,objectAdminId:options.objectAdminId||''});app.use((_req,res)=>res.status(503).end());
+  const app=express();app.use(express.json());mountAccountRoutes(app,config,{store,verify:createTokenVerifier(config),draftTranslation,objectAdminId:options.objectAdminId||'',...(options.routeOptions||{})});app.use((_req,res)=>res.status(503).end());
   const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
   return {base:`http://127.0.0.1:${server.address().port}`,server,store};
 }
@@ -440,6 +441,71 @@ test('admin statistics return file-store counts and reject non-admin accounts',a
   assert.equal((await fetch(`${base}/api/admin/stats`,{headers:auth('reader')})).status,403);
   const response=await fetch(`${base}/api/admin/stats`,{headers:auth('admin-user')});assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{accounts:2,profilesCompleted:1,publicPosts:1,pendingFirstPosts:1,openReports:1});
+});
+
+test('admin notifier sends a branded Resend payload with private configuration omitted from logs',async()=>{
+  const env={RESEND_API_KEY:'synthetic-resend-key',NOTIFY_FROM:'Story Bridge <alerts@example.test>',ADMIN_NOTIFY_EMAIL:'admin@example.test'};
+  const log=[];let request;
+  const status=await notifyAdmin({subject:'Story Bridge — test alert',text:'Review now',html:'<b>Review</b>'},{env,logger:value=>log.push(value),fetchImpl:async(url,options)=>{request={url,options};return{ok:true,status:200};}});
+  assert.equal(status,'sent');assert.equal(request.url,'https://api.resend.com/emails');assert.equal(request.options.method,'POST');
+  assert.equal(request.options.headers.Authorization,'Bearer synthetic-resend-key');
+  assert.deepEqual(JSON.parse(request.options.body),{from:env.NOTIFY_FROM,to:env.ADMIN_NOTIFY_EMAIL,subject:'Story Bridge — test alert',text:'Review now',html:'<b>Review</b>'});
+  assert.deepEqual(log,['{"adminNotify":"sent"}']);assert.ok(!log.join('').includes(env.RESEND_API_KEY));assert.ok(!log.join('').includes(env.ADMIN_NOTIFY_EMAIL));
+});
+
+test('admin notifier silently skips missing settings and deduplicates each event within the process',async()=>{
+  let calls=0;const log=[];
+  assert.equal(await notifyAdmin({subject:'skip'},{env:{},fetchImpl:async()=>{calls++;},logger:value=>log.push(value)}),'skipped');
+  assert.equal(calls,0);assert.deepEqual(log,[]);
+  const env={RESEND_API_KEY:'key',NOTIFY_FROM:'from@example.test',ADMIN_NOTIFY_EMAIL:'to@example.test'};
+  let startedResolve;const started=new Promise(resolve=>startedResolve=resolve);
+  const options={env,logger:value=>log.push(value),fetchImpl:async()=>{calls++;startedResolve();return{ok:true};}};
+  scheduleAdminNotification('test-dedupe-event',()=>({subject:'once',text:'x',html:'x'}),options);
+  scheduleAdminNotification('test-dedupe-event',()=>({subject:'twice',text:'x',html:'x'}),options);
+  await started;await new Promise(resolve=>setTimeout(resolve,0));
+  assert.equal(calls,1);
+});
+
+test('reporting still succeeds while Resend is unavailable and alert omits reporter identity',async t=>{
+  const store=fixtureStore();store.rows.set('alert-report-post',{...storyRow('alert-report-post','author','shared','public'),title:'Safe synthetic title',text:'Private body must not be mailed.'});
+  const env={RESEND_API_KEY:'test-key',NOTIFY_FROM:'Story Bridge <alerts@example.test>',ADMIN_NOTIFY_EMAIL:'admin@example.test'};
+  const logs=[];let emailPayload;let fetchStartedResolve;const fetchStarted=new Promise(resolve=>fetchStartedResolve=resolve);
+  const routeOptions={scheduleAdminNotify:(key,builder)=>scheduleAdminNotification(`report-test:${key}`,builder,{env,logger:value=>logs.push(value),fetchImpl:async(_url,options)=>{emailPayload=JSON.parse(options.body);fetchStartedResolve();throw new Error('mock Resend failure');}})};
+  const {base,server}=await serverFor(store,undefined,{routeOptions});t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const response=await fetch(`${base}/api/posts/alert-report-post/report`,{method:'POST',headers:{...auth('private-reporter'),'content-type':'application/json'},body:JSON.stringify({reason:'privacy',details:'Reporter note must not be emailed.'})});
+  assert.equal(response.status,201);assert.deepEqual(await response.json(),{ok:true});
+  await fetchStarted;await new Promise(resolve=>setTimeout(resolve,0));
+  assert.ok(logs.includes('{"adminNotify":"failed"}'));
+  assert.match(emailPayload.text,/Safe synthetic title/);assert.match(emailPayload.text,/Private information/);
+  assert.ok(!emailPayload.text.includes('Private body must not be mailed.'));assert.ok(!emailPayload.text.includes('Reporter note must not be emailed.'));
+  assert.ok(!emailPayload.text.includes('private-reporter@example.test'));assert.ok(!emailPayload.text.includes('private-reporter'));
+});
+
+test('first-post review alert uses profile name and test-alert endpoint is admin-only',async t=>{
+  const store=fixtureStore();
+  store.rows.set('alert-first-post',{...storyRow('alert-first-post','member','draft','private'),first_post:true,requested_visibility:'public',moderation_status:'approved',title:'First post title',text:'Story body is excluded from email.'});
+  await store.saveProfile('member',{display_name:'Member Profile',country:'South Africa'});
+  const sent=[];const tasks=[];
+  const routeOptions={
+    adminNotifyConfigured:()=>true,
+    adminNotify:message=>{sent.push(message);return Promise.resolve('sent');},
+    scheduleAdminNotify:(key,builder)=>{const task=Promise.resolve().then(builder).then(message=>sent.push(message));tasks.push(task);},
+  };
+  const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user',routeOptions});t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const submit=await fetch(`${base}/api/stories/alert-first-post`,{method:'PUT',headers:{...auth('member'),'content-type':'application/json'},body:JSON.stringify({approve:true,visibility:'public'})});
+  assert.equal(submit.status,200);assert.equal((await submit.json()).moderationStatus,'pending_review');
+  await Promise.all(tasks);
+  const firstPostEmail=sent.find(message=>message.subject==='Story Bridge — a first post awaits your approval');
+  assert.ok(firstPostEmail);assert.match(firstPostEmail.text,/First post title/);assert.match(firstPostEmail.text,/Synthetic/);assert.match(firstPostEmail.text,/Member Profile/);assert.match(firstPostEmail.text,/Time:/);assert.ok(!firstPostEmail.text.includes('Story body is excluded'));
+  assert.equal((await fetch(`${base}/api/admin/notify-test`,{method:'POST',headers:auth('member')})).status,403);
+  const testResponse=await fetch(`${base}/api/admin/notify-test`,{method:'POST',headers:auth('admin-user')});
+  assert.equal(testResponse.status,200);assert.deepEqual(await testResponse.json(),{configured:true});
+  assert.ok(sent.some(message=>message.subject==='Story Bridge — test alert'));
+  const welcomeResponse=await fetch(`${base}/api/account/welcome-complete`,{method:'POST',headers:auth('member')});
+  assert.equal(welcomeResponse.status,204);await Promise.all(tasks);
+  const welcomeEmail=sent.find(message=>message.subject==='Story Bridge — new member joined');
+  assert.ok(welcomeEmail);assert.match(welcomeEmail.text,/Member Profile/);assert.match(welcomeEmail.text,/South Africa/);
+  assert.ok(!welcomeEmail.text.includes('member@example.test'));
 });
 
 test('account deletion requires a session and removes profile, stories, media files and submitted reports',async t=>{

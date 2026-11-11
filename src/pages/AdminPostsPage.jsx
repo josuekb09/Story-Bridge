@@ -35,17 +35,21 @@ export default function AdminPostsPage({ posts = [], error = '', busyId = '', on
   const [reportBusyId,setReportBusyId]=useState('');
   const [hideTarget,setHideTarget]=useState('');
   const [hideNote,setHideNote]=useState('');
+  const [notifyBusy,setNotifyBusy]=useState(false);
+  const [notifyStatus,setNotifyStatus]=useState('');
   async function loadStats(){try{setStatsError('');setStats(await api('/api/admin/stats'));}catch(cause){setStats(null);setStatsError(cause.message||'Admin statistics are unavailable.');}}
   async function loadReports(){setReportsBusy(true);setReportsError('');try{const rows=await api('/api/admin/reports');if(!Array.isArray(rows))throw Error('Invalid reports response');setReports(rows);}catch(cause){setReportsError(cause.message||'The reports queue is unavailable.');}finally{setReportsBusy(false);}}
   useEffect(()=>{loadStats();},[]);
   useEffect(()=>{if(tab==='reports')loadReports();},[tab]);
   async function dismissReport(id){setReportBusyId(id);setReportsError('');try{await api(`/api/admin/reports/${encodeURIComponent(id)}/dismiss`,{method:'POST'});setReports(rows=>rows.filter(row=>row.id!==id));await loadStats();}catch(cause){setReportsError(cause.message||'The report could not be dismissed.');}finally{setReportBusyId('');}}
   async function hidePost(postId){if(!hideNote.trim())return;setReportBusyId(postId);setReportsError('');try{await api(`/api/admin/posts/${encodeURIComponent(postId)}/hide`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({note:hideNote})});setReports(rows=>rows.filter(row=>row.postId!==postId));setHideTarget('');setHideNote('');await loadStats();}catch(cause){setReportsError(cause.message||'The post could not be hidden.');}finally{setReportBusyId('');}}
+  async function sendTestAlert(){setNotifyBusy(true);setNotifyStatus('');try{const result=await api('/api/admin/notify-test',{method:'POST'});setNotifyStatus(result.configured?'Sent':'Email alerts are not configured');}catch{setNotifyStatus('Email alert test could not be sent.');}finally{setNotifyBusy(false);}}
   return <main className="admin-main">
     <header className="admin-head">
       <p className="eyebrow">Moderation</p>
       <h1>Admin review</h1>
       <p className="muted">Review first posts before they become public.</p>
+      <div className="admin-actions"><button type="button" className="secondary" disabled={notifyBusy} onClick={sendTestAlert}>{notifyBusy?'Sending…':'Send me a test email'}</button>{notifyStatus&&<span role="status">{notifyStatus}</span>}</div>
     </header>
     <section className="admin-stats" aria-label="Platform numbers">
       {stats ? [['Accounts',stats.accounts],['Completed profiles',stats.profilesCompleted],['Public posts',stats.publicPosts],['Pending first posts',stats.pendingFirstPosts],['Open reports',stats.openReports]].map(([label,value])=><article className="admin-stat" key={label}><b>{value}</b><span>{label}</span></article>) : <p className="muted" role={statsError?'alert':'status'}>{statsError||'Loading platform numbers…'}</p>}
