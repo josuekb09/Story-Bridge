@@ -115,7 +115,7 @@ the chosen files in `src/data/showcase.js`.
 - [x] **4. Direct search load:** the controller fetches public stories on an initial `search` route (source commit `8c67227`). In fresh browser contexts, `/search?q=zulu` showed both the Zulu culture and Nosihle’s story on the first load and after reload; the input retained `zulu`, story-list requests returned 200, and the console had no errors. Build and all 106 tests passed; no further code change was needed.
 - [x] **5. Unknown routes, Zulu summary copy and brand translation guard:** commit `57da29f` keeps unrecognized paths on a simple 404 page with a Discover link and title. Live `/story/abc` preserved its URL; `/cultures/za-zulu-beadwork` showed “No summary yet — read the member stories below” and one public story. The live wordmark carries `translate="no"`; no console errors. Build and all 109 tests passed.
 - [x] **6. Demo video comparison and poster.**
-- [ ] **7. README and fresh screenshot gallery.**
+- [x] **7. README and fresh screenshot gallery:** commit `b392e95` replaced the old gallery with 40 public live captures at 1440×900 @2x and 390×844 @2x, including all eight posts and Nosihle's Read in control plus French/Tshiluba results. Every capture waited for decoded images; none includes a `Loading photo…` state. The README and submission notes now link the selected 5:00 video and poster and use `YOUTUBE_LINK_HERE`. Build, 110 tests, secret check and 83 local README links passed. Live Playwright saw 8 stories / 2 languages, 8 Discover cards, 0 placeholders, both labelled translations and 0 browser errors. GitHub README and raw poster/video links returned 200. The screenshot/report-menu styling fix is `0b963f2`.
 - [ ] **8. Final build, test, secret check and live smoke matrix.**
 
 ## Final submission run — 11 November 2026
@@ -128,6 +128,6 @@ the chosen files in `src/data/showcase.js`.
 - Live verification after push: Render home and Discover returned 200; after the counter animation settled, home showed 8 stories and 2 languages, Discover showed 8 posts, and Playwright recorded 0 console errors. GitHub raw links for both MP4s returned 200.
 
 ### Sections 7–8 and final video
-- [ ] Capture fresh screenshots and update README and submission notes.
+- [x] Capture fresh screenshots and update README and submission notes — `b392e95` (with the deployed compact report-menu fix `0b963f2`).
 - [ ] Run the final desktop/mobile live route matrix and record the control-gate result.
 - [ ] Polish the selected video, captions and poster; publish the README demo link.
