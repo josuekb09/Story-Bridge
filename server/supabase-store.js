@@ -52,6 +52,7 @@ export function createSupabaseStore(config, client = createClient(config.url, co
       }
     },
     async profile(userId) { const { data, error } = await client.from('profiles').select('*').eq('user_id', userId).maybeSingle(); fail(error); return data; },
+    async profilesByUserIds(userIds) { if(!userIds.length)return[];const {data,error}=await client.from('profiles').select('user_id,display_name,avatar_key').in('user_id',userIds);fail(error);return data||[]; },
     async listOpenPostReports() { const {data,error}=await client.from('reports').select('id,target_id,reason,details,created_at').eq('target_type','post').eq('status','open').order('created_at',{ascending:false});fail(error);return data||[]; },
     async createPostReport(record) {
       const id=stablePostReportId(record.reporter_id,record.target_id);

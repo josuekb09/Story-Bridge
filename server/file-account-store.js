@@ -52,6 +52,7 @@ export function createFileAccountStore(directory) {
     async listPostMedia(postId) { return (await read(postMediaFile)).filter(row=>row.post_id===postId&&row.kind==='image'); },
     async getPostImage(key) { const buffer=await fs.readFile(path.join(postMediaDir,`${key}.webp`));return {buffer,mime:'image/webp'}; },
     async profile(userId) { return (await read(profilesFile)).find(row=>row.user_id===userId)||null; },
+    async profilesByUserIds(userIds) { const wanted=new Set(userIds);return (await read(profilesFile)).filter(row=>wanted.has(row.user_id)); },
     async saveProfile(userId,profile) { return serialize(async()=>{const rows=await read(profilesFile);let row=rows.find(item=>item.user_id===userId);if(row)Object.assign(row,profile);else{row={user_id:userId,...profile};rows.push(row);}await write(profilesFile,rows);return {...row};}); },
     async putProfileAvatar(key,buffer) { await fs.mkdir(avatarDir,{recursive:true});await fs.writeFile(path.join(avatarDir,`${key}.webp`),buffer,{flag:'wx'});return {key,mime:'image/webp'}; },
     async getProfileAvatar(key) { const buffer=await fs.readFile(path.join(avatarDir,`${key}.webp`));return {buffer,mime:'image/webp'}; },

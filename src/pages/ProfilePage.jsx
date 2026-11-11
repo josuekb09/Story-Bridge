@@ -64,7 +64,7 @@ export default function ProfilePage({ navigate, profileState, profileError, load
             <button className="secondary" onClick={() => navigate('share')}>Share a story</button>
             <button className="secondary" onClick={() => navigate('mine')}>My stories</button>
           </div>
-          <p className="muted profile-privacy">Your name appears on a story only when you choose to show it.</p>
+          <p className="muted profile-privacy">Your profile name and photo appear on public posts by default. You can choose Community member for an individual post.</p>
           <details id="account-settings" className="profile-account" open={accountOpen} onToggle={event => onAccountToggle?.(event.currentTarget.open)}><summary>Account</summary>{email && <p><strong>Email address:</strong> <span>{email}</span></p>}<div className="actions"><button type="button" className="secondary" onClick={() => signOut()}>Sign out</button><button type="button" className="secondary" onClick={() => signOut(true)}>Sign out of all devices</button></div></details>
         </>}
 

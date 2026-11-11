@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import AudioPlayer from '../components/AudioPlayer.jsx';
+import AuthorAvatar, { authorName } from '../components/AuthorAvatar.jsx';
 import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
 import ReportPostAction from '../components/ReportPostAction.jsx';
 import { translationOriginLabel } from '../lib/i18n.js';
@@ -10,11 +11,6 @@ import '../styles/components/social.css';
 import '../styles/components/cultures.css';
 
 const PAGE_SIZE = 10;
-
-function initials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
-  return parts.length ? (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase() : '·';
-}
 
 function timeAgo(value) {
   const date = value ? new Date(value) : null;
@@ -29,13 +25,11 @@ function timeAgo(value) {
 function PostCard({ story, showStory, translationStoryId, setTranslationStoryId, signedIn, isAuthor, onReportSignIn, onReported }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [authorAvatarUnavailable, setAuthorAvatarUnavailable] = useState(false);
-  const author = story.storytellerName || 'Community member';
+  const author = authorName(story);
   const text = story.text || '';
   const long = text.length > 280;
   const showingTranslation = translationStoryId === story.id;
   const images = story.images || [];
-  const authorAvatar = story.authorAvatarUrl && !authorAvatarUnavailable;
 
   async function share() {
     const title = story.title || 'A story on Story Bridge';
@@ -48,9 +42,7 @@ function PostCard({ story, showStory, translationStoryId, setTranslationStoryId,
 
   return <article className="post" aria-labelledby={`post-title-${story.id}`}>
     <header className="post-head">
-      {authorAvatar
-        ? <img className="post-avatar post-avatar-image" src={story.authorAvatarUrl} alt="" loading="lazy" decoding="async" onError={() => setAuthorAvatarUnavailable(true)}/>
-        : <span className="post-avatar" aria-hidden="true">{initials(author)}</span>}
+      <AuthorAvatar className="post-avatar" story={story}/>
       <div className="post-who">
         <b>{author}</b>
         <span>{[story.region, timeAgo(story.createdAt)].filter(Boolean).join(' · ')}</span>

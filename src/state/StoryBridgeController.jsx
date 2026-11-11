@@ -58,7 +58,7 @@ export default function App() {
   const [detailReturnPage, setDetailReturnPage] = useState('discover');
   const [translationStoryId, setTranslationStoryId] = useState('');
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ originalLanguage: '', text: '', translationLanguage: '', translation: '', translationOrigin: 'storyteller', translationApproved: false, storytellerName: '', showName: false });
+  const [form, setForm] = useState({ originalLanguage: '', text: '', translationLanguage: '', translation: '', translationOrigin: 'storyteller', translationApproved: false, postAsCommunityMember: false });
   const [translationBusy, setTranslationBusy] = useState(false);
   const [translationError, setTranslationError] = useState('');
   const [file, setFile] = useState(null);
@@ -129,7 +129,7 @@ export default function App() {
   const mutationRequest = useRef(0);
   const translationRequest = useRef(0);
   const translationBusyRef = useRef(false);
-  const emptyForm = { originalLanguage: '', text: '', translationLanguage: '', translation: '', translationOrigin: 'storyteller', translationApproved: false, storytellerName: '', showName: false };
+  const emptyForm = { originalLanguage: '', text: '', translationLanguage: '', translation: '', translationOrigin: 'storyteller', translationApproved: false, postAsCommunityMember: false };
   const [authBusy, setAuthBusy] = useState(false);
   const [welcomeBusy,setWelcomeBusy]=useState(false);
   const [welcomeError,setWelcomeError]=useState('');
@@ -296,7 +296,7 @@ export default function App() {
     api(`/api/stories/${encodeURIComponent(id)}`).then(story => {
       if (live && currentSession.current === identity && identityEpoch.current === epoch && detailRequest.current === requestId) {
         const activeSessionKey = session?.user?.id || (accountConfig.account ? '' : 'legacy');
-        setCurrent({ ...story, _own: listOwner === activeSessionKey && mine.some(item => item.id === id) });
+        setCurrent({ ...story, _own: !!story.isOwner || listOwner === activeSessionKey && mine.some(item => item.id === id) });
       }
     }).catch(() => {
       if (live && currentSession.current === identity && identityEpoch.current === epoch && detailRequest.current === requestId) setError('This story could not be loaded. It may be private or no longer available.');
@@ -399,7 +399,7 @@ export default function App() {
       if (typeof profile?.country === 'string') setProfileCountry(profile.country);
       if (Array.isArray(profile?.languages)) setProfileLanguages(profile.languages.join(', '));
       setProfileState('ready');
-      if (scopeIsCurrent(scope)) { setProfileNotice('Profile saved.'); setToast('Profile saved'); }
+      if (scopeIsCurrent(scope)) { await refresh(scope.identity); setProfileNotice('Profile saved.'); setToast('Profile saved'); }
       return true;
     } catch {
       if (profileRequest.current !== requestId) return false;
@@ -505,6 +505,7 @@ export default function App() {
       const body = new FormData(); body.append('avatar', file);
       await api('/api/account/profile/avatar', { method: 'POST', body });
       await showAvatar('/api/account/profile/avatar');
+      await refresh(currentSession.current);
       setToast('Photo updated');
     } catch { setProfileError('Your photo could not be saved. Use a JPEG, PNG or WebP under 2 MB.'); }
     finally { setAvatarBusy(false); }
@@ -569,7 +570,7 @@ export default function App() {
       if (scope.page === 'review' && review?.id === id) {
         setReview(story); setReviewBaseline({ text: story.text || '', translation: story.translation || '', visibility: story.visibility || 'private' });
       }
-      if (current?.id === id) setCurrent(story);
+      if (current?.id === id) setCurrent({ ...story, _own: current._own });
       await refresh(scope.identity);
       return story;
     } finally {
@@ -577,6 +578,13 @@ export default function App() {
         mutationBusyRef.current = false; setSaving(false);
       }
     }
+  }
+
+  async function changeAuthorVisibility(story, showName) {
+    try {
+      const saved = await update(story.id, { showName });
+      if (saved) setToast(showName ? 'Your name and photo now appear on this post' : 'This post will appear as Community member');
+    } catch (cause) { setError(cause.message || 'The author choice could not be saved.'); }
   }
 
   function pendingReviewEdits() {
@@ -625,7 +633,9 @@ export default function App() {
     try {
       const fullStory = await api(`/api/stories/${story.id}`);
       if (!scopeIsCurrent(scope) || detailRequest.current !== requestId) return;
-      setCurrent({ ...fullStory, _own: own });
+      const activeKey = session?.user?.id || (accountConfig?.account ? '' : 'legacy');
+      const ownsPost = own || !!fullStory.isOwner || (listOwner === activeKey && mine.some(item => item.id === fullStory.id));
+      setCurrent({ ...fullStory, _own: ownsPost });
       setTranslationStoryId('');
       transitionTo('detail', story.id);
     } catch (cause) { if (scopeIsCurrent(scope) && detailRequest.current === requestId) setError(cause.message); }
@@ -647,7 +657,7 @@ export default function App() {
   const visibleObjects=publicObjects.filter(record=>(museumFilter==='all'||record.holderToday===museumFilter)&&(objectTypeFilter==='all'||record.whatItIs===objectTypeFilter));
   const museumChoices=[...new Set(OBJECT_RECORDS.map(record=>record.holderToday))];
   const typeChoices=[...new Set(OBJECT_RECORDS.map(record=>record.whatItIs))];
-  const objectStories = objectId => [...new Map([...visibleStories,...visibleMine].filter(story=>story.objectId===objectId).map(story=>[story.id,story])).values()];
+  const objectStories = objectId => [...new Map([...visibleMine,...visibleStories].filter(story=>story.objectId===objectId).map(story=>[story.id,story])).values()];
   async function saveObjectAccess(id, access) {
     setObjectAccessSaving(id); setObjectAccessError('');
     try { await api(`/api/objects/${id}/access`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({access})}); setObjectSettings(value=>({...value,objects:value.objects.map(item=>item.id===id?{...item,access}:item)})); }
@@ -672,14 +682,14 @@ export default function App() {
       {page === 'workspace' && accountConfig.account && <WorkspacePage savedProfileName={savedProfileName} profileState={profileState} navigate={navigate} listState={listState} listErrors={listErrors} retryList={retryList} counts={counts} setCollectionFilter={setCollectionFilter} draftStories={draftStories} startReview={startReview}/>}
       {(page === 'listen' || page === 'discover') && <FeedPage accountConfig={accountConfig} visibleStories={visibleStories} ownedStoryIds={ownedStoryIds} languageFilter={languageFilter} setLanguageFilter={setLanguageFilter} regionFilter={regionFilter} setRegionFilter={setRegionFilter} audioOnly={audioOnly} setAudioOnly={setAudioOnly} listState={listState} listErrors={listErrors} retryList={retryList} filteredStories={filteredStories} navigate={navigate} translationStoryId={translationStoryId} setTranslationStoryId={setTranslationStoryId} showStory={showStory} transitionTo={transitionTo} signedIn={!!session} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')} onCulture={openCulture}/>}
       {page === 'profile' && accountConfig.account && <ProfilePage navigate={navigate} profileState={profileState} profileError={profileError} loadProfile={loadProfile} identity={currentSession.current} epoch={identityEpoch.current} profileName={profileName} setProfileName={setProfileName} profileCountry={profileCountry} setProfileCountry={setProfileCountry} profileLanguages={profileLanguages} setProfileLanguages={setProfileLanguages} profileAvatar={profileAvatar} profileNotice={profileNotice} saveProfile={saveProfile} signOut={signOut} deleteAccount={deleteAccount} changeAvatar={changeAvatar} avatarBusy={avatarBusy} storyCount={visibleMine.length} publicCount={counts.public} email={session?.user?.email || ''} accountOpen={profileAccountOpen} onAccountToggle={setProfileAccountOpen}/>}
-      {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage} signedIn={!!session} isAuthor={!!current._own||!!session&&listState.mine==='loading'} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')}/>}
+      {page === 'detail' && current && <StoryDetailPage story={current} navigate={navigate} backPage={detailReturnPage} signedIn={!!session} isAuthor={!!current._own||!!session&&listState.mine==='loading'} profileAvatar={profileAvatar} onChangeAuthorVisibility={showName=>changeAuthorVisibility(current,showName)} saving={saving} onReportSignIn={()=>setShowSignIn(true)} onReported={()=>setToast('Thanks. A moderator will review this.')}/>}
       {page === 'detail' && !current && <main>{error ? <section className="panel" role="alert"><p>{error}</p><button className="secondary" onClick={() => navigate(accountConfig.account ? 'discover' : 'listen')}>Back to stories</button></section> : <p role="status">Loading story…</p>}</main>}
       {page === 'objects' && <ObjectsPage objectSettings={objectSettings} visibleObjects={visibleObjects} museumFilter={museumFilter} setMuseumFilter={setMuseumFilter} museumChoices={museumChoices} objectTypeFilter={objectTypeFilter} setObjectTypeFilter={setObjectTypeFilter} typeChoices={typeChoices} transitionTo={transitionTo} retry={() => setObjectSettings(null)}/>}
       {page === 'group-record' && <CulturalGroupPage record={CULTURAL_GROUP_RECORD} navigate={navigate} onAddVoice={addVoiceToObject}/>}
       {page.startsWith('object:') && <ObjectRecordPage source={OBJECT_RECORDS.find(item => item.id === page.slice(7))} objectSettings={objectSettings} session={session} objectAccessSaving={objectAccessSaving} objectAccessError={objectAccessError} saveObjectAccess={saveObjectAccess} linkedStories={objectStories(page.slice(7))} showStory={showStory} addVoiceToObject={addVoiceToObject} navigate={navigate}/>}
-      {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft}/>}
+      {page === 'share' && <SharePage objectContext={objectContext} form={form} setForm={setForm} change={change} postMeta={postMeta} setPostMeta={setPostMeta} file={file} fileKind={fileKind} audioSaved={audioSaved} saving={saving} captureBusy={captureBusy} onAudioChange={onAudioChange} onCaptureBusyChange={onCaptureBusyChange} shareStep={shareStep} setShareStep={setShareStep} postImages={postImages} setPostImages={setPostImages} imageDetails={imageDetails} setImageDetails={setImageDetails} translationBusy={translationBusy} translationError={translationError} requestTranslationDraft={requestTranslationDraft} translationApprovalCanContinue={translationApprovalCanContinue} createDraft={createDraft} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onEditProfile={()=>navigate('profile')}/>}
       {page === 'review' && review && <ReviewPage review={review} setReview={setReview} saving={saving} saveReviewEdits={saveReviewEdits} checkedBy={checkedBy} setCheckedBy={setCheckedBy} reviewVisibility={reviewVisibility} setReviewVisibility={setReviewVisibility} saveReview={saveReview} objectContext={objectContext} transitionTo={transitionTo} navigate={navigate}/>}
-      {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId} profileAvatar={profileAvatar}/>}
+      {page === 'mine' && <MyStoriesPage accountConfig={accountConfig} listState={listState} listErrors={listErrors} retryList={retryList} collectionFilter={collectionFilter} setCollectionFilter={setCollectionFilter} visibleMine={visibleMine} sortedMine={sortedMine} counts={counts} category={category} showStory={showStory} startReview={startReview} withdrawConfirmationId={withdrawConfirmationId} setWithdrawConfirmationId={setWithdrawConfirmationId} saving={saving} withdrawStory={withdrawStory} onChangeAuthorVisibility={changeAuthorVisibility} deleteConfirmationId={deleteConfirmationId} setDeleteConfirmationId={setDeleteConfirmationId} deleteStory={deleteStory} deletingId={deletingId} profileAvatar={profileAvatar}/>}
       {page === 'cultures' && <CulturesPage stories={publicStories} showStory={showStory} navigate={navigate}/>}
       {page === 'search' && <SearchPage stories={publicStories} showStory={showStory}/>}
       {page === 'admin' && adminAccess==='available' && <AdminPostsPage posts={pendingPosts} error={pendingPostsError} busyId={adminBusyId} onAction={moderatePendingPost} onRetry={()=>setAdminRetry(value=>value+1)}/>}

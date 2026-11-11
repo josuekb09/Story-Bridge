@@ -68,7 +68,8 @@ test('object-linked public story keeps author and fingerprint and is hidden with
     assert.equal((await fetch(`${base}/api/stories/${story.id}`)).status,404);
     const memberStories=await fetch(`${base}/api/stories`,{headers:{authorization:'Bearer member-token'}}).then(r=>r.json());
     assert.equal(memberStories.length,1);assert.equal(memberStories[0].objectId,'luluwa-mask');
-    assert.equal(memberStories[0].storytellerName,undefined);
+    assert.equal(memberStories[0].author.name,'Community Speaker');
+    assert.equal(memberStories[0].storytellerName,'Community Speaker');
     assert.equal(memberStories[0].versionLog[0].fingerprint,story.versionLog[0].fingerprint);
   });
 });

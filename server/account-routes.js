@@ -12,18 +12,45 @@ import { sendSitemap } from './sitemap.js';
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 // Busboy uses defCharset for text field values and defParamCharset for part-header parameters.
 const UTF8_MULTIPART = { defCharset: 'utf8', defParamCharset: 'utf8' };
-const clean = (row, owner = false) => {
+const isCommunityMemberPost = row => row?.show_name === false && storyRecord(row).some(version => version.change === 'Posted as Community member');
+const publicAuthorAvatarUrl = (row, profile) => {
+  if (!row?.owner_user_id || !profile?.avatar_key) return '';
+  const version = sha256(String(profile.avatar_key)).slice(0, 12);
+  return `/api/stories/${encodeURIComponent(row.id)}/author-avatar?v=${version}`;
+};
+const authorFor = (row, profile, includeAvatar = false) => {
+  if (isCommunityMemberPost(row)) return { name: 'Community member', anonymous: true };
+  const name = String(profile?.display_name || '').trim() || String(row.storyteller_name || '').trim();
+  const author = name ? { name } : { name: 'Community member', anonymous: true };
+  const avatarUrl = includeAvatar && name ? publicAuthorAvatarUrl(row, profile) : '';
+  if (avatarUrl) author.avatarUrl = avatarUrl;
+  return author;
+};
+const clean = (row, owner = false, profile = null, includeAvatar = false) => {
   const out = { id: row.id, objectId: row.object_id || null, title:row.title||'',kind:row.kind||'story',section:row.section||'stories',trustLabel:row.trust_label||'Told by a community member',licence:row.licence||'All rights reserved',region:row.region||'',people:row.people||'',tags:row.tags||[],sources:row.sources||[],consentConfirmed:!!row.consent_confirmed,access:row.access||'Public',moderationStatus:row.moderation_status||'approved',originalLanguage: row.original_language, text: row.text, translationLanguage: row.translation_language, translation: row.translation, translationOrigin: row.translation_origin || 'storyteller', translationChecked: row.translation_checked, checkedBy: row.translation_checked ? row.checked_by : '', visibility: row.visibility, status: row.status, createdAt: row.created_at, audio: !!row.audio_key, versionLog:storyRecord(row) };
-  if (row.show_name || owner) out.storytellerName = row.storyteller_name;
+  const author = authorFor(row, profile, includeAvatar);
+  out.author = author;
+  out.storytellerName = author.name;
+  if (owner) out.showName = !isCommunityMemberPost(row);
+  if (includeAvatar && author.avatarUrl) out.authorAvatarUrl = author.avatarUrl;
   return out;
 };
-const cleanPost = async (row, owner = false, store, includePublicAuthorAvatar = false) => ({
-  ...clean(row,owner),
-  ...(includePublicAuthorAvatar && row.show_name && row.owner_user_id
-    ? { authorAvatarUrl:`/api/stories/${encodeURIComponent(row.id)}/author-avatar` }
-    : {}),
+const cleanPost = async (row, owner = false, store, profile = null, includeAvatar = false) => ({
+  ...clean(row, owner, profile, includeAvatar),
   images:(await store.listPostMedia?.(row.id)||[]).filter(media=>media.kind==='image').map(media=>({id:media.id,kind:media.kind,altText:media.alt_text,credit:media.credit,licence:media.licence,width:media.width,height:media.height,sha256:media.sha256,url:`/api/posts/${row.id}/media/${encodeURIComponent(media.storage_key)}`})),
 });
+const cleanPosts = async (rows, owner, store, includeAvatar = () => false) => {
+  const userIds = [...new Set(rows.map(row => row.owner_user_id).filter(Boolean))];
+  const profileRows = userIds.length
+    ? await (store.profilesByUserIds ? store.profilesByUserIds(userIds) : store.profile ? Promise.all(userIds.map(userId => store.profile(userId))) : [])
+    : [];
+  const profiles = new Map((profileRows || []).filter(Boolean).map(profile => [profile.user_id, profile]));
+  return Promise.all(rows.map(row => cleanPost(row, owner, store, profiles.get(row.owner_user_id) || null, includeAvatar(row))));
+};
+const cleanSinglePost = async (row, owner, store, includeAvatar = false) => {
+  const profile = row?.owner_user_id && store.profile ? await store.profile(row.owner_user_id) : null;
+  return cleanPost(row, owner, store, profile, includeAvatar);
+};
 
 export function mountAccountRoutes(app, config, { store = createSupabaseStore(config), verify = createTokenVerifier(config), rateLimit = (_req, _res, next) => next(), draftTranslation = async () => { throw new Error('translation-service-unavailable'); }, objectAdminId = process.env.STORY_BRIDGE_OBJECT_ADMIN_ID || '' } = {}) {
   const audioUpload = multer({ ...UTF8_MULTIPART, storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 }, fileFilter: (_req, file, cb) => /^audio\/[a-z0-9.+-]+$/i.test(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('invalid audio'), { code: 'INVALID_AUDIO' })) });
@@ -117,7 +144,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   });
   app.get('/api/admin/posts/pending', session, async (req,res)=>{
     if(!objectAdminId||req.account.id!==objectAdminId)return res.sendStatus(403);
-    try{res.json(await Promise.all((await store.listPending()).map(row=>cleanPost(row,true,store))))}catch{res.status(503).json({error:'Pending posts are unavailable.'})}
+    try{const rows=await store.listPending();res.json(await cleanPosts(rows,false,store))}catch{res.status(503).json({error:'Pending posts are unavailable.'})}
   });
   app.post('/api/posts/:id/report',session,rateLimit,async(req,res)=>{
     const reason=req.body?.reason;
@@ -169,16 +196,16 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     try {
       const row=await store.get(req.params.id);
       if(!row)return res.sendStatus(404);
-      if(row.moderation_status!=='pending_review')return row.moderation_status==='approved'&&row.status==='shared'?res.json(clean(row,true)):res.sendStatus(404);
+      if(row.moderation_status!=='pending_review')return row.moderation_status==='approved'&&row.status==='shared'?res.json(await cleanSinglePost(row,false,store,row.visibility==='public')):res.sendStatus(404);
       const next={...row,status:'shared',visibility:row.requested_visibility||'public',moderation_status:'approved',first_post:false};
       next.version_log=appendStoryVersion(next,'Admin approved first post');
       stage='persist_approval';
       const saved=typeof store.approvePending==='function'
         ? await store.approvePending(row.id,{status:next.status,visibility:next.visibility,moderation_status:next.moderation_status,first_post:false,version_log:next.version_log})
         : await store.update(row.id,row.owner_user_id,{status:next.status,visibility:next.visibility,moderation_status:next.moderation_status,first_post:false,version_log:next.version_log});
-      if(saved)return res.json(clean(saved,true));
+      if(saved)return res.json(await cleanSinglePost(saved,false,store,saved.visibility==='public'));
       const current=await store.get(row.id);
-      return current?.moderation_status==='approved'&&current.status==='shared'?res.json(clean(current,true)):res.sendStatus(409);
+      return current?.moderation_status==='approved'&&current.status==='shared'?res.json(await cleanSinglePost(current,false,store,current.visibility==='public')):res.sendStatus(409);
     } catch(error) {
       const rawCode=error?.cause?.code||error?.code||error?.cause?.status||error?.status||error?.name||'unknown';
       const errorCode=typeof rawCode==='string'&&/^[A-Za-z0-9_-]{1,32}$/.test(rawCode)?rawCode:'unknown';
@@ -197,7 +224,7 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       const saved=typeof store.approvePending==='function'
         ? await store.approvePending(row.id,changes)
         : await store.update(row.id,row.owner_user_id,changes);
-      return saved?res.json(clean(saved,true)):res.sendStatus(409);
+      return saved?res.json(await cleanSinglePost(saved,false,store)):res.sendStatus(409);
     } catch {
       return res.status(503).json({error:'Post could not be kept private.'});
     }
@@ -206,10 +233,10 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const access = await objectAccessList();
     const restricted = new Set(access.filter(item=>item.access==='Community only').map(item=>item.id));
     const rows = (await store.listPublic()).filter(row => (!!req.account||row.access!=='Community only')&&(!row.object_id || !restricted.has(row.object_id) || !!req.account)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));
-    res.json(await Promise.all(rows.map(row => cleanPost(row,false,store,
-      row.moderation_status!=='pending_review' && row.access!=='Community only' && (!row.object_id || !restricted.has(row.object_id))))));
+    res.json(await cleanPosts(rows,false,store,
+      row => row.moderation_status!=='pending_review' && row.access!=='Community only' && (!row.object_id || !restricted.has(row.object_id))));
   } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
-  app.get('/api/mine', session, async (req, res) => { try { res.json(await Promise.all((await store.listMine(req.account.id)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).map(row => cleanPost(row,true,store)))); } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
+  app.get('/api/mine', session, async (req, res) => { try { const rows=(await store.listMine(req.account.id)).sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));res.json(await cleanPosts(rows,true,store)); } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); } });
   app.post('/api/stories', session, rateLimit, limitPostBody, parsePostUpload, async (req, res) => {
     const b = req.body || {};
     const metadataError=validatePostMetadata({...b,consentConfirmed:b.consentConfirmed});
@@ -229,32 +256,39 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
       const existingPosts=await store.listMine(req.account.id);
       const firstPost=existingPosts.length===0||existingPosts.some(item=>item.first_post&&item.moderation_status==='pending_review');
       let row;
-      const record={ ...normalized, owner_user_id: req.account.id, owner_hash: null, first_post:firstPost, moderation_status:'approved',requested_visibility:'private', object_id:b.objectId || null, original_language: b.originalLanguage.trim(), text: b.text || '', translation_language: b.translationLanguage || '', translation: b.translation || '', translation_origin: b.translation ? (b.translationOrigin === 'ai_approved' && isTranslationApproved(b.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller', translation_checked: false, checked_by: '', storyteller_name: String(b.storytellerName || '').slice(0,120), show_name: b.showName === true || b.showName === 'true', visibility: 'private', status: 'draft', audio_key: audioKey, audio_mime:audioFile?.mimetype || '', audio_sha256:audioFile?sha256(audioFile.buffer):'' };
+      const postAsCommunityMember = b.postAsCommunityMember === true || b.postAsCommunityMember === 'true';
+      const record={ ...normalized, owner_user_id: req.account.id, owner_hash: null, first_post:firstPost, moderation_status:'approved',requested_visibility:'private', object_id:b.objectId || null, original_language: b.originalLanguage.trim(), text: b.text || '', translation_language: b.translationLanguage || '', translation: b.translation || '', translation_origin: b.translation ? (b.translationOrigin === 'ai_approved' && isTranslationApproved(b.translationApproved) ? 'ai_approved' : 'storyteller') : 'storyteller', translation_checked: false, checked_by: '', storyteller_name: String(b.storytellerName || '').slice(0,120), show_name: !postAsCommunityMember, visibility: 'private', status: 'draft', audio_key: audioKey, audio_mime:audioFile?.mimetype || '', audio_sha256:audioFile?sha256(audioFile.buffer):'' };
       record.version_log=[makeStoryVersion(record,'Story created')];
+      if(postAsCommunityMember)record.version_log=appendStoryVersion(record,'Posted as Community member');
       try { row = await store.create(record); }
       catch (error) { if (audioKey && store.removeAudio) await store.removeAudio(audioKey).catch(() => {}); throw error; }
       const media=[...converted.map(item=>({...item,post_id:row.id})),...(audioKey?[{id:crypto.randomUUID(),post_id:row.id,kind:'audio',storage_key:audioKey,alt_text:null,credit:'',licence:normalized.licence,width:null,height:null,sha256:sha256(audioFile.buffer)}]:[])];
       if(media.length)await store.createPostMedia(media);
       if(converted.length)row.images=converted.map(item=>({...item,url:`/api/posts/${row.id}/media/${item.storage_key}`}));
-      res.status(201).json(await cleanPost(row,true,store));
+      res.status(201).json(await cleanSinglePost(row,true,store));
     } catch { res.status(503).json({ error: 'Story storage is unavailable.' }); }
   });
   app.get('/api/posts/:id/media/:key',optionalSession,async(req,res)=>{try{const row=await store.get(req.params.id);if(!row)return res.sendStatus(404);const isOwner=!!req.account&&row.owner_user_id===req.account.id;const isAdmin=!!req.account&&!!objectAdminId&&req.account.id===objectAdminId;const isPublic=row.status==='shared'&&row.visibility==='public'&&row.moderation_status!=='pending_review';if(!isOwner&&!isAdmin&&!isPublic)return res.sendStatus(404);const access=await objectAccessList();if(!req.account&&row.access==='Community only')return res.sendStatus(404);if(!req.account&&row.object_id&&access.some(item=>item.id===row.object_id&&item.access==='Community only'))return res.sendStatus(404);const item=(await store.listPostMedia(row.id)).find(media=>media.storage_key===req.params.key);if(!item)return res.sendStatus(404);const image=await store.getPostImage(item.storage_key);res.set('X-Content-Type-Options','nosniff').set('Cache-Control',isPublic?'public, max-age=300':'private, no-store').type(image.mime).send(image.buffer)}catch{return res.status(503).json({error:'Post media is unavailable.'})}});
   app.get('/api/stories/:id', optionalSession, ownerOnly, async (req, res) => {
     if(req.story.access==='Community only'&&!req.account)return res.sendStatus(404);
-    if (req.story.object_id && !req.account) {
-      try { if ((await objectAccessList()).some(item=>item.id===req.story.object_id&&item.access==='Community only')) return res.sendStatus(404); }
+    let objectIsRestricted=false;
+    if (req.story.object_id) {
+      try { objectIsRestricted=(await objectAccessList()).some(item=>item.id===req.story.object_id&&item.access==='Community only'); }
       catch { return res.status(503).json({error:'Story access is unavailable.'}); }
+      if(objectIsRestricted&&!req.account)return res.sendStatus(404);
     }
-    res.json(await cleanPost(req.story, req.isStoryOwner,store));
+    const includeAvatar=req.story.status==='shared'&&req.story.visibility==='public'&&req.story.moderation_status!=='pending_review'&&req.story.access!=='Community only'&&!objectIsRestricted;
+    const payload=await cleanSinglePost(req.story, req.isStoryOwner,store,includeAvatar);
+    if(req.isStoryOwner)payload.isOwner=true;
+    res.json(payload);
   });
   app.get('/api/stories/:id/author-avatar', async (req, res) => {
     try {
       const row=await store.get(req.params.id);
-      if(!row || row.status!=='shared' || row.visibility!=='public' || row.moderation_status==='pending_review' || !row.show_name || !row.owner_user_id || row.access==='Community only')return res.sendStatus(404);
+      if(!row || row.status!=='shared' || row.visibility!=='public' || row.moderation_status==='pending_review' || isCommunityMemberPost(row) || !row.owner_user_id || row.access==='Community only')return res.sendStatus(404);
       if(row.object_id && (await objectAccessList()).some(item=>item.id===row.object_id&&item.access==='Community only'))return res.sendStatus(404);
       const profile=await store.profile(row.owner_user_id);
-      if(!profile?.avatar_key)return res.sendStatus(404);
+      if(!profile?.avatar_key||!String(profile.display_name||row.storyteller_name||'').trim())return res.sendStatus(404);
       const image=await store.getProfileAvatar(profile.avatar_key);
       res.set('X-Content-Type-Options','nosniff').set('Cache-Control','public, max-age=300').type(image.mime||'image/webp').send(image.buffer);
     } catch { res.sendStatus(404); }
@@ -268,7 +302,8 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
   app.put('/api/stories/:id', session, rateLimit, ownerOnly, async (req, res) => {
     if (!req.isStoryOwner) return res.sendStatus(403);
     const b = req.body || {}; const changes = {};
-    for (const [from, to] of Object.entries({ text:'text', translation:'translation', translationLanguage:'translation_language', originalLanguage:'original_language', storytellerName:'storyteller_name', showName:'show_name' })) if (b[from] !== undefined) changes[to] = b[from];
+    for (const [from, to] of Object.entries({ text:'text', translation:'translation', translationLanguage:'translation_language', originalLanguage:'original_language', storytellerName:'storyteller_name' })) if (b[from] !== undefined) changes[to] = b[from];
+    if (b.showName !== undefined) changes.show_name = b.showName;
     for (const [from,to] of Object.entries({title:'title',kind:'kind',section:'section',trustLabel:'trust_label',licence:'licence',region:'region',people:'people',tags:'tags',sources:'sources',access:'access'})) if(b[from]!==undefined)changes[to]=b[from];
     if (b.visibility !== undefined) {
       if (!['private','public'].includes(b.visibility)) return res.status(400).json({ error:'Invalid visibility.' });
@@ -298,8 +333,11 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const after={...req.story,...changes};
     const labels=[];
     for(const [field,label] of [['original_language','Original language changed'],['text','Original story edited'],['title','Post title changed'],['kind','Post type changed'],['section','Post section changed'],['trust_label','Trust label changed'],['licence','Licence changed'],['region','Region changed'],['people','People field changed'],['tags','Tags changed'],['sources','Sources changed'],['access','Post access changed'],['moderation_status','Submitted for admin review'],['translation_language','Translation language changed'],['translation','Translation edited'],['translation_origin',`Translation origin set to ${after.translation_origin==='ai_approved'?'AI draft approved by the storyteller':'written by the storyteller'}`],['storyteller_name','Storyteller name changed'],['show_name','Name display choice changed'],['visibility',`Visibility changed to ${after.visibility}`],['status',after.status==='shared'?'Approved for sharing':after.status==='withdrawn'?'Story withdrawn':'Saved as draft'],['translation_checked','Translation review label changed']]) if(changes[field]!==undefined&&changes[field]!==req.story[field]) labels.push(label);
-    if(labels.length) changes.version_log=appendStoryVersion(after,labels.join('; '));
-    try { const row = await store.update(req.params.id, req.account.id, changes); row ? res.json(clean(row, true)) : res.sendStatus(409); }
+    let nextVersions=labels.length?appendStoryVersion(after,labels.join('; ')):storyRecord(req.story);
+    const hasCommunityChoice=storyRecord(req.story).some(version=>version.change==='Posted as Community member');
+    if(b.showName===false&&!hasCommunityChoice)nextVersions=appendStoryVersion({...after,version_log:nextVersions},'Posted as Community member');
+    if(labels.length||b.showName===false&&!hasCommunityChoice)changes.version_log=nextVersions;
+    try { const row = await store.update(req.params.id, req.account.id, changes); row ? res.json(await cleanSinglePost(row,true,store)) : res.sendStatus(409); }
     catch { res.status(503).json({ error: 'Story storage is unavailable.' }); }
   });
   app.get('/api/stories/:id/audio', optionalSession, ownerOnly, async (req, res) => {

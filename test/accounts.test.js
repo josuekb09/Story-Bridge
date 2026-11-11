@@ -26,6 +26,7 @@ function fixtureStore() {
   const store = {
     rows,
     reports,
+    profileBatchCalls: 0,
     async listPublic() { return [...rows.values()].filter(row => row.status==='shared' && row.visibility==='public'); },
     async listMine(userId) { return [...rows.values()].filter(row => row.owner_user_id===userId); },
     async listPending() { return [...rows.values()].filter(row=>row.moderation_status==='pending_review'); },
@@ -47,6 +48,7 @@ function fixtureStore() {
     },
     async claim(id,ownerHash,userId) { const row=rows.get(id);if(!row||row.owner_user_id!==null||row.owner_hash!==ownerHash)return false;row.owner_user_id=userId;row.owner_hash=null;return true; },
     async profile(id) { return profiles.get(id)||null; },
+    async profilesByUserIds(ids) { this.profileBatchCalls++;const wanted=new Set(ids);return [...profiles.values()].filter(profile=>wanted.has(profile.user_id)); },
     async saveProfile(id,profile) { const result={user_id:id,...(profiles.get(id)||{}),...profile};profiles.set(id,result);return result; },
     async putProfileAvatar(key,buffer){avatars.set(key,buffer);},async getProfileAvatar(key){return{buffer:avatars.get(key),mime:'image/webp'};},async removeProfileAvatar(key){avatars.delete(key);},
     async putAudio() {}, async removeAudio() {}, async audioUsage(){return 0;}, async audioResponse(){return new Response(new Uint8Array([1,2,3]),{headers:{'content-type':'audio/webm'}});},
@@ -237,6 +239,7 @@ test('admin post approval survives repeated and concurrent requests using file s
 
 test('admin queue includes private post photos and Keep private clears review without publishing',async t=>{
   const store=fixtureStore();
+  await store.saveProfile('admin-user',{display_name:'Admin Member',email:'admin@example.test'});
   const row={...storyRow('admin-own-pending','admin-user'),title:'Synthetic own pending post',first_post:true,requested_visibility:'public',moderation_status:'pending_review',version_log:[{timestamp:new Date().toISOString(),language:'Synthetic',change:'Created',fingerprint:'c'.repeat(64)}]};
   store.rows.set(row.id,row);
   const key='synthetic-admin-image';
@@ -245,7 +248,7 @@ test('admin queue includes private post photos and Keep private clears review wi
   const {base,server}=await serverFor(store,undefined,{objectAdminId:'admin-user'});t.after(()=>new Promise(resolve=>server.close(resolve)));
   assert.equal((await fetch(`${base}/api/admin/posts/pending`,{headers:auth('other-user')})).status,403);
   const queueResponse=await fetch(`${base}/api/admin/posts/pending`,{headers:auth('admin-user')});assert.equal(queueResponse.status,200);
-  const queue=await queueResponse.json();assert.equal(queue.length,1);assert.equal(queue[0].images[0].altText,'Synthetic test photo');
+  const queue=await queueResponse.json();assert.equal(queue.length,1);assert.equal(queue[0].images[0].altText,'Synthetic test photo');assert.equal(queue[0].author.name,'Admin Member');assert.doesNotMatch(JSON.stringify(queue[0]),/admin-user|admin@example\.test/);
   const privateImage=await fetch(`${base}${queue[0].images[0].url}`);assert.equal(privateImage.status,404);
   const adminImage=await fetch(`${base}${queue[0].images[0].url}`,{headers:auth('admin-user')});assert.equal(adminImage.status,200);assert.equal(adminImage.headers.get('cache-control'),'private, no-store');
   assert.equal((await fetch(`${base}/api/admin/posts/${row.id}/keep-private`,{method:'POST',headers:auth('other-user')})).status,403);
@@ -327,29 +330,68 @@ test('profile avatar upload verifies image bytes, is private, and serves nosniff
   const profile=await store.profile('user-a');assert.ok(profile.avatar_key);assert.equal(await store.profile('user-b'),null);
 });
 
-test('public named story cards can load only their public author avatar',async t=>{
+test('public posts use current profile identity unless a community-member choice is recorded',async t=>{
   const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
   const image=Buffer.from('synthetic webp avatar');
   await store.putProfileAvatar('avatar-key',image);
-  await store.saveProfile('user-a',{avatar_key:'avatar-key'});
+  await store.saveProfile('user-a',{display_name:'Dan Example',avatar_key:'avatar-key',email:'dan@example.test'});
   store.rows.set('named-public',{...storyRow('named-public','user-a','shared','public'),show_name:true,access:'Public'});
-  store.rows.set('anonymous-public',{...storyRow('anonymous-public','user-a','shared','public'),show_name:false,access:'Public'});
+  store.rows.set('friend-like-public',{...storyRow('friend-like-public','user-a','shared','public'),show_name:false,access:'Public'});
+  store.rows.set('explicit-community-public',{...storyRow('explicit-community-public','user-a','shared','public'),show_name:false,access:'Public',version_log:[{timestamp:new Date().toISOString(),language:'Synthetic',change:'Posted as Community member',fingerprint:'a'.repeat(64)}]});
   store.rows.set('community-public',{...storyRow('community-public','user-a','shared','public'),show_name:true,access:'Community only'});
   store.rows.set('restricted-object',{...storyRow('restricted-object','user-a','shared','public'),show_name:true,access:'Public',object_id:OBJECT_IDS[0]});
   store.rows.set('private-story',{...storyRow('private-story','user-a','draft','private'),show_name:true,access:'Public'});
   store.listObjectAccess=async()=>[{id:OBJECT_IDS[0],access:'Community only'}];
 
   const publicStories=await fetch(`${base}/api/stories`).then(response=>response.json());
-  const named=publicStories.find(story=>story.id==='named-public');
-  assert.equal(named.authorAvatarUrl,'/api/stories/named-public/author-avatar');
+  const named=publicStories.find(story=>story.id==='friend-like-public');
+  assert.equal(named.author.name,'Dan Example');
+  assert.equal(named.storytellerName,named.author.name);
+  assert.equal(named.author.avatarUrl,named.authorAvatarUrl);
+  assert.match(named.authorAvatarUrl,/^\/api\/stories\/friend-like-public\/author-avatar\?v=[a-f0-9]{12}$/);
   assert.equal(named.owner_user_id,undefined);
-  assert.equal(publicStories.find(story=>story.id==='anonymous-public').authorAvatarUrl,undefined);
+  const anonymous=publicStories.find(story=>story.id==='explicit-community-public');
+  assert.deepEqual(anonymous.author,{name:'Community member',anonymous:true});
+  assert.equal(anonymous.storytellerName,'Community member');
+  assert.equal(anonymous.authorAvatarUrl,undefined);
   assert.equal(publicStories.some(story=>['community-public','restricted-object','private-story'].includes(story.id)),false);
+  assert.equal(store.profileBatchCalls,1,'Public story lists batch profile lookups.');
+  assert.doesNotMatch(JSON.stringify(publicStories),/user-a|dan@example\.test/);
 
   const photo=await fetch(`${base}${named.authorAvatarUrl}`);
-  assert.equal(photo.status,200);assert.match(photo.headers.get('content-type'),/image\/webp/);assert.equal(photo.headers.get('x-content-type-options'),'nosniff');
+  assert.equal(photo.status,200);assert.match(photo.headers.get('content-type'),/image\/webp/);assert.match(photo.headers.get('cache-control'),/public, max-age=300/);assert.equal(photo.headers.get('x-content-type-options'),'nosniff');
   assert.deepEqual(Buffer.from(await photo.arrayBuffer()),image);
-  for(const id of ['anonymous-public','community-public','restricted-object','private-story']) assert.equal((await fetch(`${base}/api/stories/${id}/author-avatar`)).status,404,id);
+  for(const id of ['explicit-community-public','community-public','restricted-object','private-story']) assert.equal((await fetch(`${base}/api/stories/${id}/author-avatar`)).status,404,id);
+
+  await store.saveProfile('user-a',{display_name:'Dan Renamed'});
+  const renamed=await fetch(`${base}/api/stories`).then(response=>response.json());
+  const renamedStory=renamed.find(story=>story.id==='friend-like-public');
+  assert.equal(renamedStory.author.name,'Dan Renamed');
+  await store.putProfileAvatar('avatar-key-2',Buffer.from('updated synthetic avatar'));
+  await store.saveProfile('user-a',{avatar_key:'avatar-key-2'});
+  const updated=await fetch(`${base}/api/stories`).then(response=>response.json());
+  const updatedStory=updated.find(story=>story.id==='friend-like-public');
+  assert.notEqual(updatedStory.authorAvatarUrl,named.authorAvatarUrl,'Profile photo changes produce a fresh cache URL on existing posts.');
+  const updatedPhoto=await fetch(`${base}${updatedStory.authorAvatarUrl}`);
+  assert.deepEqual(Buffer.from(await updatedPhoto.arrayBuffer()),Buffer.from('updated synthetic avatar'));
+  const detail=await fetch(`${base}/api/stories/friend-like-public`).then(response=>response.json());
+  assert.equal(detail.author.name,'Dan Renamed');
+  assert.doesNotMatch(JSON.stringify(detail),/user-a|dan@example\.test/);
+});
+
+test('new Community member choice is recorded and owner can toggle post identity',async t=>{
+  const {base,server,store}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  await store.saveProfile('user-a',{display_name:'Dan Example'});
+  const form=new FormData();
+  for(const [key,value] of Object.entries({title:'Synthetic private story',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true',postAsCommunityMember:'true'}))form.append(key,value);
+  form.append('originalLanguage','Synthetic');form.append('text','A synthetic story.');
+  const created=await fetch(`${base}/api/stories`,{method:'POST',headers:auth('user-a'),body:form});assert.equal(created.status,201);
+  let story=await created.json();assert.equal(story.showName,false);assert.equal(story.author.name,'Community member');assert.ok(story.versionLog.some(version=>version.change==='Posted as Community member'));
+  const show=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({showName:true})});assert.equal(show.status,200);
+  story=await show.json();assert.equal(story.showName,true);assert.equal(story.author.name,'Dan Example');
+  const hide=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('user-a'),'content-type':'application/json'},body:JSON.stringify({showName:false})});assert.equal(hide.status,200);
+  story=await hide.json();assert.equal(story.showName,false);assert.equal(story.author.name,'Community member');
+  assert.ok(store.rows.get(story.id).version_log.some(version=>version.change==='Posted as Community member'));
 });
 
 test('post reports are saved, idempotent per reporter and post, reject authors and validate reasons',async t=>{
