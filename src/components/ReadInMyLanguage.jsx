@@ -17,6 +17,12 @@ export function languageCode(label) {
   return hit ? hit.code : '';
 }
 
+// The browser translator can stall forever (no response while a language pack is unavailable,
+// or in some embedded browsers). Never leave the reader waiting: give up after a few seconds.
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('translator-timeout')), ms))]);
+}
+
 function hasBuiltInTranslator() {
   return typeof window !== 'undefined' && 'Translator' in window && typeof window.Translator?.create === 'function';
 }
@@ -39,20 +45,22 @@ export default function ReadInMyLanguage({ text, sourceLanguage, className = '' 
   const googleUrl = `https://translate.google.com/?sl=${encodeURIComponent(source || 'auto')}&tl=${encodeURIComponent(target.code)}&op=translate&text=${encodeURIComponent(String(text).slice(0, MAX_CHARS))}`;
 
   async function translate() {
-    if (!hasBuiltInTranslator()) { setState('unsupported'); return; }
+    // Unknown source language or no built-in translator: go straight to the fallback link.
+    if (!source || !hasBuiltInTranslator()) { setState('unsupported'); return; }
     try {
       setState('checking');
-      const options = { sourceLanguage: source || 'en', targetLanguage: target.code };
-      const availability = await window.Translator.availability(options);
+      const options = { sourceLanguage: source, targetLanguage: target.code };
+      const availability = await withTimeout(window.Translator.availability(options), 3000);
       if (availability === 'unavailable') { setState('unsupported'); return; }
       if (availability !== 'available') setState('downloading');
-      translator.current = translator.current || await window.Translator.create({ ...options, monitor(m) { m.addEventListener('downloadprogress', () => setState('downloading')); } });
+      translator.current = translator.current || await withTimeout(window.Translator.create({ ...options, monitor(m) { m.addEventListener('downloadprogress', () => setState('downloading')); } }), 20000);
       setState('translating');
-      const result = await translator.current.translate(String(text).slice(0, MAX_CHARS));
+      const result = await withTimeout(translator.current.translate(String(text).slice(0, MAX_CHARS)), 15000);
+      if (!result || !String(result).trim()) throw new Error('empty-translation');
       setOutput(result);
       setState('done');
     } catch (error) {
-      console.warn('read-in-my-language', error?.name || error);
+      console.warn('read-in-my-language', error?.message || error?.name || error);
       setState('unsupported');
     }
   }
@@ -61,15 +69,17 @@ export default function ReadInMyLanguage({ text, sourceLanguage, className = '' 
 
   return <div className={`read-in-language ${className}`.trim()} lang={state === 'done' ? target.code : undefined} dir={state === 'done' ? target.dir : undefined}>
     {state === 'idle' && <button type="button" className="text-button" onClick={translate}>🌐 {label}</button>}
-    {(state === 'checking' || state === 'translating') && <p className="muted" role="status">{tr('translating', 'Translating…')}</p>}
-    {state === 'downloading' && <p className="muted" role="status">{tr('downloadingLanguagePack', `Downloading the ${target.nativeName} language pack (once)…`)}</p>}
+    {(state === 'checking' || state === 'translating' || state === 'downloading') && <p className="muted" role="status">
+      {state === 'downloading' ? tr('downloadingLanguagePack', `Downloading the ${target.nativeName} language pack (once)…`) : tr('translating', 'Translating…')}
+      {' · '}<a href={googleUrl} target="_blank" rel="noreferrer noopener">{tr('openInGoogleTranslate', `Open in Google Translate (${target.nativeName})`)}</a>
+    </p>}
     {state === 'done' && <div className="read-in-language-output">
       <p className="post-translation-label">{target.nativeName} · {tr('machineTranslationLabel', 'Machine translation, not checked by a speaker')}</p>
       <p>{output}</p>
       <button type="button" className="text-button" onClick={() => { setState('idle'); setOutput(''); }}>{tr('showOriginal', 'Show original')}</button>
     </div>}
-    {(state === 'unsupported' || state === 'error') && <p className="muted">
-      <a href={googleUrl} target="_blank" rel="noreferrer noopener">🌐 {tr('openInGoogleTranslate', `Open in Google Translate (${target.nativeName})`)}</a>
+    {(state === 'unsupported' || state === 'error') && <p className="muted read-in-language-fallback">
+      <a className="text-button" href={googleUrl} target="_blank" rel="noreferrer noopener">🌐 {tr('openInGoogleTranslate', `Open in Google Translate (${target.nativeName})`)} ↗</a>
       {' · '}<span>{tr('machineTranslationLabel', 'Machine translation, not checked by a speaker')}</span>
     </p>}
   </div>;
