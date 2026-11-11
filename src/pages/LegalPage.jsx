@@ -83,7 +83,7 @@ function Privacy() {
     <h2>Who can see what</h2>
     <ul>
       <li>Drafts and private posts: only you (and the moderator, for a first post under review or a reported post).</li>
-      <li>Public posts: anyone. Your name appears only if you choose "Show my name".</li>
+      <li>Public posts: anyone. By default a post shows your profile name and photo (or your initials if you have no photo). For a sensitive story you can choose "Community member" instead, and your name and photo stay hidden on that post.</li>
       <li>Your photo, audio and image files are stored privately and delivered only according to these rules.</li>
     </ul>
     <h2>Services that process data for us</h2>
