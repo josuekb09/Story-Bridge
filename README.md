@@ -21,6 +21,8 @@ African cultural knowledge is held by families and communities, often passed on 
 
 The project brings together three named challenge tracks and a fourth product strand for consent and safety:
 
+Unknown addresses show a clear not-found page with a link back to Discover.
+
 ### Voices & Languages
 
 People can write, record audio or add photos about stories, objects, songs, traditions and places in one of 36 suggested languages, including 31 African languages. The original stays intact. Authors may add their own translation or request an AI draft when OpenAI is configured; machine-drafted interface text and translations are labelled for readers.

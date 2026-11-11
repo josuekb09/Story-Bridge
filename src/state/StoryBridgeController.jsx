@@ -54,7 +54,7 @@ export default function App() {
     if (path === '/privacy') return 'privacy';
     if (path === '/guidelines') return 'guidelines';
     if (/^\/stories\/[^/]+$/.test(path)) return 'detail';
-    return 'landing';
+    return 'not-found';
   };
   const storyIdFromPath = () => {
     const match = window.location.pathname.match(/^\/stories\/([^/]+)$/);
@@ -180,9 +180,11 @@ export default function App() {
     const currentPath = window.location.pathname;
     const routes = { landing:'/', discover:'/discover', listen:'/listen', mine:'/mine', workspace:'/workspace', profile:'/profile', share:'/share', objects:'/objects', cultures:'/cultures', search:'/search', admin:'/admin', terms:'/terms', privacy:'/privacy', guidelines:'/guidelines' };
     const storyId = targetStoryId || current?.id || storyIdFromPath();
-    const route = nextPage === 'cultures' && currentPath.startsWith('/cultures/')
+    const route = nextPage === 'not-found'
       ? currentPath
-      : nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
+      : nextPage === 'cultures' && currentPath.startsWith('/cultures/')
+        ? currentPath
+        : nextPage === 'detail' && storyId ? `/stories/${encodeURIComponent(storyId)}` : routes[nextPage] || (nextPage.startsWith('object:') ? `/objects/${encodeURIComponent(nextPage.slice(7))}` : '/');
     // Keep the OAuth callback (?code=… / ?error=…) until Supabase has read it; it is removed after getSession().
     const oauthCallback = /[?&](code|error|error_description)=/.test(window.location.search) ? window.location.search : '';
     const keepSearchQuery = nextPage === 'search' && currentPath === '/search';
@@ -293,7 +295,7 @@ export default function App() {
     if (identityChanged) {
       currentSession.current = sessionKey;
       identityEpoch.current += 1;
-      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search','terms','privacy','guidelines'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share','admin'].includes(pageRef.current) ? pageRef.current : 'discover';
+      const initialPublicPage = ['landing','discover','listen','detail','objects','group-record','cultures','search','terms','privacy','guidelines','not-found'].includes(pageRef.current) || pageRef.current.startsWith('object:') ? pageRef.current : ['profile','mine','workspace','share','admin'].includes(pageRef.current) ? pageRef.current : 'discover';
       const keepPublicObjectRoute = initialPublicPage === 'objects' || initialPublicPage === 'group-record' || initialPublicPage.startsWith('object:');
       const needsWelcome=!!session&&!session.user?.user_metadata?.story_bridge_welcome_completed;
       clearPrivateState(accountConfig?.account && session && !keepPublicObjectRoute ? (needsWelcome?'welcome':initialPublicPage==='landing'?'discover':initialPublicPage) : initialPublicPage);
@@ -503,7 +505,7 @@ export default function App() {
   const documentTitle = showSignIn && !session ? 'Sign in — Story Bridge' : page === 'detail' && current?.status === 'shared' && current?.visibility === 'public'
     ? `${current.title || 'Story'} — Story Bridge`
     : page.startsWith('object:') ? `${objectTitle || 'Objects'} — Story Bridge`
-      : ({ landing: 'Story Bridge — Your story, in your own voice', discover: 'Discover — Story Bridge', listen: 'Discover — Story Bridge', cultures: 'Cultures — Story Bridge', search: 'Search — Story Bridge', admin: 'Admin — Story Bridge', share: 'Share a story — Story Bridge', mine: 'My stories — Story Bridge', workspace: 'My workspace — Story Bridge', profile: 'Profile — Story Bridge', review: 'Review — Story Bridge', detail: 'Story — Story Bridge', objects: 'Objects — Story Bridge', 'group-record': 'Luluwa — Story Bridge', terms: 'Terms — Story Bridge', privacy: 'Privacy — Story Bridge', guidelines: 'Community guidelines — Story Bridge', welcome: 'Welcome — Story Bridge' }[page] || 'Story Bridge');
+      : ({ landing: 'Story Bridge — Your story, in your own voice', discover: 'Discover — Story Bridge', listen: 'Discover — Story Bridge', cultures: 'Cultures — Story Bridge', search: 'Search — Story Bridge', admin: 'Admin — Story Bridge', share: 'Share a story — Story Bridge', mine: 'My stories — Story Bridge', workspace: 'My workspace — Story Bridge', profile: 'Profile — Story Bridge', review: 'Review — Story Bridge', detail: 'Story — Story Bridge', objects: 'Objects — Story Bridge', 'group-record': 'Luluwa — Story Bridge', terms: 'Terms — Story Bridge', privacy: 'Privacy — Story Bridge', guidelines: 'Community guidelines — Story Bridge', 'not-found': 'Page not found — Story Bridge', welcome: 'Welcome — Story Bridge' }[page] || 'Story Bridge');
   useEffect(() => { document.title = documentTitle; }, [documentTitle]);
   const policyFooter = <footer className="site-policy-footer"><span>{t('footer.tagline')}</span><nav aria-label={t('policy.navLabel')}><a href="/guidelines">{t('policy.guidelines')}</a><span aria-hidden="true"> · </span><a href="/terms">{t('policy.terms')}</a><span aria-hidden="true"> · </span><a href="/privacy">{t('policy.privacy')}</a></nav></footer>;
   const appHeader = <AppHeader page={page} signedIn={!!session} accountEnabled={!!accountConfig?.account} adminEnabled={adminAccess==='available'} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onNavigate={navigate} onSignIn={() => setShowSignIn(true)} onSignOut={signOut} onSettings={openSettings}/>;
@@ -513,6 +515,7 @@ export default function App() {
   // Private pages need a session: show the sign-in screen instead of an empty "could not be loaded" list.
   const privatePage = ['workspace', 'mine', 'review', 'profile', 'share','admin'].includes(page);
   if (accountConfig.account && !session && (showSignIn || privatePage)) return <div className="app">{appHeader}<Suspense fallback={pageLoading}><SignInPage accountConfig={accountConfig} authStep={authStep} authBusy={authBusy} authEmail={authEmail} setAuthEmail={setAuthEmail} setAuthCode={setAuthCode} authCode={authCode} sendEmailCode={sendEmailCode} resendEmailCode={resendEmailCode} verifyEmailCode={verifyEmailCode} supabase={supabase} setError={setError} setAuthBusy={setAuthBusy} setAuthStep={setAuthStep} setShowSignIn={value => { setShowSignIn(value); if (!value && privatePage) transitionTo('landing'); }} error={error} dismissError={() => setError('')}/></Suspense>{policyFooter}{mobileNav}</div>;
+  if (page === 'not-found') return <div className="app">{appHeader}<main><section className="panel"><h1>Page not found</h1><p>That address does not lead to a Story Bridge page.</p><a href="/discover" onClick={event => { event.preventDefault(); transitionTo('discover'); }}>Go to Discover</a></section></main>{policyFooter}{mobileNav}</div>;
   if (accountConfig.account&&session&&page==='welcome')return <div className="app">{appHeader}<Suspense fallback={pageLoading}><WelcomePage saving={welcomeBusy} error={welcomeError} initialDisplayName={profileName||googleDisplayName(session)} onComplete={completeWelcome}/></Suspense>{policyFooter}{mobileNav}</div>;
    if (accountConfig.account && !session && page==='landing') return <div className="app">{appHeader}<Suspense fallback={pageLoading}><Landing showSignIn repoUrl="https://github.com/josuekb09/Story-Bridge" onListen={()=>transitionTo('listen')} onObjects={()=>transitionTo('objects')} onShare={()=>setShowSignIn(true)} onCulture={openCulture} onSignIn={()=>setShowSignIn(true)}/></Suspense>{policyFooter}{mobileNav}</div>;
   if (currentSession.current !== activeIdentity) return <div className="app">{appHeader}<main><p role="status">Loading your account…</p></main>{policyFooter}{mobileNav}</div>;

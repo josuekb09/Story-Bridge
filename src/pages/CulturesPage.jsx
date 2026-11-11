@@ -77,7 +77,7 @@ function CultureDetail({ item, stories, showStory, navigate, back }) {
 
     <section className="culture-section" aria-labelledby="culture-about">
       <h2 id="culture-about">About</h2>
-      <p className="culture-undocumented"><b>Not yet documented — add what you know.</b> We only publish cultural knowledge that comes from people of this culture or from sources we can cite; we do not invent facts. Share a story, a word, a song, an object or a place.</p>
+      <p className="culture-undocumented"><b>{related.length > 0 ? 'No summary yet — read the member stories below.' : 'Not yet documented — add what you know.'}</b> We only publish cultural knowledge that comes from people of this culture or from sources we can cite; we do not invent facts. Share a story, a word, a song, an object or a place.</p>
       <button type="button" className="primary" onClick={() => navigate('share')}>Share a story about {item.culture}</button>
     </section>
 
