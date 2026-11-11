@@ -114,6 +114,20 @@ the chosen files in `src/data/showcase.js`.
 - [x] **3. Mobile overflow and bottom navigation clearance:** implementation commit `ebf7986` clamps the region filter, feed cards and image grids and reserves bottom-navigation space on `main`. At 375×844, live Playwright measured the filter right edge at 355px and card at 357px; Discover, Nosihle’s story, Cultures and Share had no visible element past 375px. Read-in controls sat above the nav; zero console errors. Build and all 106 tests passed.
 - [x] **4. Direct search load:** the controller fetches public stories on an initial `search` route (source commit `8c67227`). In fresh browser contexts, `/search?q=zulu` showed both the Zulu culture and Nosihle’s story on the first load and after reload; the input retained `zulu`, story-list requests returned 200, and the console had no errors. Build and all 106 tests passed; no further code change was needed.
 - [x] **5. Unknown routes, Zulu summary copy and brand translation guard:** commit `57da29f` keeps unrecognized paths on a simple 404 page with a Discover link and title. Live `/story/abc` preserved its URL; `/cultures/za-zulu-beadwork` showed “No summary yet — read the member stories below” and one public story. The live wordmark carries `translate="no"`; no console errors. Build and all 109 tests passed.
-- [ ] **6. Demo video comparison and poster.**
+- [x] **6. Demo video comparison and poster.**
 - [ ] **7. README and fresh screenshot gallery.**
 - [ ] **8. Final build, test, secret check and live smoke matrix.**
+
+## Final submission run — 11 November 2026
+
+### Section 6 — video choice
+- [x] Kept Josué's chosen cut at `docs/demo/story-bridge-demo.mp4`; it is 1920×1080, 5:00 and 25,228,352 bytes. The owner explicitly selected this cut, and its full-HD frame fits the demo better than the 1280×816 alternate.
+- [x] Moved Claude's video intact to `docs/media/alternates/claude-demo.mp4`; also kept its poster beside it. No video was deleted.
+- [x] Generated `docs/media/Story-Bridge-demo-poster.jpg` from the selected cut. This will be refreshed from the polished cut in the final-video step.
+- Checks: `npm run build`, `npm test` (109 passed), `npm run check:dist-secrets` passed. Content commit: `c340616`.
+- Live verification after push: Render home and Discover returned 200; after the counter animation settled, home showed 8 stories and 2 languages, Discover showed 8 posts, and Playwright recorded 0 console errors. GitHub raw links for both MP4s returned 200.
+
+### Sections 7–8 and final video
+- [ ] Capture fresh screenshots and update README and submission notes.
+- [ ] Run the final desktop/mobile live route matrix and record the control-gate result.
+- [ ] Polish the selected video, captions and poster; publish the README demo link.
