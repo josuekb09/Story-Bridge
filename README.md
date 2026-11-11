@@ -8,12 +8,36 @@ Built for the Andela × OpenAI capstone *Telling African Stories*, and to be pre
 
 ---
 
+## Screenshots
+
+Captured from the live site on 11 November 2026. These public-view screenshots are a dated snapshot; posts and profile details may change.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/01-home.jpg" alt="Landing page with Table Mountain hero and the Story Bridge headline"><br><sub><b>Home</b> — the public landing page.</sub></td>
+    <td width="50%"><img src="docs/screenshots/02-discover.jpg" alt="Discover feed with language and audio filters, a story card, and culture and collection links"><br><sub><b>Discover</b> — browse stories with language and audio filters.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/03-feed-post.jpg" alt="Feed card with a credited photo and Read, Translation, and Share actions"><br><sub><b>Feed post</b> — a story card with photo and reading actions.</sub></td>
+    <td><img src="docs/screenshots/04-story.jpg" alt="Story detail page for Painted walls of the Southern Ndebele"><br><sub><b>Story detail</b> — original text, author, language, and story documentation.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/05-cultures.jpg" alt="Culture directory with region filters and Cape Town, Ndebele, and Zulu cards"><br><sub><b>Cultures</b> — browse showcase cultures by region.</sub></td>
+    <td><img src="docs/screenshots/06-culture-ndebele.jpg" alt="Ndebele culture page with a credited photo and South African language chips"><br><sub><b>Culture detail</b> — sourced context, with a language search shortcut.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/08-object-records.jpg" alt="Object records page with shared context and limits of museum records"><br><sub><b>Object records</b> — museum references remain separate from community stories.</sub></td>
+    <td align="center"><img src="docs/screenshots/07-mobile-home.jpg" width="260" alt="Mobile landing page with a painted wall hero and bottom navigation"><br><sub><b>Mobile</b> — landing page and bottom navigation.</sub></td>
+  </tr>
+</table>
+
 ## What you can do
 
 - **Discover** a feed of public stories: author, region, time, original language, preserved paragraph breaks in previews, "See more", photos, audio, the storyteller's translation, and sharing.
 - **Share** a post in four steps — language → tell → translate → review. A post can hold text, a voice recording or audio file, up to six photos, and documentation: post type and section, region, people, tags, sources, a trust label (*Told by a community member*, *Research note*, *Museum record*) and a licence. Photo credits start with the storyteller's profile name, alt text can be left blank and is filled from the post title, and validation guides the author to the field that needs attention.
 - **Translate with AI** (optional): *Draft with AI* asks OpenAI for a first translation. It is marked unapproved until the storyteller approves it, and editing it clears the approval. An empty `OPENAI_TRANSLATION_MODEL` uses `gpt-6-luna`; an optional fallback model is tried once if the provider reports the primary model is missing or access is denied.
-- **Read in my language** — on-device translation in Chrome, Google Translate fallback; AI drafts via OpenAI when configured.
+- **Read in my language** — storyteller translations are labelled with their language and author; on-device translation in Chrome and the Google Translate link are labelled as machine translation. The machine option is hidden when the author's translation matches the selected interface language.
+- **Guard translations** — the author must provide a target language different from the original. A text-similarity check blocks identical or near-identical copies; this is a heuristic, not a translation-quality check.
 - **Stay in control**: every story starts as a private draft. The storyteller approves sharing, can withdraw it, or **delete it permanently** (text, audio, photos and translations).
 - **Profiles and post identity**: photo, name, country, languages and counts, with an *Edit profile* form. Public stories use the author's current profile name, then a Google account name or stored story name when needed, plus their photo (or initials). Welcome requires a display name, and Share saves a missing name before creating the post. The opt-in *Post as Community member* choice is off by default and tucked under Privacy options.
 - **Navigate consistently**: the same app header provides Discover, Cultures, Collections, Share, search, language choice and the account menu. The mobile bar links to My stories with a bookmark icon. The header never displays an email address; the address is inside Profile → Account.
@@ -40,7 +64,7 @@ The app shell and static interface files can be installed as a PWA. Its service 
 | Email-code and Google sign-in | Live. Google OAuth is in *Testing* mode: only accounts added as test users can sign in with Google until the app is published |
 | Database migrations `202611070001` … `202611090007` | Applied to the production Supabase project |
 | AI translation | Key configured on the host; the live provider call is still being verified (errors are now logged as status/code/model only) |
-| Interface translation | Landing page in 20 languages; English/French header labels, with other screens English for now. Brand and translated navigation opt out of browser auto-translation; story text stays translatable. |
+| Interface translation | Landing page in 20 languages; feed/detail controls in English and French, with other screens falling back to English. Brand and translated navigation opt out of browser auto-translation; story text stays translatable. |
 | Phase L0 (live) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are deployed. Render serves the pushed build; the live header and static resource types were checked. Signed-in email privacy is covered by the browser suite with synthetic authentication |
 | Culture directory and search | Live in the app build; public showcase data only, with no social schema or API changes |
 | First-post admin review | Available only to accounts authorized by the pending-post endpoint; publish and keep-private actions are confirmed |

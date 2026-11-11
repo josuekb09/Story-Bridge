@@ -1,18 +1,30 @@
 import RecordingCapture from '../RecordingCapture.jsx';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AuthorAvatar from '../components/AuthorAvatar.jsx';
-import { LANGUAGES } from '../lib/languages.js';
+import { findLanguage, LANGUAGES } from '../lib/languages.js';
+import { useUiLanguage } from '../lib/i18n.js';
 import UnsavedAudioPreview from '../components/UnsavedAudioPreview.jsx';
-import { createImageDetails, mapShareSubmissionError, shareFieldId, validateShareStep } from '../share-validation.js';
+import { createImageDetails, languagesMatch, mapShareSubmissionError, shareFieldId, validateShareStep } from '../share-validation.js';
 
 export default function SharePage({ objectContext, form, setForm, change, postMeta, setPostMeta, file, fileKind, audioSaved, saving, captureBusy, onAudioChange, onCaptureBusyChange, shareStep, setShareStep, postImages, setPostImages, imageDetails, setImageDetails, translationBusy, translationError, requestTranslationDraft, translationApprovalCanContinue, createDraft, profileName = '', profileAvatar = '', requireAuthorName = false, onSaveAuthorName = async () => {}, onEditProfile = () => {}, submissionError = '', clearSubmissionError = () => {} }) {
+  const { lang: uiLanguage } = useUiLanguage();
   const [otherLanguageMode, setOtherLanguageMode] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [authorNameInput, setAuthorNameInput] = useState(profileName);
+  const translationDefaulted = useRef(false);
   const languageSuggestions = [...new Set(LANGUAGES.flatMap(({ name, nativeName }) => [name, nativeName]))];
 
   useEffect(() => { if (profileName) setAuthorNameInput(profileName); }, [profileName]);
+
+  useEffect(() => {
+    if (translationDefaulted.current || !form.translation?.trim() || form.translationLanguage?.trim()) return;
+    const preferred = findLanguage(uiLanguage);
+    if (preferred && !languagesMatch(form.originalLanguage, preferred.name)) {
+      translationDefaulted.current = true;
+      change('translationLanguage', preferred.nativeName);
+    }
+  }, [form.originalLanguage, form.translation, form.translationLanguage, uiLanguage, change]);
 
   function focusField(field) {
     const element = document.getElementById(shareFieldId(field, otherLanguageMode));
@@ -66,6 +78,8 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
       originalLanguage: form.originalLanguage,
       title: postMeta.title,
       text: form.text,
+      translation: form.translation,
+      translationLanguage: form.translationLanguage,
       hasAudio: !!file,
       consentConfirmed: postMeta.consentConfirmed,
       postImages,
@@ -96,6 +110,8 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
   }
 
   function continueToReview() {
+    const errors = validateShareStep(3, valuesForValidation());
+    if (Object.keys(errors).length) return setStepError(errors, 3);
     if (!translationApprovalCanContinue(form)) {
       setStepError({ translationApproval: 'Approve the AI translation before continuing.' }, 3);
       return;
@@ -110,6 +126,7 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
     const checks = [
       [1, validateShareStep(1, valuesForValidation())],
       [2, validateShareStep(2, valuesForValidation())],
+      [3, validateShareStep(3, valuesForValidation())],
       [4, validateShareStep(4, valuesForValidation())],
     ];
     const invalid = checks.find(([, errors]) => Object.keys(errors).length);
@@ -179,8 +196,8 @@ export default function SharePage({ objectContext, form, setForm, change, postMe
       </>}
       {shareStep === 3 && <>
         <p className="muted">A translation is optional. The original remains unchanged and is always shown first.</p>
-        <label>Translation language (optional)<input value={form.translationLanguage} onChange={event => change('translationLanguage', event.target.value)} maxLength="80" placeholder="Optional"/></label>
-        <label>Your translation or AI draft<textarea aria-label="Your translation or AI draft" value={form.translation} onChange={event => { clearFieldError('translationApproval'); change('translation', event.target.value); }} maxLength="12000" rows="6"/></label>
+        <label>Translation language<input id="share-translation-language" value={form.translationLanguage} onChange={event => { translationDefaulted.current = true; clearFieldError('translationLanguage'); change('translationLanguage', event.target.value); }} maxLength="80" placeholder="e.g. English" aria-invalid={!!fieldErrors.translationLanguage} aria-describedby={fieldErrors.translationLanguage ? 'share-error-translationLanguage' : undefined}/></label>{fieldError('translationLanguage')}
+        <label>Your translation or AI draft<textarea id="share-translation" aria-label="Your translation or AI draft" value={form.translation} onChange={event => { clearFieldError('translationApproval'); clearFieldError('translation'); change('translation', event.target.value); }} maxLength="12000" rows="6" aria-invalid={!!fieldErrors.translation} aria-describedby={fieldErrors.translation ? 'share-error-translation' : undefined}/></label>{fieldError('translation')}
         {form.translationOrigin === 'ai_draft' && <><p className="notice" role="status">AI draft: {form.translationApproved ? 'approved by you' : 'not yet approved by you'}</p><div className="actions"><button id="share-translation-approve" type="button" className="primary" disabled={!form.translation.trim()} onClick={() => { clearFieldError('translationApproval'); setForm(previous => ({ ...previous, translationApproved:true })); }}>Approve translation</button><button type="button" className="secondary" onClick={() => { clearFieldError('translationApproval'); setForm(previous => ({ ...previous, translationOrigin:'storyteller', translationApproved:false })); }}>Write this translation yourself</button></div>{fieldError('translationApproval')}</>}
         {form.translation && form.translationOrigin === 'storyteller' && <p className="notice">Written by the storyteller.</p>}
         <p className="muted ai-consent">If enabled, this sends the original text to OpenAI to draft a translation. It is not saved by Story Bridge until you approve it and save your story.</p>

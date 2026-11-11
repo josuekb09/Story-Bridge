@@ -12,6 +12,7 @@ import { contentSecurityPolicy } from './csp.js';
 import { appendStoryVersion, makeStoryVersion, storyRecord } from './story-record.js';
 import { createTranslationDraftService, isTranslationApproved, translationDraftHandler } from './translation-draft.js';
 import { OBJECT_IDS, OBJECT_RECORDS } from '../src/object-records.js';
+import { validateTranslationEntry } from '../src/share-validation.js';
 import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
 import { sendSitemap } from './sitemap.js';
 
@@ -268,6 +269,8 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.post('/api/storie
     if (String(body.originalLanguage || '').trim().length > 80 || String(body.translation || '').length > 12_000) return res.status(413).json({ error: 'Language or translation is too long.' });
     if (body.objectId !== undefined && body.objectId !== '' && !OBJECT_IDS.includes(body.objectId)) return res.status(400).json({error:'Choose a valid object record.'});
     if (!String(body.originalLanguage || '').trim()) return res.status(400).json({ error: 'Enter the language of the story.' });
+    const translationEntryError = validateTranslationEntry({ originalText: text, originalLanguage: body.originalLanguage, translation: body.translation || '', translationLanguage: body.translationLanguage || '' });
+    if (translationEntryError) return res.status(400).json({ error: translationEntryError });
     if (body.translationOrigin === 'ai_approved' && !isTranslationApproved(body.translationApproved)) return res.status(400).json({ error: 'Approve the AI translation before saving it.' });
 
     const all = readDb();
@@ -348,6 +351,10 @@ if (MODE.backend === 'file' && MODE.authMode === 'legacy') app.put('/api/stories
   }
   if (body.translationLanguage !== undefined) story.translationLanguage = String(body.translationLanguage).slice(0, 80);
   if (body.originalLanguage !== undefined) story.originalLanguage = String(body.originalLanguage).slice(0, 80);
+  if (['text','translation','translationLanguage','originalLanguage'].some(field => body[field] !== undefined)) {
+    const translationEntryError = validateTranslationEntry({ originalText: story.text, originalLanguage: story.originalLanguage, translation: story.translation, translationLanguage: story.translationLanguage });
+    if (translationEntryError) return res.status(400).json({ error: translationEntryError });
+  }
   if (body.storytellerName !== undefined) story.storytellerName = String(body.storytellerName).slice(0, 120);
   if (body.showName !== undefined) story.showName = !!body.showName;
   if(body.title!==undefined){if(typeof body.title!=='string'||!body.title.trim()||body.title.length>160)return res.status(400).json({error:'Post title must be 1–160 characters.'});story.title=body.title.trim()}

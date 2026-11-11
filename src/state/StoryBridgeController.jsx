@@ -4,7 +4,8 @@ import { AppHeader, AppMobileNav } from '../components/AppHeader.jsx';
 import { api, ownerToken, setAccountSessionToken, authorizedObjectUrl } from '../lib/api.js';
 import { editAiTranslationDraft, translationApprovalCanContinue } from '../translation-draft.js';
 import { OBJECT_RECORDS, CULTURAL_GROUP_RECORD, OBJECT_IDS, objectRecordView } from '../object-records.js';
-import { prepareImageMetadata } from '../share-validation.js';
+import { prepareImageMetadata, validateTranslationEntry } from '../share-validation.js';
+import { useUiLanguage } from '../lib/i18n.js';
 
 const Landing = lazy(() => import('../pages/LandingPage.jsx'));
 const SignInPage = lazy(() => import('../pages/SignInPage.jsx'));
@@ -33,6 +34,7 @@ const googleDisplayName = session => {
 };
 
 export default function App() {
+  const { t } = useUiLanguage();
   const pathPage = () => {
     const path = window.location.pathname;
     if (path === '/') return window.history.state?.storyBridgePage || 'landing';
@@ -442,7 +444,7 @@ export default function App() {
     : page.startsWith('object:') ? `${objectTitle || 'Objects'} — Story Bridge`
       : ({ landing: 'Story Bridge — Your story, in your own voice', discover: 'Discover — Story Bridge', listen: 'Discover — Story Bridge', cultures: 'Cultures — Story Bridge', search: 'Search — Story Bridge', admin: 'Admin — Story Bridge', share: 'Share a story — Story Bridge', mine: 'My stories — Story Bridge', workspace: 'My workspace — Story Bridge', profile: 'Profile — Story Bridge', review: 'Review — Story Bridge', detail: 'Story — Story Bridge', objects: 'Objects — Story Bridge', 'group-record': 'Luluwa — Story Bridge', terms: 'Terms — Story Bridge', privacy: 'Privacy — Story Bridge', guidelines: 'Community guidelines — Story Bridge', welcome: 'Welcome — Story Bridge' }[page] || 'Story Bridge');
   useEffect(() => { document.title = documentTitle; }, [documentTitle]);
-  const policyFooter = <footer className="site-policy-footer"><span>Stories stay under the storyteller’s control.</span><nav aria-label="Policies"><a href="/guidelines">Community guidelines</a><span aria-hidden="true"> · </span><a href="/terms">Terms</a><span aria-hidden="true"> · </span><a href="/privacy">Privacy</a></nav></footer>;
+  const policyFooter = <footer className="site-policy-footer"><span>{t('footer.tagline')}</span><nav aria-label={t('policy.navLabel')}><a href="/guidelines">{t('policy.guidelines')}</a><span aria-hidden="true"> · </span><a href="/terms">{t('policy.terms')}</a><span aria-hidden="true"> · </span><a href="/privacy">{t('policy.privacy')}</a></nav></footer>;
   const appHeader = <AppHeader page={page} signedIn={!!session} accountEnabled={!!accountConfig?.account} adminEnabled={adminAccess==='available'} profileName={profileName || savedProfileName} profileAvatar={profileAvatar} onNavigate={navigate} onSignIn={() => setShowSignIn(true)} onSignOut={signOut} onSettings={openSettings}/>;
   const mobileNav = <AppMobileNav page={page} onNavigate={navigate}/>;
   if (!accountConfig) return <div className="app">{appHeader}{!isOnline && <p className="offline-banner" role="status">You’re offline. Some app files may still be available on this device.</p>}<main>{configError ? <section className="panel" role="alert"><h1>Story Bridge is unavailable</h1><p>{configError}</p><button className="secondary" onClick={() => setConfigAttempt(value => value + 1)}>Try again</button></section> : <p>Loading Story Bridge…</p>}</main>{policyFooter}{mobileNav}</div>;
@@ -623,10 +625,18 @@ export default function App() {
     const edits = {};
     if (!saved || review.text !== saved.text) edits.text = review.text;
     if (!saved || review.translation !== saved.translation) { edits.translation = review.translation; edits.translationOrigin = 'storyteller'; }
+    if (!saved || review.translationLanguage !== saved.translationLanguage) edits.translationLanguage = review.translationLanguage;
     return edits;
   }
 
   async function saveReviewChanges(extra = {}) {
+    const translationError = validateTranslationEntry({
+      originalText: review?.text,
+      originalLanguage: review?.originalLanguage,
+      translation: review?.translation,
+      translationLanguage: review?.translationLanguage,
+    });
+    if (translationError) throw new Error(translationError);
     return update(review.id, { ...pendingReviewEdits(), ...extra });
   }
 
@@ -652,7 +662,7 @@ export default function App() {
       const fullStory=await api(`/api/stories/${story.id}`);
       if(!scopeIsCurrent(scope)||detailRequest.current!==requestId)return;
       setReview(fullStory);setCurrent(fullStory);setReviewVisibility(fullStory.visibility||'private');
-      setReviewBaseline({text:fullStory.text||'',translation:fullStory.translation||'',visibility:fullStory.visibility||'private'});
+      setReviewBaseline({text:fullStory.text||'',translation:fullStory.translation||'',translationLanguage:fullStory.translationLanguage||'',visibility:fullStory.visibility||'private'});
       setWithdrawConfirmationId('');setCheckedBy(fullStory.checkedBy||'');transitionTo('review');
     } catch(cause) { if(scopeIsCurrent(scope)&&detailRequest.current===requestId)setError(cause.message); }
   }

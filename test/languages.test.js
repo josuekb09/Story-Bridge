@@ -10,7 +10,13 @@ test('language codes are unique and every UI language has a complete locale or E
   const codes = LANGUAGES.map(language => language.code);
   assert.equal(new Set(codes).size, codes.length);
   const english = readLocale('en');
-  const englishFallbackKeys = ['readInMyLanguage', 'translating', 'downloadingLanguagePack', 'machineTranslationLabel', 'showOriginal', 'openInGoogleTranslate'];
+  const englishFallbackKeys = [
+    'readInMyLanguage', 'translating', 'downloadingLanguagePack', 'machineTranslationLabel', 'showOriginal', 'openInGoogleTranslate',
+    'feed.listen', 'feed.composerPlaceholder', 'feed.post', 'feed.allLanguages', 'feed.withAudio', 'feed.region', 'feed.allRegions',
+    'feed.seeMore', 'feed.seeLess', 'feed.read', 'feed.share', 'feed.shareStory', 'feed.original', 'feed.translation',
+    'feed.translationByAuthor', 'feed.translationByAuthorNoLanguage', 'feed.originalStory', 'feed.exploreCultures',
+    'feed.collections', 'feed.browseObjects', 'feed.joinStoryBridge', 'policy.navLabel', 'policy.guidelines', 'policy.terms', 'policy.privacy',
+  ];
   for (const language of UI_LANGUAGES) {
     const locale = readLocale(language.code);
     const expectedKeys = Object.keys(english).filter(key => language.code === 'en' || language.code === 'fr' || !englishFallbackKeys.includes(key));

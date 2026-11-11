@@ -1,6 +1,87 @@
+import { LANGUAGES } from './lib/languages.js';
+
 export function createImageDetails(count, profileName = '') {
   const name = String(profileName || '').trim();
   return Array.from({ length: count }, () => ({ altText: '', credit: name ? `Photo: ${name}` : '' }));
+}
+
+function normalizedLanguage(value) {
+  return String(value || '').trim().normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+function languageCode(value) {
+  const normalized = normalizedLanguage(value);
+  if (!normalized) return '';
+  const match = LANGUAGES.find(language => [language.code, language.name, language.nativeName].some(label => normalizedLanguage(label) === normalized));
+  return match?.code || normalized;
+}
+
+export function languagesMatch(left, right) {
+  const a = languageCode(left);
+  const b = languageCode(right);
+  return !!a && !!b && a === b;
+}
+
+function normalizedText(value) {
+  return String(value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function levenshteinSimilarity(left, right) {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      current[column] = Math.min(current[column - 1] + 1, previous[column] + 1, previous[column - 1] + (left[row - 1] === right[column - 1] ? 0 : 1));
+    }
+    previous = current;
+  }
+  return 1 - previous[right.length] / Math.max(left.length, right.length, 1);
+}
+
+function trigramSimilarity(left, right) {
+  const counts = value => {
+    const result = new Map();
+    for (let index = 0; index <= value.length - 3; index += 1) {
+      const gram = value.slice(index, index + 3);
+      result.set(gram, (result.get(gram) || 0) + 1);
+    }
+    return result;
+  };
+  const a = counts(left);
+  const b = counts(right);
+  let overlap = 0;
+  let totalA = 0;
+  let totalB = 0;
+  for (const count of a.values()) totalA += count;
+  for (const count of b.values()) totalB += count;
+  for (const [gram, count] of a) overlap += Math.min(count, b.get(gram) || 0);
+  return totalA + totalB ? (2 * overlap) / (totalA + totalB) : 0;
+}
+
+export function translationLooksLikeOriginal(originalText, translationText) {
+  const original = normalizedText(originalText);
+  const translation = normalizedText(translationText);
+  if (!original || !translation) return false;
+  if (original === translation) return true;
+  if (Math.max(original.length, translation.length) <= 512) return levenshteinSimilarity(original, translation) > 0.9;
+  return trigramSimilarity(original, translation) > 0.9;
+}
+
+export function validateTranslationEntry({ originalText = '', originalLanguage = '', translation = '', translationLanguage = '' } = {}) {
+  const text = String(translation || '').trim();
+  const language = String(translationLanguage || '').trim();
+  if (!text && !language) return '';
+  if (text && !language) return 'Choose a language for the translation.';
+  if (language && !text) return 'Enter the translation or clear its language.';
+  if (languagesMatch(originalLanguage, language)) return 'Translation language must differ from the original language.';
+  if (translationLooksLikeOriginal(originalText, text)) return 'This looks like the original text. Paste the translation, or leave it empty.';
+  return '';
+}
+
+export function shouldShowMachineTranslation(story, uiLanguage, text = story?.text) {
+  if (!String(text || '').trim()) return false;
+  const hasAuthorTranslation = String(story?.translation || '').trim() && languagesMatch(story?.translationLanguage, uiLanguage);
+  return !hasAuthorTranslation;
 }
 
 export function prepareImageMetadata(details = [], title = '') {
@@ -22,7 +103,7 @@ function sourcesAreValid(value) {
 }
 
 export function validateShareStep(step, {
-  originalLanguage = '', title = '', text = '', hasAudio = false, consentConfirmed = false,
+  originalLanguage = '', title = '', text = '', translation = '', translationLanguage = '', hasAudio = false, consentConfirmed = false,
   postImages = [], imageDetails = [], region = '', people = '', tags = '', sources = '', authorDisplayName = '', requireAuthorName = false,
 } = {}) {
   const errors = {};
@@ -44,6 +125,12 @@ export function validateShareStep(step, {
     const tagList = String(tags || '').split(',').map(tag => tag.trim()).filter(Boolean);
     if (tagList.length > 20 || tagList.some(tag => tag.length > 40)) errors.tags = 'Use up to 20 tags, each 40 characters or fewer.';
     if (!sourcesAreValid(sources)) errors.sources = 'Sources must be labels and HTTPS links, with up to 20 entries.';
+  }
+  if (step === 3) {
+    const translationError = validateTranslationEntry({ originalText: text, originalLanguage, translation, translationLanguage });
+    if (translationError) {
+      errors[translationError.includes('language') ? 'translationLanguage' : 'translation'] = translationError;
+    }
   }
   if (step === 4) {
     if (requireAuthorName && !String(authorDisplayName).trim()) errors.authorName = 'Enter the name you want to appear on your posts.';
@@ -71,6 +158,9 @@ export function mapShareSubmissionError(message) {
     [/enter the language of the story|language or translation is too long/i, 1, 'language'],
     [/post media upload is too large|upload storage limit reached/i, 2, 'images'],
     [/approve the ai draft/i, 3, 'translationApproval'],
+    [/choose a language for the translation|translation language must differ/i, 3, 'translationLanguage'],
+    [/enter the translation or clear its language/i, 3, 'translationLanguage'],
+    [/looks like the original text/i, 3, 'translation'],
   ];
   const match = rules.find(([pattern]) => pattern.test(text));
   return match ? { step: match[1], field: match[2], message: text } : null;
@@ -81,5 +171,7 @@ export function shareFieldId(field, otherLanguageMode = false) {
   if (field === 'authorName') return 'share-author-name';
   if (field.startsWith('image-')) return `share-${field}`;
   if (field === 'translationApproval') return 'share-translation-approve';
+  if (field === 'translationLanguage') return 'share-translation-language';
+  if (field === 'translation') return 'share-translation';
   return `share-${field}`;
 }

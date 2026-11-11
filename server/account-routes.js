@@ -6,6 +6,7 @@ import { createSupabaseStore } from './supabase-store.js';
 import { appendStoryVersion, makeStoryVersion, storyRecord } from './story-record.js';
 import { isTranslationApproved, translationDraftHandler } from './translation-draft.js';
 import { OBJECT_IDS } from '../src/object-records.js';
+import { validateTranslationEntry } from '../src/share-validation.js';
 import { IMAGE_MAX_BYTES, normalizePostMetadata, validateAndReencodeImage, validateImageMetadata, validatePostMetadata } from './post-content.js';
 import { sendSitemap } from './sitemap.js';
 import { createAdminEmail, isAdminNotifyConfigured, notifyAdmin, scheduleAdminNotification } from './admin-notify.js';
@@ -276,6 +277,8 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     const images=req.files?.images||[];const imageMetadataError=validateImageMetadata(images,imageMetadata);if(imageMetadataError)return res.status(400).json({error:imageMetadataError});
     const audioFile=req.files?.audio?.[0];
     if (typeof b.originalLanguage !== 'string' || !b.originalLanguage.trim() || b.originalLanguage.length > 80 || b.text !== undefined && (typeof b.text !== 'string' || b.text.length > 12000) || b.translation !== undefined && (typeof b.translation !== 'string' || b.translation.length > 12000) || b.translationLanguage !== undefined && (typeof b.translationLanguage !== 'string' || b.translationLanguage.length > 80) || b.objectId !== undefined && b.objectId !== '' && !OBJECT_IDS.includes(b.objectId)) return res.status(400).json({ error: 'Check the language, object, and story lengths.' });
+    const translationEntryError = validateTranslationEntry({ originalText: b.text || '', originalLanguage: b.originalLanguage, translation: b.translation || '', translationLanguage: b.translationLanguage || '' });
+    if (translationEntryError) return res.status(400).json({ error: translationEntryError });
     if (b.translationOrigin === 'ai_approved' && !isTranslationApproved(b.translationApproved)) return res.status(400).json({ error: 'Approve the AI translation before saving it.' });
     try {
       if ((await store.countMine(req.account.id)) >= 500) return res.status(429).json({ error: 'This account has reached its story limit.' });
@@ -364,6 +367,10 @@ export function mountAccountRoutes(app, config, { store = createSupabaseStore(co
     else if (b.approve === false) changes.status = 'draft';
     if (b.withdraw === true) { changes.status = 'withdrawn'; changes.visibility = 'private'; }
     const after={...req.story,...changes};
+    if (['text','translation','translation_language','original_language'].some(field => changes[field] !== undefined)) {
+      const translationEntryError = validateTranslationEntry({ originalText: after.text, originalLanguage: after.original_language, translation: after.translation, translationLanguage: after.translation_language });
+      if (translationEntryError) return res.status(400).json({ error: translationEntryError });
+    }
     const labels=[];
     for(const [field,label] of [['original_language','Original language changed'],['text','Original story edited'],['title','Post title changed'],['kind','Post type changed'],['section','Post section changed'],['trust_label','Trust label changed'],['licence','Licence changed'],['region','Region changed'],['people','People field changed'],['tags','Tags changed'],['sources','Sources changed'],['access','Post access changed'],['moderation_status','Submitted for admin review'],['translation_language','Translation language changed'],['translation','Translation edited'],['translation_origin',`Translation origin set to ${after.translation_origin==='ai_approved'?'AI draft approved by the storyteller':'written by the storyteller'}`],['storyteller_name','Storyteller name changed'],['show_name','Name display choice changed'],['visibility',`Visibility changed to ${after.visibility}`],['status',after.status==='shared'?'Approved for sharing':after.status==='withdrawn'?'Story withdrawn':'Saved as draft'],['translation_checked','Translation review label changed']]) if(changes[field]!==undefined&&changes[field]!==req.story[field]) labels.push(label);
     let nextVersions=labels.length?appendStoryVersion(after,labels.join('; ')):storyRecord(req.story);

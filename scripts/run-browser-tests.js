@@ -745,7 +745,7 @@ try {
     await pageA.getByLabel('Post title').fill('Synthetic AI translation post');
     await pageA.getByLabel('Your story').fill('Synthetic original story for the translation draft.');
     await pageA.getByRole('button', { name: 'Continue to translation' }).click();
-    await pageA.getByLabel('Translation language (optional)').fill('Synthetic target language');
+    await pageA.getByLabel('Translation language').fill('Synthetic target language');
     const before = (await direct(ownerA, '/api/mine')).body.length;
     let mockedCalls = 0;
     await pageA.route('**/api/translation-draft', async route => {
@@ -802,7 +802,7 @@ try {
     await pageA.getByLabel('Your story').fill(text);
     await pageA.getByLabel(/Or choose an audio file/).setInputFiles(fixturePath);
     await pageA.getByRole('button',{name:'Continue to translation'}).click();
-    await pageA.getByLabel('Translation language (optional)').fill('Second test language');
+    await pageA.getByLabel('Translation language').fill('English');
     await pageA.getByLabel('Your translation or AI draft').fill('Manual test translation.');
     await pageA.getByRole('button',{name:'Continue to review'}).click();
     await pageA.getByLabel('This is mine, or I have permission from the person telling it.').check();
@@ -919,7 +919,8 @@ try {
     await pageB.getByText(approvedActionText, { exact: true }).waitFor({ state: 'visible' });
     const storyTextTranslation = await publicCard.locator('.post-text').evaluate(element => ({ translate: element.getAttribute('translate'), insideNotranslate: !!element.closest('.notranslate') }));
     ensure(storyTextTranslation.translate !== 'no' && !storyTextTranslation.insideNotranslate, 'Story text was accidentally excluded from browser translation.');
-    await publicCard.getByRole('button', { name: /Translation/ }).click();
+    ensure(await publicCard.locator('.read-in-language').count() === 0, 'Machine translation appeared even though the author translation matched the reader UI language.');
+    await publicCard.getByRole('button', { name: /by the author/i }).click();
     await publicCard.locator('.post-translation').getByText(approvedActionTranslation, { exact: true }).waitFor({ state: 'visible' });
     await publicCard.getByRole('button', { name: /Original/ }).waitFor({ state: 'visible' });
   }, haveStory);

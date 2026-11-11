@@ -215,6 +215,35 @@ test('AI translation draft route requires an account and stores origin only afte
   assert.equal(edited.status,200);assert.equal((await edited.json()).translationOrigin,'storyteller');
 });
 
+test('account post creation and editing reject incomplete or duplicated translations',async t=>{
+  const {base,server}=await serverFor();t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const formFor=({originalLanguage='English',text='A synthetic original story.',translationLanguage='',translation=''}={})=>{
+    const form=new FormData();
+    const fields={title:'Synthetic translation check',kind:'story',section:'stories',trustLabel:'Told by a community member',licence:'All rights reserved',region:'',people:'',tags:'',sources:'[]',access:'Public',consentConfirmed:'true',originalLanguage,text,translationLanguage,translation};
+    for(const [key,value] of Object.entries(fields))form.append(key,value);
+    return form;
+  };
+  const submit=form=>fetch(`${base}/api/stories`,{method:'POST',headers:auth('translation-user'),body:form});
+
+  let response=await submit(formFor({translation:'A translated story.'}));
+  assert.equal(response.status,400);assert.equal((await response.json()).error,'Choose a language for the translation.');
+  response=await submit(formFor({translationLanguage:'English',translation:'A translated story.'}));
+  assert.equal(response.status,400);assert.match((await response.json()).error,/differ from the original/);
+  response=await submit(formFor({text:'This is the original story.',translationLanguage:'French',translation:'This is the original story!'}));
+  assert.equal(response.status,400);assert.equal((await response.json()).error,'This looks like the original text. Paste the translation, or leave it empty.');
+
+  response=await submit(formFor());assert.equal(response.status,201);
+  const story=await response.json();
+  const edited=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('translation-user'),'content-type':'application/json'},body:JSON.stringify({translation:'A translation without its language.'})});
+  assert.equal(edited.status,400);assert.equal((await edited.json()).error,'Choose a language for the translation.');
+  const languageOnly=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('translation-user'),'content-type':'application/json'},body:JSON.stringify({translationLanguage:'French'})});
+  assert.equal(languageOnly.status,400);assert.equal((await languageOnly.json()).error,'Enter the translation or clear its language.');
+  const sameLanguage=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('translation-user'),'content-type':'application/json'},body:JSON.stringify({translation:'A different translation.',translationLanguage:'English'})});
+  assert.equal(sameLanguage.status,400);assert.match((await sameLanguage.json()).error,/differ from the original/);
+  const copiedText=await fetch(`${base}/api/stories/${story.id}`,{method:'PUT',headers:{...auth('translation-user'),'content-type':'application/json'},body:JSON.stringify({translation:'A synthetic original story!',translationLanguage:'French'})});
+  assert.equal(copiedText.status,400);assert.equal((await copiedText.json()).error,'This looks like the original text. Paste the translation, or leave it empty.');
+});
+
 test('post creation requires consent and image alt text, and first approved post waits for admin review',async t=>{
   const {base,server,store}=await serverFor(fixtureStore(),undefined,{objectAdminId:'admin-user'});t.after(()=>new Promise(resolve=>server.close(resolve)));
   const sharp=(await import('sharp')).default;const png=await sharp({create:{width:12,height:8,channels:3,background:'#3f7a5c'}}).png().toBuffer();

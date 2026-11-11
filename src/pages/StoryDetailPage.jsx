@@ -4,7 +4,8 @@ import AuthorAvatar, { authorName } from '../components/AuthorAvatar.jsx';
 import ReadInMyLanguage from '../components/ReadInMyLanguage.jsx';
 import ReportPostAction from '../components/ReportPostAction.jsx';
 import { authorizedObjectUrl } from '../lib/api.js';
-import { translationOriginLabel } from '../lib/i18n.js';
+import { translationOriginLabel, useUiLanguage } from '../lib/i18n.js';
+import { shouldShowMachineTranslation } from '../share-validation.js';
 import '../styles/components/story-detail.css';
 import '../styles/components/cultures.css';
 
@@ -49,12 +50,14 @@ function StoryImage({ image, protectedFile }) {
 }
 
 export default function StoryDetailPage({ story, navigate, backPage = 'discover', signedIn = false, isAuthor = !!story._own, profileAvatar = '', onChangeAuthorVisibility = () => {}, saving = false, onReportSignIn = () => {}, onReported = () => {} }) {
+  const { lang: uiLanguage, t } = useUiLanguage();
   const [shareFeedback, setShareFeedback] = useState('');
   const privateAudio = !!story._own && !(story.status === 'shared' && story.visibility === 'public');
   const title = storyTitle(story);
   const publicStory = story.status === 'shared' && story.visibility === 'public';
   const visibilityLabel = story.visibility === 'private' ? 'Only me' : story.visibility === 'public' ? 'Public' : '';
   const date = story.createdAt && !Number.isNaN(new Date(story.createdAt).getTime()) ? new Date(story.createdAt) : null;
+  const showMachineTranslation = shouldShowMachineTranslation(story, uiLanguage);
 
   useEffect(() => {
     const pageTitle = publicStory ? `${title} — Story Bridge` : 'Private story — Story Bridge';
@@ -109,7 +112,7 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
           {story.region && <span>{story.region}</span>}
           {date && <time dateTime={date.toISOString()} title={date.toLocaleString()}>{relativeDate(date)}</time>}
         </p>
-        <button type="button" className="secondary story-share" onClick={shareStory}>↗ Share story</button>
+        <button type="button" className="secondary story-share" onClick={shareStory}>↗ {t('feed.shareStory')}</button>
         <ReportPostAction postId={story.id} signedIn={signedIn} isAuthor={isAuthor} onSignIn={onReportSignIn} onReported={onReported}/>
         {shareFeedback && <span className="story-share-feedback" role="status">{shareFeedback}</span>}
         {story._own && <label className="check story-author-toggle"><input type="checkbox" checked={story.showName !== false} disabled={saving} onChange={event => onChangeAuthorVisibility(event.target.checked)}/> Show my name and photo on this post</label>}
@@ -122,7 +125,7 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
         </figure>)}
       </section>}
 
-      <section className="panel story-detail-original"><h2>Original story</h2><AudioPlayer story={story} privateAudio={privateAudio}/><p className="story-text">{story.text || 'No written text provided.'}</p><ReadInMyLanguage text={story.text} sourceLanguage={story.originalLanguage}/></section>
+      <section className="panel story-detail-original"><h2>{t('feed.original').replace('{language}', story.originalLanguage || t('feed.translation'))}</h2><AudioPlayer story={story} privateAudio={privateAudio}/><p className="story-text">{story.text || 'No written text provided.'}</p>{showMachineTranslation && <ReadInMyLanguage text={story.text} sourceLanguage={story.originalLanguage}/>}</section>
 
       {(story.people || story.region || story.tags?.length > 0 || story.sources?.length > 0 || story.licence || story.access || visibilityLabel) && <section className="panel story-detail-documentation">
         <h2>Documentation</h2>
@@ -135,8 +138,8 @@ export default function StoryDetailPage({ story, navigate, backPage = 'discover'
         {story._own && story.access && story.access !== visibilityLabel && <p><b>Requested audience:</b> {story.access}</p>}
       </section>}
 
-      {story.translation && <section className="panel translation-panel story-detail-translation">
-        <h2>Translation · {story.translationLanguage}</h2>
+      {String(story.translation || '').trim() && <section className="panel translation-panel story-detail-translation">
+        <h2>{story.translationLanguage ? t('feed.translationByAuthor').replace('{language}', story.translationLanguage) : t('feed.translationByAuthorNoLanguage')}</h2>
         <p className="notice">{story.translationChecked ? `Checked by ${story.checkedBy} (self-reported)` : 'Not yet checked by a speaker of this language'}</p>
         <p className="translation-credit">{translationOriginLabel(story.translationOrigin)} · Original story remains available above.</p>
         <p className="story-text">{story.translation}</p>
