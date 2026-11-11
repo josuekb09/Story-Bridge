@@ -363,6 +363,20 @@ try {
     await pageB.goto(webOrigin,{waitUntil:'domcontentloaded'}); await pageB.getByRole('heading', { name: 'Share your culture. Learn from every other.' }).waitFor(); await pageB.locator('.home-actions').getByRole('button',{name:'Explore stories'}).click(); await pageB.getByRole('heading',{name:'Listen'}).waitFor();
     await pageCapture.goto(webOrigin,{waitUntil:'domcontentloaded'}); await pageCapture.getByRole('heading', { name: 'Share your culture. Learn from every other.' }).waitFor(); await pageCapture.locator('.home-actions').getByRole('button',{name:'Explore stories'}).click(); await pageCapture.getByRole('heading',{name:'Listen'}).waitFor();
     await pageUnsupported.goto(webOrigin,{waitUntil:'domcontentloaded'}); await pageUnsupported.getByRole('heading', { name: 'Share your culture. Learn from every other.' }).waitFor(); await pageUnsupported.locator('.home-actions').getByRole('button',{name:'Explore stories'}).click(); await pageUnsupported.getByRole('heading',{name:'Listen'}).waitFor();
+    await pageA.locator('.app-avatar-button').click();
+    const translationGuards = await pageA.evaluate(() => {
+      const guarded = element => element?.getAttribute('translate') === 'no' && element.classList.contains('notranslate');
+      const brand = document.querySelector('.app-header-brand');
+      const wordmark = document.querySelector('.wordmark');
+      const desktopLabels = [...document.querySelectorAll('.app-header-primary a, .app-header-icon-link')];
+      const desktopText = [...document.querySelectorAll('.app-header-primary a span')];
+      const mobileLabels = [...document.querySelectorAll('.app-mobile-nav button')];
+      const mobileText = [...document.querySelectorAll('.app-mobile-nav button span')];
+      const menuButtons = [...document.querySelectorAll('.app-avatar-dropdown button')];
+      return { brand: guarded(brand), wordmark: guarded(wordmark), desktopLabels: desktopLabels.length > 0 && desktopLabels.every(guarded), desktopText: desktopText.length > 0 && desktopText.every(guarded), mobileLabels: mobileLabels.length > 0 && mobileLabels.every(guarded), mobileText: mobileText.length > 0 && mobileText.every(guarded), menuButtons: menuButtons.length > 0 && menuButtons.every(guarded), bodyTranslatable: document.body.getAttribute('translate') !== 'no' && !document.body.classList.contains('notranslate') };
+    });
+    await pageA.locator('.app-avatar-button').click();
+    ensure(translationGuards.brand && translationGuards.wordmark && translationGuards.desktopLabels && translationGuards.desktopText && translationGuards.mobileLabels && translationGuards.mobileText && translationGuards.menuButtons && translationGuards.bodyTranslatable, `Brand and translated navigation are not correctly protected from browser translation: ${JSON.stringify(translationGuards)}.`);
     ownerA = await pageA.evaluate(() => localStorage.getItem('story-bridge-owner') || '');
     ownerB = await pageB.evaluate(() => localStorage.getItem('story-bridge-owner') || '');
     ownerCapture = await pageCapture.evaluate(() => localStorage.getItem('story-bridge-owner') || '');
@@ -903,6 +917,8 @@ try {
     const publicCard = pageB.locator('.post').filter({ hasText: approvedActionText });
     await publicCard.waitFor({ state: 'visible' });
     await pageB.getByText(approvedActionText, { exact: true }).waitFor({ state: 'visible' });
+    const storyTextTranslation = await publicCard.locator('.post-text').evaluate(element => ({ translate: element.getAttribute('translate'), insideNotranslate: !!element.closest('.notranslate') }));
+    ensure(storyTextTranslation.translate !== 'no' && !storyTextTranslation.insideNotranslate, 'Story text was accidentally excluded from browser translation.');
     await publicCard.getByRole('button', { name: /Translation/ }).click();
     await publicCard.locator('.post-translation').getByText(approvedActionTranslation, { exact: true }).waitFor({ state: 'visible' });
     await publicCard.getByRole('button', { name: /Original/ }).waitFor({ state: 'visible' });

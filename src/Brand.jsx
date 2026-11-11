@@ -17,7 +17,7 @@ export function Waveform({className=''}) {
 }
 
 export function Wordmark({stacked=false,light=false}) {
-  return <span className={`wordmark ${stacked?'wordmark-stacked':''} ${light?'wordmark-light':''}`}>
+  return <span translate="no" className={`wordmark notranslate ${stacked?'wordmark-stacked':''} ${light?'wordmark-light':''}`}>
     <BridgeMark className="bridge-mark"/><span>Story Bridge</span>
   </span>;
 }

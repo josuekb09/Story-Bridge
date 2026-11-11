@@ -17,9 +17,9 @@ function initials(name) {
 }
 
 function LanguagePicker({ lang, setLanguage, label, compact = false }) {
-  return <label className={`app-language-picker${compact ? ' is-compact' : ''}`}>
+  return <label translate="no" className={`app-language-picker notranslate${compact ? ' is-compact' : ''}`}>
     <span className="visually-hidden">{label}</span>
-    <select value={lang} onChange={event => setLanguage(event.target.value)} aria-label={label}>
+    <select translate="no" className="notranslate" value={lang} onChange={event => setLanguage(event.target.value)} aria-label={label}>
       {UI_LANGUAGES.map(language => <option key={language.code} value={language.code}>{language.nativeName}{language.uiStatus === 'machine' ? ' •' : ''}</option>)}
     </select>
   </label>;
@@ -51,25 +51,25 @@ export function AppHeader({ page, signedIn, accountEnabled, adminEnabled = false
     : signedIn ? <span aria-hidden="true">{initials(profileName)}</span> : <AppIcon name="profile"/>;
 
   return <header className="app-header" aria-label="Story Bridge">
-    <a className="app-header-brand" href="/discover" aria-label={`Story Bridge — ${t('nav.discover')}`} onClick={event => go(event, 'discover')}><Wordmark/></a>
-    <nav className="app-header-primary" aria-label={t('nav.primaryNavigation')}>
-      {links.map(link => <a key={link.key} href={link.path} className={activePage === link.key ? 'is-active' : ''} aria-current={activePage === link.key ? 'page' : undefined} onClick={event => go(event, link.key)}><AppIcon name={link.icon}/><span>{t(link.labelKey)}</span></a>)}
+    <a translate="no" className="app-header-brand notranslate" href="/discover" aria-label={`Story Bridge — ${t('nav.discover')}`} onClick={event => go(event, 'discover')}><Wordmark/></a>
+    <nav translate="no" className="app-header-primary notranslate" aria-label={t('nav.primaryNavigation')}>
+      {links.map(link => <a translate="no" key={link.key} href={link.path} className={`notranslate ${activePage === link.key ? 'is-active' : ''}`} aria-current={activePage === link.key ? 'page' : undefined} onClick={event => go(event, link.key)}><AppIcon name={link.icon}/><span translate="no" className="notranslate">{t(link.labelKey)}</span></a>)}
     </nav>
     <div className="app-header-tools">
-      <a className={`app-header-icon-link${activePage === 'search' ? ' is-active' : ''}`} href="/search" aria-label={t('nav.search')} onClick={event => go(event, 'search')}><AppIcon name="search"/></a>
+      <a translate="no" className={`app-header-icon-link notranslate${activePage === 'search' ? ' is-active' : ''}`} href="/search" aria-label={t('nav.search')} onClick={event => go(event, 'search')}><AppIcon name="search"/></a>
       <LanguagePicker lang={lang} setLanguage={setLanguage} label={t('nav.language')}/>
       <div className="app-avatar-menu" ref={menuRef}>
-        <button className="app-avatar-button" type="button" aria-label={signedIn ? t('nav.openProfileMenu') : t('nav.openAccountMenu')} aria-haspopup="true" aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}>{avatar}</button>
+        <button translate="no" className="app-avatar-button notranslate" type="button" aria-label={signedIn ? t('nav.openProfileMenu') : t('nav.openAccountMenu')} aria-haspopup="true" aria-expanded={menuOpen} onClick={() => setMenuOpen(value => !value)}>{avatar}</button>
         {menuOpen && <div className="app-avatar-dropdown">
-          {signedIn && <button type="button" onClick={event => go(event, 'profile')}>{t('nav.profile')}</button>}
-          {(signedIn || !accountEnabled) && <button type="button" onClick={event => go(event, 'mine')}>{t('nav.myStories')}</button>}
-          {signedIn && adminEnabled && <button type="button" onClick={event => go(event, 'admin')}>{t('nav.admin')}</button>}
+          {signedIn && <button translate="no" className="notranslate" type="button" onClick={event => go(event, 'profile')}>{t('nav.profile')}</button>}
+          {(signedIn || !accountEnabled) && <button translate="no" className="notranslate" type="button" onClick={event => go(event, 'mine')}>{t('nav.myStories')}</button>}
+          {signedIn && adminEnabled && <button translate="no" className="notranslate" type="button" onClick={event => go(event, 'admin')}>{t('nav.admin')}</button>}
           {signedIn && <>
-            <button type="button" onClick={() => { setMenuOpen(false); onNavigate('workspace'); }}>{t('nav.workspace')}</button>
-            <button type="button" onClick={() => { setMenuOpen(false); onSettings(); }}>{t('nav.profileSettings')}</button>
-            <button type="button" onClick={() => { setMenuOpen(false); onSignOut(); }}>{t('nav.signOut')}</button>
+            <button translate="no" className="notranslate" type="button" onClick={() => { setMenuOpen(false); onNavigate('workspace'); }}>{t('nav.workspace')}</button>
+            <button translate="no" className="notranslate" type="button" onClick={() => { setMenuOpen(false); onSettings(); }}>{t('nav.profileSettings')}</button>
+            <button translate="no" className="notranslate" type="button" onClick={() => { setMenuOpen(false); onSignOut(); }}>{t('nav.signOut')}</button>
           </>}
-          {!signedIn && accountEnabled && <button type="button" onClick={() => { setMenuOpen(false); onSignIn(); }}>{t('nav.signIn')}</button>}
+          {!signedIn && accountEnabled && <button translate="no" className="notranslate" type="button" onClick={() => { setMenuOpen(false); onSignIn(); }}>{t('nav.signIn')}</button>}
           <div className="app-avatar-mobile-language"><LanguagePicker lang={lang} setLanguage={setLanguage} label={t('nav.language')} compact/></div>
         </div>}
       </div>
@@ -87,7 +87,7 @@ export function AppMobileNav({ page, onNavigate }) {
     { key: 'profile', labelKey: 'nav.profile', icon: 'profile' },
   ];
   const activePage = page === 'listen' || page === 'detail' ? 'discover' : page;
-  return <nav className="app-mobile-nav" aria-label={t('nav.mainNavigation')}>
-    {tabs.map(tab => <button key={tab.key} type="button" className={`${activePage === tab.key ? 'is-active ' : ''}${tab.featured ? 'is-featured' : ''}`} aria-current={activePage === tab.key ? 'page' : undefined} onClick={() => onNavigate(tab.key)}><AppIcon name={tab.icon}/><span>{t(tab.labelKey)}</span></button>)}
+  return <nav translate="no" className="app-mobile-nav notranslate" aria-label={t('nav.mainNavigation')}>
+    {tabs.map(tab => <button translate="no" key={tab.key} type="button" className={`notranslate ${activePage === tab.key ? 'is-active ' : ''}${tab.featured ? 'is-featured' : ''}`} aria-current={activePage === tab.key ? 'page' : undefined} onClick={() => onNavigate(tab.key)}><AppIcon name={tab.icon}/><span translate="no" className="notranslate">{t(tab.labelKey)}</span></button>)}
   </nav>;
 }

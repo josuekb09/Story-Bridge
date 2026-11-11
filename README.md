@@ -40,7 +40,7 @@ The app shell and static interface files can be installed as a PWA. Its service 
 | Email-code and Google sign-in | Live. Google OAuth is in *Testing* mode: only accounts added as test users can sign in with Google until the app is published |
 | Database migrations `202611070001` … `202611090007` | Applied to the production Supabase project |
 | AI translation | Key configured on the host; the live provider call is still being verified (errors are now logged as status/code/model only) |
-| Interface translation | Landing page in 20 languages; other screens are English for now |
+| Interface translation | Landing page in 20 languages; English/French header labels, with other screens English for now. Brand and translated navigation opt out of browser auto-translation; story text stays translatable. |
 | Phase L0 (live) | Shared navigation, account email privacy, PWA metadata, static asset serving, sitemap and offline shell are deployed. Render serves the pushed build; the live header and static resource types were checked. Signed-in email privacy is covered by the browser suite with synthetic authentication |
 | Culture directory and search | Live in the app build; public showcase data only, with no social schema or API changes |
 | First-post admin review | Available only to accounts authorized by the pending-post endpoint; publish and keep-private actions are confirmed |
