@@ -72,3 +72,4 @@ Stage 1 hardening is covered by `test/hardening.test.js`, the existing API tests
 41. Unknown paths now render a Discover-linked not-found page without rewriting the requested URL. Culture pages say there is no summary yet when public member stories exist; the wordmark already opts out of browser auto-translation.
 
 42. Public post images now clear the Loading photo label when an already-complete cached image is detected after render, as well as on the image load event. A live Discover run exposed the missed event; a focused unit test covers complete and incomplete image states.
+43. Fresh public screenshots and README documentation now describe the deployed eight-story feed and the live French/Tshiluba reader examples. The story report menu keeps its intrinsic width instead of stretching into a horizontal bar; the dated gallery replaces stale captures.
