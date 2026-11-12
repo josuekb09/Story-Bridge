@@ -6,7 +6,7 @@ Deadline: end of day **Wednesday 11 November 2026**, on the program LMS (learnin
 
 - Live demo: https://story-bridge.onrender.com
 - Code: https://github.com/josuekb09/Story-Bridge
-- Demo video: [five-minute walkthrough](demo/story-bridge-demo.mp4) · YouTube upload: **YOUTUBE_LINK_HERE**
+- Demo video: [five-minute walkthrough](demo/story-bridge-demo.mp4) · YouTube upload: [Watch on YouTube](https://youtu.be/ZeZZXDgeU68?si=-k7mlvZJntilQ18X)
 
 ## Tracks
 
