@@ -1,7 +1,7 @@
 Story Bridge — African stories, in your own voice
 Live proof of concept: https://story-bridge.onrender.com
 Code: https://github.com/josuekb09/Story-Bridge
-Demo video: [add link]
+Demo video: https://youtu.be/ZeZZXDgeU68?si=-k7mlvZJntilQ18X
 Tracks: Voices & Languages (primary) · Truth, Authorship & Ownership · Discovery & Audience
 
 WHY I BUILT IT
