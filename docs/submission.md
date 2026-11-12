@@ -6,7 +6,7 @@ Deadline: end of day **Wednesday 11 November 2026**, on the program LMS (learnin
 
 - Live demo: https://story-bridge.onrender.com
 - Code: https://github.com/josuekb09/Story-Bridge
-- Demo video: [five-minute walkthrough](demo/story-bridge-demo.mp4) · YouTube upload: [Watch on YouTube](https://youtu.be/ZeZZXDgeU68?si=-k7mlvZJntilQ18X)
+- Demo video: [Watch on YouTube](https://youtu.be/ZeZZXDgeU68?si=-k7mlvZJntilQ18X) · earlier 5:00 cut: [local walkthrough file](demo/story-bridge-demo.mp4)
 
 ## Tracks
 
@@ -54,9 +54,9 @@ Video posts and sharing with selected people or groups are not supported yet. AI
 ### What's next
 Community translations reviewed by speakers; comments, reactions and follows; sharing with chosen people or groups; video; recording the first community testimonies in Grand Kasaï with consent.
 
-## Demo video (5:00)
+## Demo video (4:18)
 
-The linked walkthrough opens on the public home page, visits all eight member stories, shows the reader control on Nosihle's post in French and Tshiluba, then covers culture pages, search, an object record, sharing, community guidelines and the phone layout. Captions are included. No signed-in account or private content is shown.
+The linked walkthrough opens on the public home page, browses Discover and its member stories, shows a post read in French with the reader control, then covers culture pages, collections, search and the sharing wizard.
 
 ## Checklist before submitting
 
