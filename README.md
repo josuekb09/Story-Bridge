@@ -11,7 +11,7 @@ A social network where people share stories from their cultures in their own lan
 
 [![Watch the Story Bridge demo](docs/demo/story-bridge-demo-poster.jpg)](https://youtu.be/ZeZZXDgeU68?si=-k7mlvZJntilQ18X)
 
-A polished 4:18 walkthrough shows the live public site, its eight stories and two-language count, and Nosihle’s post read in French and Tshiluba. YouTube upload: [Watch on YouTube](https://youtu.be/ZeZZXDgeU68?si=-k7mlvZJntilQ18X).
+A polished 4:18 walkthrough of the live public site. [Watch on YouTube](https://youtu.be/ZeZZXDgeU68?si=-k7mlvZJntilQ18X).
 
 ## The problem
 
